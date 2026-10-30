@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The local database (scores and profile) is included in the user's own Android backup.
+     Iteration 2 will exclude the sync credentials file from backup here. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="nfas.db" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="nfas.db" />
+    </device-transfer>
+</data-extraction-rules>

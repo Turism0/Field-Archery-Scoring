@@ -1,0 +1,108 @@
+package uk.co.fnurble.nfas.data.local
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import uk.co.fnurble.nfas.domain.AgeGroup
+import uk.co.fnurble.nfas.domain.ArcherClass
+import uk.co.fnurble.nfas.domain.BowStyle
+import uk.co.fnurble.nfas.domain.Hit
+import uk.co.fnurble.nfas.domain.RoundStatus
+import uk.co.fnurble.nfas.domain.TargetType
+import java.time.Instant
+import java.time.LocalDate
+
+/** Sync state of a row. Iteration 2 uploads PENDING rows and marks them SYNCED. */
+enum class SyncState { PENDING, SYNCED }
+
+enum class AnimalState { PENDING, MISSED, SCORED }
+
+/**
+ * The archer's profile. PHONE ONLY — never synced.
+ * Holds personal data (real name, date of birth) that must not reach the server.
+ * Single row, id = 1.
+ */
+@Entity(tableName = "profile")
+data class ProfileEntity(
+    @PrimaryKey val id: Int = 1,
+    @ColumnInfo(name = "real_name") val realName: String? = null,
+    /** Public username used on the server. Must not be the archer's real name. */
+    val username: String? = null,
+    @ColumnInfo(name = "date_of_birth") val dateOfBirth: LocalDate? = null,
+    @ColumnInfo(name = "archer_class") val archerClass: ArcherClass? = null,
+    /** Manual age group; when null it's worked out from date of birth. */
+    @ColumnInfo(name = "age_group_manual") val ageGroupManual: AgeGroup? = null,
+    @ColumnInfo(name = "main_bow_style") val mainBowStyle: BowStyle? = null,
+)
+
+/**
+ * A round. Ids are UUIDs made on the phone so the server never creates duplicates on retry.
+ * Class, age group and bow style are copied in at the start so later profile changes don't
+ * alter old rounds.
+ */
+@Entity(tableName = "round", indices = [Index("shoot_date")])
+data class RoundEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "shoot_date") val shootDate: LocalDate,
+    @ColumnInfo(name = "target_count") val targetCount: Int,
+    @ColumnInfo(name = "archer_class") val archerClass: ArcherClass,
+    @ColumnInfo(name = "age_group") val ageGroup: AgeGroup,
+    @ColumnInfo(name = "bow_style") val bowStyle: BowStyle,
+    val status: RoundStatus,
+    /** Stored for fast lists and server reporting; recalculated whenever a target is saved. */
+    @ColumnInfo(name = "total_points") val totalPoints: Int = 0,
+    @ColumnInfo(name = "created_at") val createdAt: Instant,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
+    /** Soft delete so the deletion can be synced to the server. */
+    val deleted: Boolean = false,
+)
+
+@Entity(
+    tableName = "target",
+    primaryKeys = ["round_id", "target_no"],
+    foreignKeys = [
+        ForeignKey(
+            entity = RoundEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["round_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class TargetEntity(
+    @ColumnInfo(name = "round_id") val roundId: String,
+    @ColumnInfo(name = "target_no") val targetNo: Int,
+    val type: TargetType,
+    @ColumnInfo(name = "override_points") val overridePoints: Int?,
+    /** Stored total (override or calculated). */
+    val points: Int,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
+)
+
+@Entity(
+    tableName = "animal",
+    primaryKeys = ["round_id", "target_no", "animal_index"],
+    foreignKeys = [
+        ForeignKey(
+            entity = TargetEntity::class,
+            parentColumns = ["round_id", "target_no"],
+            childColumns = ["round_id", "target_no"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class AnimalEntity(
+    @ColumnInfo(name = "round_id") val roundId: String,
+    @ColumnInfo(name = "target_no") val targetNo: Int,
+    /** 0-based. For predator/prey: 0 = predator, 1 = prey. */
+    @ColumnInfo(name = "animal_index") val animalIndex: Int,
+    val state: AnimalState,
+    /** Arrow number at this animal that scored (1–3), null unless SCORED. */
+    @ColumnInfo(name = "arrow_no") val arrowNo: Int?,
+    val hit: Hit?,
+    val points: Int,
+)
