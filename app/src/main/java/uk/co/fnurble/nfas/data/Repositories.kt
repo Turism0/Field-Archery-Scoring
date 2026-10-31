@@ -39,16 +39,23 @@ class ProfileRepository(private val dao: ProfileDao) {
 
     suspend fun get(): Profile = dao.get()?.toProfile() ?: Profile()
 
+    /** Saves the profile screen. The username isn't edited there (it comes from the account), so keep it. */
     suspend fun save(p: Profile) = dao.upsert(
         ProfileEntity(
             realName = p.realName?.trim()?.ifBlank { null },
-            username = p.username?.trim()?.ifBlank { null },
+            username = dao.get()?.username,
             dateOfBirth = p.dateOfBirth,
             archerClass = p.archerClass,
             ageGroupManual = p.ageGroupManual,
             mainBowStyle = p.mainBowStyle,
         ),
     )
+
+    /** Records the account username after signing in. */
+    suspend fun setUsername(username: String) {
+        val current = dao.get() ?: ProfileEntity()
+        dao.upsert(current.copy(username = username))
+    }
 
     private fun ProfileEntity.toProfile() =
         Profile(realName, username, dateOfBirth, archerClass, ageGroupManual, mainBowStyle)

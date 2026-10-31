@@ -20,6 +20,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,8 +47,10 @@ import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
+fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Unit) {
     val profile by vm.state.collectAsStateWithLifecycle()
+    val account by vm.account.collectAsStateWithLifecycle()
+    var confirmSignOut by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -61,6 +72,26 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SectionCard(title = "Account", subtitle = "Optional. Scoring works without it.") {
+                val a = account
+                if (a == null) {
+                    Text(
+                        "Sign in to back up your rounds to the NFAS server and, later, share scorecards with friends.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = onAccount, modifier = Modifier.fillMaxWidth()) { Text("Sign in or create account") }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Signed in as", style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(a.username, style = MaterialTheme.typography.titleLarge)
+                        }
+                        OutlinedButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
+                    }
+                }
+            }
+
             SectionCard(title = "About you", subtitle = "Stored on this phone only. Never sent anywhere.") {
                 OutlinedTextField(
                     value = p.realName.orEmpty(),
@@ -78,15 +109,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
                 )
             }
 
-            SectionCard(title = "Archery", subtitle = "Shared with your scores when syncing (coming in a later version).") {
-                OutlinedTextField(
-                    value = p.username.orEmpty(),
-                    onValueChange = { v -> vm.update { it.copy(username = v) } },
-                    label = { Text("Username") },
-                    supportingText = { Text("Don't use your real name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            SectionCard(title = "Archery", subtitle = "Copied onto each round, and shared with your scores when signed in.") {
                 SegmentedChoice(ArcherClass.entries, p.archerClass, { it.displayName }) { c ->
                     vm.update { it.copy(archerClass = c) }
                 }
@@ -110,5 +133,15 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
                 )
             }
         }
+    }
+
+    if (confirmSignOut) {
+        AlertDialog(
+            onDismissRequest = { confirmSignOut = false },
+            title = { Text("Sign out?") },
+            text = { Text("Your rounds stay on this phone. Sign in again any time with your username and password.") },
+            confirmButton = { TextButton(onClick = { confirmSignOut = false; vm.signOut() }) { Text("Sign out") } },
+            dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
+        )
     }
 }

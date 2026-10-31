@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import uk.co.fnurble.nfas.domain.RoundStatus
+import uk.co.fnurble.nfas.ui.screens.AccountScreen
 import uk.co.fnurble.nfas.ui.screens.HomeScreen
 import uk.co.fnurble.nfas.ui.screens.NewRoundScreen
 import uk.co.fnurble.nfas.ui.screens.ProfileScreen
@@ -38,7 +39,14 @@ fun NfasNavHost() {
         }
         composable("profile") {
             ProfileScreen(
-                vm = appViewModel { c, _ -> ProfileViewModel(c.profileRepository) },
+                vm = appViewModel { c, _ -> ProfileViewModel(c.profileRepository, c.accountRepository) },
+                onBack = { nav.popBackStack() },
+                onAccount = { nav.navigate("account") },
+            )
+        }
+        composable("account") {
+            AccountScreen(
+                vm = appViewModel { c, _ -> AccountViewModel(c.accountRepository, c.profileRepository) },
                 onBack = { nav.popBackStack() },
             )
         }

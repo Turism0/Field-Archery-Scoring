@@ -19,10 +19,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uk.co.fnurble.nfas.AppContainer
 import uk.co.fnurble.nfas.NfasApp
+import uk.co.fnurble.nfas.data.Account
+import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.Profile
 import uk.co.fnurble.nfas.data.ProfileRepository
 import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.data.RoundSummary
+import uk.co.fnurble.nfas.data.remote.ApiException
+import uk.co.fnurble.nfas.domain.AccountRules
 import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.AnimalResult
 import uk.co.fnurble.nfas.domain.ArcherClass
@@ -61,9 +65,17 @@ class HomeViewModel(profiles: ProfileRepository, roundRepo: RoundRepository) : V
 
 // ---------------- Profile ----------------
 
-class ProfileViewModel(private val repo: ProfileRepository) : ViewModel() {
+class ProfileViewModel(
+    private val repo: ProfileRepository,
+    private val accounts: AccountRepository,
+) : ViewModel() {
     private val _state = MutableStateFlow<Profile?>(null)
     val state: StateFlow<Profile?> = _state.asStateFlow()
+
+    /** Signed-in account, or null when using the app offline only. */
+    val account: StateFlow<Account?> = accounts.account
+
+    fun signOut() = viewModelScope.launch { accounts.signOut() }
 
     init {
         viewModelScope.launch { _state.value = repo.get() }
@@ -76,6 +88,114 @@ class ProfileViewModel(private val repo: ProfileRepository) : ViewModel() {
         viewModelScope.launch {
             repo.save(p)
             onDone()
+        }
+    }
+}
+
+// ---------------- Account (sign in / create account) ----------------
+
+enum class AccountStep { USERNAME, EXISTING_USER, NEW_USER }
+
+data class AccountUiState(
+    val step: AccountStep = AccountStep.USERNAME,
+    val username: String = "",
+    val password: String = "",
+    val confirmPassword: String = "",
+    val busy: Boolean = false,
+    val error: String? = null,
+    val signedIn: Boolean = false,
+)
+
+/**
+ * Enter a username → the server says whether it exists →
+ *  exists: "that username already exists" + password to sign in;
+ *  new:    choose a password (typed twice) to create the account.
+ */
+class AccountViewModel(
+    private val accounts: AccountRepository,
+    profiles: ProfileRepository,
+) : ViewModel() {
+    private val _state = MutableStateFlow(AccountUiState())
+    val state: StateFlow<AccountUiState> = _state.asStateFlow()
+
+    init {
+        // Pre-fill any username typed into the old profile field.
+        viewModelScope.launch {
+            val saved = profiles.get().username.orEmpty()
+            _state.update { if (it.username.isEmpty()) it.copy(username = saved) else it }
+        }
+    }
+
+    fun onUsername(v: String) = _state.update { it.copy(username = v.trim(), error = null) }
+    fun onPassword(v: String) = _state.update { it.copy(password = v, error = null) }
+    fun onConfirmPassword(v: String) = _state.update { it.copy(confirmPassword = v, error = null) }
+
+    /** Back to the username step (e.g. "use a different username"). */
+    fun changeUsername() = _state.update {
+        it.copy(step = AccountStep.USERNAME, password = "", confirmPassword = "", error = null)
+    }
+
+    fun continueWithUsername() {
+        val username = _state.value.username
+        if (!AccountRules.isValidUsername(username)) {
+            _state.update { it.copy(error = AccountRules.USERNAME_HELP) }
+            return
+        }
+        launchCall {
+            val check = accounts.checkUsername(username)
+            _state.update {
+                it.copy(
+                    username = check.username,
+                    step = if (check.exists) AccountStep.EXISTING_USER else AccountStep.NEW_USER,
+                )
+            }
+        }
+    }
+
+    fun signIn() {
+        val s = _state.value
+        if (s.password.isEmpty()) {
+            _state.update { it.copy(error = "Enter your password.") }
+            return
+        }
+        launchCall {
+            accounts.login(s.username, s.password)
+            _state.update { it.copy(signedIn = true, password = "") }
+        }
+    }
+
+    fun createAccount() {
+        val s = _state.value
+        AccountRules.newPasswordProblem(s.password, s.confirmPassword)?.let { problem ->
+            _state.update { it.copy(error = problem) }
+            return
+        }
+        launchCall {
+            try {
+                accounts.register(s.username, s.password)
+                _state.update { it.copy(signedIn = true, password = "", confirmPassword = "") }
+            } catch (e: ApiException) {
+                if (e.code == "username_taken") {
+                    // Someone took it in the meantime: switch to signing in.
+                    _state.update { it.copy(step = AccountStep.EXISTING_USER, confirmPassword = "") }
+                }
+                throw e
+            }
+        }
+    }
+
+    /** Runs a server call with a busy spinner, turning failures into a message on screen. */
+    private fun launchCall(block: suspend () -> Unit) {
+        if (_state.value.busy) return
+        _state.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: ApiException) {
+                _state.update { it.copy(error = e.message) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
         }
     }
 }

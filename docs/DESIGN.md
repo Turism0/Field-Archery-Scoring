@@ -12,8 +12,8 @@
 2. **Online** ← in progress. Steps, each tested before the next:
    1. Database and API login on Mimir (`server/sql/`) ← 1.2.01, tested
    2. API skeleton on Odin (IIS) behind Nginx Proxy Manager, health check that reaches the database ← 1.2.02, tested
-   3. Accounts in the API: check username, register, sign in ← 1.2.03
-   4. Accounts in the app
+   3. Accounts in the API: check username, register, sign in ← 1.2.03, tested
+   4. Accounts in the app (optional sign-in, Account card on Profile) ← 1.2.04
    5. Upload rounds (background sync)
    6. Download rounds after signing in on a new phone
    7. Friends: request / accept, view friends' finished rounds read-only
@@ -41,7 +41,7 @@ Phone (Kotlin/Compose)                         Home server
 
 | Table | Purpose | Synced? |
 |---|---|---|
-| `profile` | Real name, DoB, username, class, manual age group, main bow style (single row) | **Never** (username only, at registration) |
+| `profile` | Real name, DoB, account username (set on sign-in), class, manual age group, main bow style (single row) | **Never** |
 | `round` | `id` (UUID made on phone), shoot date, target count, class, age group, bow style, status, total, `created_at`, `updated_at`, `sync_state`, `deleted` | Yes |
 | `target` | (`round_id`, `target_no`), type, override points, points, `updated_at`, `sync_state` | Yes |
 | `animal` | (`round_id`, `target_no`, `animal_index`), state (Pending/Missed/Scored), arrow no, hit, points | Yes |
@@ -106,7 +106,9 @@ Decisions:
 
 - **Accounts:** username + password, no email. The app asks for a username; the API says whether it exists. Existing → "user already exists, enter password". New → create the account with a password.
 - Passwords are hashed by the API with ASP.NET Core's `PasswordHasher` (salted PBKDF2); only the hash is stored.
-- After signing in, the API issues a random token for that phone; the phone stores the token (Android Keystore-backed, excluded from backup), never the password. Only a SHA-256 hash of the token is stored on the server, so it can be revoked per phone.
+- After signing in, the API issues a random token for that phone; the phone stores the token, never the password. App side: `data/AccountStore.kt` encrypts it with an AES-GCM key held in the Android Keystore, in `shared_prefs/nfas_account.xml`, which the backup rules leave out (a restored phone signs in again).
+- App networking: `data/remote/NfasApi.kt` uses the platform's HttpURLConnection and org.json (no extra libraries), HTTPS only, 15-second timeouts; errors carry a message to show the archer, and "no signal" is reported as such.
+- Signing in is optional; signing out tells the server if there's signal and always clears the phone. Only a SHA-256 hash of the token is stored on the server, so it can be revoked per phone.
 - Brute-force protection: sign-in calls limited per IP (30/minute, in memory only) and a 15-minute lockout after 5 wrong passwords.
 - Tokens are 32 random bytes (64 hex characters), valid for a year and extended while in use; signing out revokes only that phone's token.
 - Endpoints and error codes: see `server/README.md`.

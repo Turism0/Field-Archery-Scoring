@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.2.03
+## Version 1.2.04
 
+- **1.2.04:** sign in / create account in the app (optional). Profile has an Account card; the Account screen checks the username, then asks for the password (existing user) or a new password typed twice (new user). Token stored encrypted with the Android Keystore and left out of backups.
 - **1.2.03:** accounts in the API: check username, register, sign in / out, `/api/me`; password hashing, per-phone tokens, lockout and rate limiting. PowerShell test script `server/tests/Test-Accounts.ps1`. No app changes.
 - **1.2.02:** API skeleton (`server/api/NfasApi`, .NET 10) with a `/health` check, and deployment steps for Odin (`server/README.md`). No app changes.
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
@@ -18,7 +19,8 @@ Versioning: minor changes go 1.2.01, 1.2.02 … 1.2.99; major changes move to th
 ### Screens
 
 - **Home:** list of rounds, newest first. Rounds in progress are highlighted and open on the scoring screen; finished rounds open on the scorecard.
-- **Profile** (phone only): name, date of birth, username, class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
+- **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
+- **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.
 - **Scoring:**
   - Big Game card layout: 1st / 2nd / 3rd arrow × inner kill / kill / wound, plus miss. Tap a selected score again to clear it.
