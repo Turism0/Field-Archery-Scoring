@@ -14,7 +14,7 @@ import uk.co.fnurble.nfas.data.sync.SyncScheduler
 class AppContainer(app: Application) {
     private val db = NfasDatabase.create(app)
     private val api = NfasApi()
-    private val accountStore = AccountStore(app)
+    val accountStore = AccountStore(app)
 
     val syncScheduler = SyncScheduler(app, accountStore)
     val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore)

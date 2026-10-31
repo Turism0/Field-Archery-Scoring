@@ -30,6 +30,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import java.time.format.DateTimeFormatter
+import java.time.ZoneId
+import java.time.LocalDate
+import java.time.Instant
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import uk.co.fnurble.nfas.data.local.SyncState
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Refresh
@@ -60,7 +71,18 @@ fun HomeScreen(
     val rounds by vm.rounds.collectAsStateWithLifecycle()
     val profileReady by vm.profileReady.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
+    val lastSync by vm.lastSync.collectAsStateWithLifecycle()
+    val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    val message by vm.message.collectAsStateWithLifecycle()
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val snackbar = remember { SnackbarHostState() }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbar.showSnackbar(it)
+            vm.messageShown()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -73,6 +95,7 @@ fun HomeScreen(
                 scrollBehavior = scroll,
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = if (profileReady) onNewRound else onProfile,
@@ -81,38 +104,69 @@ fun HomeScreen(
             )
         },
     ) { padding ->
-        val list = rounds
-        when {
-            list == null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            list.isEmpty() -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("No rounds yet", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (profileReady) "Tap New round to start scoring." else "Set up your profile first: class and main bow style.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                if (!profileReady) {
-                    Spacer(Modifier.height(16.dp))
-                    FilledTonalButton(onClick = onProfile) { Text("Set up profile") }
+        // Pull down anywhere on the list to sync now (upload waiting rounds, download changes).
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = vm::refresh,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        ) {
+            val list = rounds
+            when {
+                list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
                 }
-            }
-            else -> LazyColumn(
-                Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(list, key = { it.id }) { r -> RoundCard(r, showSync = signedIn) { onOpenRound(r) } }
+                // Scrollable even when empty, so pull-to-refresh still works (e.g. a new phone before the first sync).
+                list.isEmpty() -> Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (signedIn) SyncStatusLine(lastSync)
+                    Spacer(Modifier.height(16.dp))
+                    Text("No rounds yet", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (profileReady) "Tap New round to start scoring." else "Set up your profile first: class and main bow style.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (!profileReady) {
+                        Spacer(Modifier.height(16.dp))
+                        FilledTonalButton(onClick = onProfile) { Text("Set up profile") }
+                    }
+                }
+                else -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (signedIn) item(key = "sync") { SyncStatusLine(lastSync) }
+                    items(list, key = { it.id }) { r -> RoundCard(r, showSync = signedIn) { onOpenRound(r) } }
+                }
             }
         }
     }
+}
+
+/** "Last synced 21:45 · pull down to sync" (time only for today, date and time otherwise). */
+@Composable
+private fun SyncStatusLine(lastSync: Instant?) {
+    val text = if (lastSync == null) {
+        "Not synced yet · pull down to sync"
+    } else {
+        val local = lastSync.atZone(ZoneId.systemDefault())
+        val today = local.toLocalDate() == LocalDate.now()
+        val pattern = if (today) "HH:mm" else "d MMM HH:mm"
+        "Last synced ${local.format(DateTimeFormatter.ofPattern(pattern))} · pull down to sync"
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

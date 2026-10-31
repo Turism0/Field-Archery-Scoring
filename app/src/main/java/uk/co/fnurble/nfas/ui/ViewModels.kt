@@ -20,12 +20,14 @@ import kotlinx.coroutines.launch
 import uk.co.fnurble.nfas.AppContainer
 import uk.co.fnurble.nfas.NfasApp
 import uk.co.fnurble.nfas.data.Account
+import uk.co.fnurble.nfas.data.AccountStore
 import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.Profile
 import uk.co.fnurble.nfas.data.ProfileRepository
 import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.data.RoundSummary
 import uk.co.fnurble.nfas.data.remote.ApiException
+import uk.co.fnurble.nfas.data.sync.RoundSyncer
 import uk.co.fnurble.nfas.domain.AccountRules
 import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.AnimalResult
@@ -36,6 +38,7 @@ import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.TargetScore
 import uk.co.fnurble.nfas.domain.TargetType
 import uk.co.fnurble.nfas.domain.resolveAgeGroup
+import java.time.Instant
 import java.time.LocalDate
 
 /** Creates a ViewModel with access to the app container and the nav arguments. */
@@ -53,11 +56,13 @@ inline fun <reified VM : ViewModel> appViewModel(
 
 // ---------------- Home ----------------
 
-class HomeViewModel(profiles: ProfileRepository, roundRepo: RoundRepository, accounts: AccountRepository) : ViewModel() {
-    /** Upload icons on round cards are only shown when signed in. */
-    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
-
+class HomeViewModel(
+    profiles: ProfileRepository,
+    roundRepo: RoundRepository,
+    accounts: AccountRepository,
+    private val syncer: RoundSyncer,
+    accountStore: AccountStore,
+) : ViewModel() {
     val rounds: StateFlow<List<RoundSummary>?> =
         roundRepo.rounds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -65,6 +70,47 @@ class HomeViewModel(profiles: ProfileRepository, roundRepo: RoundRepository, acc
     val profileReady: StateFlow<Boolean> = profiles.profile.map { p ->
         p.archerClass != null && p.mainBowStyle != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    /** Upload labels and "last synced" are only shown when signed in. */
+    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
+    val lastSync: StateFlow<Instant?> = accountStore.lastSync
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    /** One-off message for a snackbar after pulling to refresh. */
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+
+    /** Pull to refresh: upload anything waiting and download changes now, then say how it went. */
+    fun refresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            val report = try {
+                syncer.syncAll()
+            } catch (e: Exception) {
+                // Anything unexpected (e.g. a reply the app can't read): report it rather than crash.
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                RoundSyncer.Report(RoundSyncer.Outcome.FAILED, e.message ?: e.javaClass.simpleName)
+            } finally {
+                _refreshing.value = false
+            }
+            _message.value = when (report.outcome) {
+                RoundSyncer.Outcome.DONE ->
+                    if (report.skipped > 0) "Synced, but ${report.skipped} round(s) couldn't be read. Update the app?"
+                    else "Up to date"
+                RoundSyncer.Outcome.NOT_SIGNED_IN -> "Sign in (Profile) to back up and sync your rounds."
+                RoundSyncer.Outcome.RETRY_LATER -> report.message ?: "Couldn't reach the NFAS server. It'll try again."
+                RoundSyncer.Outcome.SIGNED_OUT -> "Your sign-in has expired. Sign in again in Profile."
+                RoundSyncer.Outcome.FAILED -> "Sync problem: ${report.message}"
+            }
+        }
+    }
 }
 
 // ---------------- Profile ----------------

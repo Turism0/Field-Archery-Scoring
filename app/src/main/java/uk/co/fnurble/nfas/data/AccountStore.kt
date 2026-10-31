@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.security.KeyStore
+import java.time.Instant
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -25,6 +26,15 @@ class AccountStore(context: Context) {
     private val prefs = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
     private val _account = MutableStateFlow(load())
     val account: StateFlow<Account?> = _account.asStateFlow()
+
+    private val _lastSync = MutableStateFlow(prefs.getLong(K_LAST_SYNC, 0L).takeIf { it > 0 }?.let(Instant::ofEpochMilli))
+    /** When a sync last completed (upload and download), shown on the home screen. */
+    val lastSync: StateFlow<Instant?> = _lastSync.asStateFlow()
+
+    fun setLastSync(time: Instant) {
+        prefs.edit().putLong(K_LAST_SYNC, time.toEpochMilli()).apply()
+        _lastSync.value = time
+    }
 
     fun save(account: Account) {
         prefs.edit()
@@ -46,6 +56,7 @@ class AccountStore(context: Context) {
     fun clear() {
         prefs.edit().clear().apply()
         _account.value = null
+        _lastSync.value = null
     }
 
     private fun load(): Account? = try {
@@ -102,5 +113,6 @@ class AccountStore(context: Context) {
         const val K_TOKEN = "token"
         const val K_EXPIRES = "expires_utc"
         const val K_PULL_CURSOR = "pull_cursor"
+        const val K_LAST_SYNC = "last_sync"
     }
 }

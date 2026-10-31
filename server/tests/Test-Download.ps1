@@ -11,8 +11,7 @@
     4. Deletes it                          → the phone should remove it.
     It pauses after each step so you can check the phone, then signs this script out.
 
-    The phone downloads when the app starts (and after any change or sign-in). To make it check:
-    close the app fully (swipe it away from recent apps) and open it again.
+    To make the phone check: pull down on its home screen (app 1.2.11 or later).
 #>
 param(
     [Parameter(Mandatory)][string]$Username,
@@ -39,7 +38,7 @@ function Iso($value) {
 
 function Pause-ForPhone([string]$WhatToCheck) {
     Write-Host ''
-    Write-Host 'On the phone: close the app fully (swipe it away), open it again, and check:' -ForegroundColor Cyan
+    Write-Host 'On the phone: pull down on the home screen to sync, then check:' -ForegroundColor Cyan
     Write-Host "  $WhatToCheck" -ForegroundColor Cyan
     Read-Host 'Press Enter when you have checked'
 }

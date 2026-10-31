@@ -33,24 +33,32 @@ class RoundSyncer(
     private val api: NfasApi,
     private val accounts: AccountStore,
 ) {
-    enum class Outcome { DONE, NOT_SIGNED_IN, RETRY_LATER, SIGNED_OUT }
+    enum class Outcome { DONE, NOT_SIGNED_IN, RETRY_LATER, SIGNED_OUT, FAILED }
 
-    suspend fun syncAll(): Outcome {
-        val account = accounts.account.value ?: return Outcome.NOT_SIGNED_IN
+    /**
+     * What happened, for the home screen's pull-to-refresh message.
+     * [message] explains a problem; [skipped] counts downloaded rounds this app version couldn't read.
+     */
+    data class Report(val outcome: Outcome, val message: String? = null, val skipped: Int = 0)
+
+    suspend fun syncAll(): Report {
+        val account = accounts.account.value ?: return Report(Outcome.NOT_SIGNED_IN)
         return try {
             upload(account.token)
-            download(account.token)
-            Outcome.DONE
+            val skipped = download(account.token)
+            accounts.setLastSync(Instant.now())
+            Report(Outcome.DONE, skipped = skipped)
         } catch (e: ApiException) {
             when {
                 // No signal, server down or busy: WorkManager tries again later.
-                e.isNetwork || e.status == 429 || e.status >= 500 || e.status < 0 -> Outcome.RETRY_LATER
+                e.isNetwork || e.status == 429 || e.status >= 500 || e.status < 0 -> Report(Outcome.RETRY_LATER, e.message)
                 // Token revoked or expired: sign out on this phone so Profile asks to sign in again.
                 e.status == 401 -> {
                     accounts.clear()
-                    Outcome.SIGNED_OUT
+                    Report(Outcome.SIGNED_OUT, e.message)
                 }
-                else -> Outcome.DONE
+                // Anything else (e.g. the server is an older version without the download list).
+                else -> Report(Outcome.FAILED, "${e.message} (${e.status})")
             }
         }
     }
@@ -73,7 +81,9 @@ class RoundSyncer(
         }
     }
 
-    private suspend fun download(token: String) {
+    /** Returns how many downloaded rounds couldn't be read. */
+    private suspend fun download(token: String): Int {
+        var skipped = 0
         val saved = accounts.pullCursor()
         // Start a few minutes before the last cursor: a change saved on the server just as we
         // last downloaded can't be missed, and re-reading a round we already have is harmless.
@@ -86,7 +96,8 @@ class RoundSyncer(
             val rounds = page.getJSONArray("rounds")
             for (i in 0 until rounds.length()) {
                 val json = rounds.getJSONObject(i)
-                runCatching { applyRemote(json) }   // skip a round this version of the app can't read
+                // Skip (and count) a round this version of the app can't read.
+                if (runCatching { applyRemote(json) }.isFailure) skipped++
                 since = json.getString("serverUpdatedUtc")
                 afterId = json.getString("roundId")
                 val changed = Instant.parse(since)
@@ -95,6 +106,7 @@ class RoundSyncer(
         } while (page.optBoolean("more"))
 
         newest?.let { accounts.setPullCursor(it.toString()) }
+        return skipped
     }
 
     /** Applies one downloaded round, unless this phone has the same or a newer edit of it. */

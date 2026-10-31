@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.2.10
+## Version 1.2.11
 
+- **1.2.11:** pull down on the home screen to sync now (upload and download), with a message saying how it went and a "Last synced" line. Sync problems are now reported instead of ignored.
 - **1.2.10:** `server/tests/Test-Download.ps1`: acts as a second phone on your account to check the app downloads new, edited and deleted rounds. No app or API changes.
 - **1.2.09:** download rounds: after uploading, the app fetches this archer's rounds changed on the server (new API `GET /api/rounds?since=`), so a new or reset phone gets all its rounds back after signing in, and two phones on one account stay in step, deletions included. Newest edit wins.
 - **1.2.08:** the app uploads finished rounds (and deletions) in the background when signed in, using WorkManager: waits for signal, retries automatically, catches up on app start and after signing in. Round cards show Backed up / Waiting to upload / Couldn't upload.
@@ -24,7 +25,7 @@ Versioning: minor changes go 1.2.01, 1.2.02 … 1.2.99; major changes move to th
 
 ### Screens
 
-- **Home:** list of rounds, newest first. Rounds in progress are highlighted and open on the scoring screen; finished rounds open on the scorecard. When signed in, finished rounds show whether they're backed up to the server.
+- **Home:** list of rounds, newest first. Rounds in progress are highlighted and open on the scoring screen; finished rounds open on the scorecard. When signed in, finished rounds show whether they're backed up to the server; pull down to sync now ("Last synced" shows at the top).
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.

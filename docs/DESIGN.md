@@ -38,7 +38,7 @@ Phone (Kotlin/Compose)                         Home server
 - The app never talks to SQL Server directly — only to the API at `https://nfas.fnurble.co.uk`.
 - API: ASP.NET Core minimal API on **.NET 10 LTS** (supported to Nov 2028), IIS on Odin (app pool "No Managed Code"), Microsoft.Data.SqlClient to `sql.fnurble.co.uk` with encryption. The connection string sits in `appsettings.Production.json` on Odin only.
 - Sync runs through WorkManager (`data/sync/`) with a network constraint, so it waits for signal and retries with exponential back-off.
-  - Triggers: any change to a round (`RoundRepository.onChanged`), signing in, and app start. Unique work, appended, so a change made mid-upload is sent afterwards.
+  - Triggers: any change to a round (`RoundRepository.onChanged`), signing in, app start, and pull-to-refresh on the home screen (runs straight away in the foreground and shows the result). Unique work, appended, so a change made mid-upload is sent afterwards.
   - Sends rounds with `sync_state = PENDING` that are finished or deleted; in-progress rounds stay on the phone.
   - Marks a round SYNCED only if it wasn't edited while uploading (`markSync` checks `updated_at`), otherwise it goes again.
   - No signal / 5xx / 429 → retry later. 401 → sign out on the phone (Profile asks to sign in). 400/404 → FAILED, retried after the next edit.

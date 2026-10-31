@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val syncer = (applicationContext as NfasApp).container.roundSyncer
-        return when (syncer.syncAll()) {
+        return when (syncer.syncAll().outcome) {
             RoundSyncer.Outcome.RETRY_LATER -> Result.retry()
             else -> Result.success()
         }

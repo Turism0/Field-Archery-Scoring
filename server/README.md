@@ -84,7 +84,7 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 .\Test-Download.ps1 -Username <your username>
 ```
 
-Acts as a second phone on your real account: lists the rounds the server holds for you, then adds, edits and deletes a TEST round, pausing after each step so you can check the phone picks it up (close the app fully and reopen it to make it check). Signs itself out at the end. Leaves nothing behind except the deleted test round (hidden, kept as a deletion record).
+Acts as a second phone on your real account: lists the rounds the server holds for you, then adds, edits and deletes a TEST round, pausing after each step so you can check the phone picks it up (pull down on the phone's home screen to make it sync). Signs itself out at the end. Leaves nothing behind except the deleted test round (hidden, kept as a deletion record).
 
 ## Deploying the API to Odin (step 2, first time)
 
