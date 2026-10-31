@@ -11,6 +11,8 @@ namespace NfasApi.Rounds;
 ///   PUT    /api/rounds/{roundId}   full round JSON → 200 { roundId, result: "saved" | "unchanged", serverUpdatedUtc }
 ///   GET    /api/rounds/{roundId}   → the stored round (including deleted ones, flagged)
 ///   DELETE /api/rounds/{roundId}   → 204, marks it deleted (kept so other phones learn about it)
+///   GET    /api/rounds?since=&amp;afterId=&amp;limit=   → { rounds: [...], more } own rounds changed after the cursor,
+///          oldest change first, deleted ones included (step 6: download to a new or second phone)
 /// Sending the same round again is safe: the copy with the later clientUpdatedUtc wins.
 /// </summary>
 public static class RoundEndpoints
@@ -18,6 +20,7 @@ public static class RoundEndpoints
     public static void MapRoundEndpoints(this WebApplication app)
     {
         var rounds = app.MapGroup("/api/rounds").RequireAuthorization();
+        rounds.MapGet("/", ListChanged);
         rounds.MapPut("/{roundId:guid}", Upload);
         rounds.MapGet("/{roundId:guid}", Get);
         rounds.MapDelete("/{roundId:guid}", Delete);
@@ -130,6 +133,30 @@ public static class RoundEndpoints
         return Results.NoContent();
     }
 
+    private static async Task<IResult> ListChanged(
+        DateTime? since, Guid? afterId, int? limit, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        var take = Math.Clamp(limit ?? 50, 1, 200);
+        await using var conn = await db.OpenAsync(ct);
+        // Keyset paging on (ServerUpdatedUtc, RoundId) so pages never skip or repeat.
+        var ids = (await conn.QueryAsync<Guid>(new CommandDefinition("""
+            SELECT TOP (@take) RoundId
+            FROM dbo.Round
+            WHERE ArcherId = @archerId
+              AND (@since IS NULL
+                   OR ServerUpdatedUtc > @since
+                   OR (ServerUpdatedUtc = @since AND @afterId IS NOT NULL AND RoundId > @afterId))
+            ORDER BY ServerUpdatedUtc, RoundId;
+            """,
+            new { take = take + 1, archerId = user.ArcherId(), since = since.HasValue ? Trim(since.Value) : (DateTime?)null, afterId },
+            cancellationToken: ct))).ToList();
+
+        var more = ids.Count > take;
+        if (more) ids.RemoveAt(ids.Count - 1);
+        var rounds = await RoundReader.ReadManyAsync(conn, ids, ct);
+        return Results.Ok(new { rounds, more });
+    }
+
     /// <summary>SQL datetime2(3) keeps milliseconds; trim so comparisons with stored values are exact.</summary>
     private static DateTime Trim(DateTime utc)
     {
@@ -171,7 +198,42 @@ public static class RoundReader
         return new Loaded(r.ArcherId, dto);
     }
 
+    /// <summary>Loads several rounds in three queries, returned in the order of <paramref name="ids"/>.</summary>
+    public static async Task<List<StoredRoundDto>> ReadManyAsync(
+        Microsoft.Data.SqlClient.SqlConnection conn, IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+        using var multi = await conn.QueryMultipleAsync(new CommandDefinition("""
+            SELECT RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status, TotalPoints,
+                   IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc
+            FROM dbo.Round WHERE RoundId IN @ids;
+            SELECT RoundId, TargetNo, TargetType, OverridePoints, Points
+            FROM dbo.TargetScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo;
+            SELECT RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
+            FROM dbo.AnimalScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo, AnimalIndex;
+            """, new { ids }, cancellationToken: ct));
+
+        var rounds = (await multi.ReadAsync<RoundRow>()).ToDictionary(r => r.RoundId);
+        var targets = (await multi.ReadAsync<TargetRowWithRound>()).ToLookup(t => t.RoundId);
+        var animals = (await multi.ReadAsync<AnimalRowWithRound>()).ToLookup(a => (a.RoundId, a.TargetNo));
+
+        return ids.Where(rounds.ContainsKey).Select(id =>
+        {
+            var r = rounds[id];
+            return new StoredRoundDto(
+                r.RoundId, DateOnly.FromDateTime(r.ShootDate), r.TargetCount, r.ArcherClass.Trim(), r.AgeGroup, r.BowStyle,
+                r.Status, r.TotalPoints, r.IsDeleted, Utc(r.ClientCreatedUtc), Utc(r.ClientUpdatedUtc), Utc(r.ServerUpdatedUtc),
+                targets[id].Select(t => new TargetDto(t.TargetNo, t.TargetType, t.OverridePoints, t.Points,
+                    animals[(id, t.TargetNo)].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList()))
+                    .ToList());
+        }).ToList();
+    }
+
     private static DateTime Utc(DateTime d) => DateTime.SpecifyKind(d, DateTimeKind.Utc);
+
+    private sealed record TargetRowWithRound(Guid RoundId, short TargetNo, string TargetType, short? OverridePoints, short Points);
+
+    private sealed record AnimalRowWithRound(Guid RoundId, short TargetNo, byte AnimalIndex, string State, byte? ArrowNo, string? Hit, short Points);
 
     private sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
         string AgeGroup, string BowStyle, string Status, int TotalPoints, bool IsDeleted,

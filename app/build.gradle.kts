@@ -12,7 +12,7 @@ android {
         applicationId = "uk.co.fnurble.nfas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
+        versionCode = 6
         versionName = "0.1.2"
     }
 

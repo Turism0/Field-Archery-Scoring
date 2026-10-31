@@ -32,6 +32,7 @@ Start-WebAppPool NfasApi
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
+| GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
 Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); passwords 8–128 characters;
@@ -75,7 +76,7 @@ Every line should start with OK. It creates a `zz_test_…` account each run; re
 .\Test-Rounds.ps1 -BaseUrl http://localhost:8085     # on Odin
 ```
 
-Uploads, re-sends, edits, rule violations, another archer's access and delete. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+Uploads, re-sends, edits, the download list, rule violations, another archer's access and delete. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Deploying the API to Odin (step 2, first time)
 

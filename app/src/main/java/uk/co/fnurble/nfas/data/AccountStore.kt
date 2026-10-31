@@ -36,6 +36,13 @@ class AccountStore(context: Context) {
         _account.value = account
     }
 
+    /** Server time of the newest round change already downloaded (ISO-8601), or null for "everything". */
+    fun pullCursor(): String? = prefs.getString(K_PULL_CURSOR, null)
+
+    fun setPullCursor(serverUpdatedUtc: String) {
+        prefs.edit().putString(K_PULL_CURSOR, serverUpdatedUtc).apply()
+    }
+
     fun clear() {
         prefs.edit().clear().apply()
         _account.value = null
@@ -94,5 +101,6 @@ class AccountStore(context: Context) {
         const val K_USERNAME = "username"
         const val K_TOKEN = "token"
         const val K_EXPIRES = "expires_utc"
+        const val K_PULL_CURSOR = "pull_cursor"
     }
 }

@@ -65,7 +65,7 @@ $id = [guid]::NewGuid()
 $t0 = [datetime]::UtcNow.AddMinutes(-10)
 
 $r = Call GET '/health'
-Expect 'API is version 1.2.05 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.2.5') "(got $($r.Body.apiVersion) – publish the new build?)"
+Expect 'API is version 1.2.09 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.2.9') "(got $($r.Body.apiVersion) – publish the new build?)"
 
 $r = Call PUT "/api/rounds/$id" (New-Round $t0) -Token $tokenA
 Expect 'upload a finished round' ($r.Status -eq 200 -and $r.Body.result -eq 'saved') "($($r.Status) $($r.Body.message))"
@@ -86,6 +86,18 @@ $r = Call PUT "/api/rounds/$id" $edit -Token $tokenA
 Expect 'a newer edit is saved' ($r.Status -eq 200 -and $r.Body.result -eq 'saved') "($($r.Status) $($r.Body.message))"
 $r = Call GET "/api/rounds/$id" -Token $tokenA
 Expect 'the edit shows when read back (total 70)' ($r.Body.totalPoints -eq 70)
+
+# Download list (step 6).
+$r = Call GET '/api/rounds' -Token $tokenA
+$listed = @($r.Body.rounds | Where-Object roundId -eq $id)
+Expect 'round list includes the round, with targets' ($r.Status -eq 200 -and $listed.Count -eq 1 -and $listed[0].targets.Count -eq 3) "($($r.Status))"
+# PowerShell turns ISO dates into DateTime objects; send it back in exact ISO form.
+$stamp = $listed[0].serverUpdatedUtc
+if ($stamp -is [datetime]) { $stamp = $stamp.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
+$r = Call GET "/api/rounds?since=$([uri]::EscapeDataString($stamp))" -Token $tokenA
+Expect 'nothing new since its last change' ($r.Status -eq 200 -and @($r.Body.rounds).Count -eq 0) "($($r.Status), $(@($r.Body.rounds).Count) rounds)"
+$r = Call GET '/api/rounds' -Token $tokenB
+Expect "another archer's list doesn't include it" ($r.Status -eq 200 -and @($r.Body.rounds | Where-Object roundId -eq $id).Count -eq 0) "($($r.Status))"
 
 # Rule checks: each of these must be refused.
 $bad = New-Round $t0.AddMinutes(6); $bad.targets[0].animals[0] = Scored 0 2 'INNER_KILL' 24; $bad.targets[0].points = 24; $bad.totalPoints = 78
@@ -125,6 +137,9 @@ $r = Call DELETE "/api/rounds/$id" -Token $tokenA
 Expect 'delete' ($r.Status -eq 204) "($($r.Status))"
 $r = Call GET "/api/rounds/$id" -Token $tokenA
 Expect 'deleted round is kept, flagged as deleted' ($r.Status -eq 200 -and $r.Body.isDeleted) "($($r.Status))"
+$r = Call GET "/api/rounds?since=$([uri]::EscapeDataString($stamp))" -Token $tokenA
+$listed = @($r.Body.rounds | Where-Object roundId -eq $id)
+Expect 'the deletion shows up in the changes list' ($listed.Count -eq 1 -and $listed[0].isDeleted) "($($r.Status))"
 
 Write-Host ''
 if ($script:problems -eq 0) { Write-Host 'All round checks passed.' -ForegroundColor Green }

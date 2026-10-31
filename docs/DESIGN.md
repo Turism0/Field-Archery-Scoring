@@ -17,7 +17,7 @@
    5. Upload rounds: **finished rounds only** (the phone saves every change as you score, so in-progress rounds aren't at risk). Edits to finished rounds and deletions sync too.
       - 5a. API: `PUT/GET/DELETE /api/rounds/{id}` with server-side rule checks ← 1.2.05 (1.2.06: exact datetime2 parameters)
       - 5b. App: background upload with WorkManager when signed in and online; synced / waiting indicator ← 1.2.08
-   6. Download rounds after signing in on a new phone
+   6. Download rounds: `GET /api/rounds?since=` plus a download pass after every upload; a new phone gets everything after signing in, two phones stay in step ← 1.2.09
    7. Friends: request / accept, view friends' finished rounds read-only
 3. History and stats
 4. Group scoring (one phone scoring several archers)
@@ -43,6 +43,8 @@ Phone (Kotlin/Compose)                         Home server
   - Marks a round SYNCED only if it wasn't edited while uploading (`markSync` checks `updated_at`), otherwise it goes again.
   - No signal / 5xx / 429 → retry later. 401 → sign out on the phone (Profile asks to sign in). 400/404 → FAILED, retried after the next edit.
   - Rounds scored before signing in upload once you sign in.
+  - Download (after upload, same worker): fetches own rounds with `ServerUpdatedUtc` after the saved cursor (minus 5 minutes' overlap), keyset-paged by (`ServerUpdatedUtc`, `RoundId`). A downloaded round replaces the local copy only if its `clientUpdatedUtc` is newer than the phone's `updated_at`; deletions hide the local round. Cursor kept with the account and cleared on sign-out (next sign-in downloads everything again; identical rounds are skipped).
+  - Signing in to a different account on the same phone mixes both accounts' rounds in the list; not handled yet.
 
 ## Local data model (Room) — implemented
 

@@ -94,6 +94,22 @@ abstract class RoundDao {
         )
     }
 
+    @Query("DELETE FROM target WHERE round_id = :roundId")
+    abstract suspend fun deleteTargets(roundId: String)
+
+    @Query("DELETE FROM animal WHERE round_id = :roundId")
+    abstract suspend fun deleteAllAnimals(roundId: String)
+
+    /** Replaces a whole round with a copy downloaded from the server. */
+    @Transaction
+    open suspend fun replaceRound(round: RoundEntity, targets: List<TargetEntity>, animals: List<AnimalEntity>) {
+        upsertRound(round)
+        deleteAllAnimals(round.id)
+        deleteTargets(round.id)
+        targets.forEach { upsertTarget(it) }
+        upsertAnimals(animals)
+    }
+
     @Transaction
     open suspend fun createRound(round: RoundEntity, targets: List<TargetEntity>, animals: List<AnimalEntity>) {
         upsertRound(round)

@@ -7,6 +7,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 object ApiConfig {
     /** The NFAS API on Odin, through Nginx Proxy Manager. */
@@ -54,6 +55,19 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
     /** Marks a round deleted on the server (fine if it was never uploaded). */
     suspend fun deleteRound(token: String, roundId: String) {
         request("DELETE", "/api/rounds/$roundId", body = null, token = token)
+    }
+
+    /**
+     * One page of this archer's rounds changed after the cursor (oldest change first, deletions included):
+     * { rounds: [ { roundId, ..., isDeleted, serverUpdatedUtc, targets: [...] } ], more: true|false }.
+     */
+    suspend fun changedRounds(token: String, since: String?, afterId: String?): JSONObject {
+        val query = listOfNotNull(
+            since?.let { "since=" + URLEncoder.encode(it, "UTF-8") },
+            afterId?.let { "afterId=$it" },
+            "limit=50",
+        ).joinToString("&")
+        return request("GET", "/api/rounds?$query", body = null, token = token)
     }
 
     private fun credentials(username: String, password: String, deviceName: String) =
