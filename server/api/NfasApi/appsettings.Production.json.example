@@ -1,0 +1,5 @@
+{
+  "ConnectionStrings": {
+    "Nfas": "Server=sql.fnurble.co.uk;Database=NfasScoring;User ID=nfas_api;Password=PUT_THE_NFAS_API_PASSWORD_HERE;Encrypt=True;TrustServerCertificate=False;Application Name=NfasApi"
+  }
+}

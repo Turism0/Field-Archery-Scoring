@@ -1,0 +1,45 @@
+namespace NfasApi.Rounds;
+
+// JSON shape of a round, as sent by the app (camelCase). Codes match the app's enums and the database checks.
+
+public sealed record RoundDto(
+    DateOnly ShootDate,
+    int TargetCount,
+    string ArcherClass,          // L or G
+    string AgeGroup,             // ADULT / JUNIOR / CUB
+    string BowStyle,             // AFB, BB, ... UL
+    string Status,               // COMPLETED (the app only uploads finished rounds) or IN_PROGRESS
+    int TotalPoints,
+    DateTime ClientCreatedUtc,
+    DateTime ClientUpdatedUtc,
+    IReadOnlyList<TargetDto> Targets);
+
+public sealed record TargetDto(
+    int TargetNo,
+    string Type,                 // STANDARD / PREDATOR_PREY / FAN
+    int? OverridePoints,
+    int Points,
+    IReadOnlyList<AnimalDto> Animals);
+
+public sealed record AnimalDto(
+    int Index,                   // 0 = first animal (the predator on a predator/prey)
+    string State,                // PENDING / MISSED / SCORED
+    int? ArrowNo,
+    string? Hit,                 // INNER_KILL / KILL / WOUND
+    int Points);
+
+/// <summary>A round as returned by GET, with the server's own fields.</summary>
+public sealed record StoredRoundDto(
+    Guid RoundId,
+    DateOnly ShootDate,
+    int TargetCount,
+    string ArcherClass,
+    string AgeGroup,
+    string BowStyle,
+    string Status,
+    int TotalPoints,
+    bool IsDeleted,
+    DateTime ClientCreatedUtc,
+    DateTime ClientUpdatedUtc,
+    DateTime ServerUpdatedUtc,
+    IReadOnlyList<TargetDto> Targets);

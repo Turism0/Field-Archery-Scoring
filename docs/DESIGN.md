@@ -15,8 +15,8 @@
    3. Accounts in the API: check username, register, sign in ← 1.2.03, tested
    4. Accounts in the app (optional sign-in, Account card on Profile) ← 1.2.04, tested
    5. Upload rounds: **finished rounds only** (the phone saves every change as you score, so in-progress rounds aren't at risk). Edits to finished rounds and deletions sync too.
-      - 5a. API: `PUT/GET/DELETE /api/rounds/{id}` with server-side rule checks ← 1.2.05
-      - 5b. App: background upload with WorkManager when signed in and online; synced / waiting indicator
+      - 5a. API: `PUT/GET/DELETE /api/rounds/{id}` with server-side rule checks ← 1.2.05 (1.2.06: exact datetime2 parameters)
+      - 5b. App: background upload with WorkManager when signed in and online; synced / waiting indicator ← 1.2.08
    6. Download rounds after signing in on a new phone
    7. Friends: request / accept, view friends' finished rounds read-only
 3. History and stats
@@ -37,7 +37,12 @@ Phone (Kotlin/Compose)                         Home server
 - The phone's Room database is the source of truth while scoring. Every write is local first.
 - The app never talks to SQL Server directly — only to the API at `https://nfas.fnurble.co.uk`.
 - API: ASP.NET Core minimal API on **.NET 10 LTS** (supported to Nov 2028), IIS on Odin (app pool "No Managed Code"), Microsoft.Data.SqlClient to `sql.fnurble.co.uk` with encryption. The connection string sits in `appsettings.Production.json` on Odin only.
-- Sync (iteration 2) runs through WorkManager with a network constraint, so it waits for signal and retries automatically.
+- Sync runs through WorkManager (`data/sync/`) with a network constraint, so it waits for signal and retries with exponential back-off.
+  - Triggers: any change to a round (`RoundRepository.onChanged`), signing in, and app start. Unique work, appended, so a change made mid-upload is sent afterwards.
+  - Sends rounds with `sync_state = PENDING` that are finished or deleted; in-progress rounds stay on the phone.
+  - Marks a round SYNCED only if it wasn't edited while uploading (`markSync` checks `updated_at`), otherwise it goes again.
+  - No signal / 5xx / 429 → retry later. 401 → sign out on the phone (Profile asks to sign in). 400/404 → FAILED, retried after the next edit.
+  - Rounds scored before signing in upload once you sign in.
 
 ## Local data model (Room) — implemented
 

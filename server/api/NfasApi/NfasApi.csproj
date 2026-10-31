@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NfasApi</RootNamespace>
+    <Version>1.2.6</Version>
+    <InformationalVersion>1.2.06</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SQL Server driver. Floating 6.x so the build picks up the latest 6.x fixes. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.*" />
+    <!-- Small helper for running SQL and mapping results to C# records. -->
+    <PackageReference Include="Dapper" Version="2.*" />
+  </ItemGroup>
+
+</Project>
