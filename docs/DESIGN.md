@@ -9,7 +9,7 @@
 ## Iterations
 
 1. **Single-user scoring, offline** ← done (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit; 1.3: new home screen, round type choice, score history)
-2. **Online** ← in progress. Steps, each tested before the next:
+2. **Online** ← done (1.4). Steps, each tested before the next:
    1. Database and API login on Mimir (`server/sql/`) ← 1.2.01, tested
    2. API skeleton on Odin (IIS) behind Nginx Proxy Manager, health check that reaches the database ← 1.2.02, tested
    3. Accounts in the API: check username, register, sign in ← 1.2.03, tested
@@ -20,7 +20,7 @@
    6. Download rounds: `GET /api/rounds?since=` plus a download pass after every upload; a new phone gets everything after signing in, two phones stay in step ← 1.2.09
    7. Friends: request / accept, view friends' finished rounds read-only
       - 7a. API: `/api/friends` (list with summaries, requests, accept, remove, friends' finished rounds) ← 1.3.01
-      - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard
+      - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard ← 1.4
 3. History and stats
 4. Group scoring (one phone scoring several archers)
 
@@ -73,11 +73,12 @@ Design points:
 home ─┬─ scoreRound ─┬─ (continue) ─────────────▶ round/{id}?target=n  (scoring) ──finish──▶ card/{id}
       │              └─ roundType ─▶ newRound/{type} ─start─▶ round/{id}                       │
       ├─ history ──(finished round)──▶ card/{id} ──edit / tap target──▶ round/{id}?target=n ◀──┘
-      ├─ friends (step 7b)
+      ├─ friends ─▶ friend/{archerId}/{username} ─▶ friendCard/{archerId}/{username}/{roundId}  (read-only)
       └─ profile ─▶ account
 ```
 
 - Home has tiles for Score a round, Score history and Friends; Score history shows finished rounds only.
+- Friends data (`data/FriendsRepository.kt`) is fetched from the API each time a friends screen opens or is pulled down; nothing about friends is stored on the phone. A friend's scorecard reuses the scorecard layout with `readOnly` target rows (predator/prey and fans still expand) and no edit button or menu.
 - Round types come from `domain/RoundType.kt` (one entry, NFAS Big Game). A second type will need a `round_type` column on the phone and server (Room migration + schema version 2).
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.

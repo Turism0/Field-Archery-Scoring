@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.3.01
+## Version 1.4
 
+- **1.4:** Friends in the app: add friends by username, accept / decline / cancel requests, friends list with rounds, best and average per animal; tap a friend for their finished rounds and open any scorecard read-only. Remove a friend from their page. Completes the online features.
 - **1.3.01:** friends in the API: request by username, accept / decline / cancel / unfriend, friends list with a summary per friend (rounds, best, average per animal), and read-only access to friends' finished rounds. Test script `server/tests/Test-Friends.ps1`. No app changes yet.
 - **1.3:** new home screen with tiles for **Score a round**, **Score history** and **Friends** (coming next), plus sign-in / last-synced status and pull-to-sync. Score a round lists unfinished rounds to continue, or starts a new round via a **round type** choice (NFAS Big Game for now; more types can be added in `domain/RoundType.kt`). Score history shows finished rounds only.
 - **1.2.11:** pull down on the home screen to sync now (upload and download), with a message saying how it went and a "Last synced" line. Sync problems are now reported instead of ignored.
@@ -21,17 +22,18 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
 - **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
 
-Versioning: minor changes go 1.3.01, 1.3.02 … 1.3.99; major changes move to the next tenth (1.4).
+Versioning: minor changes go 1.4.01, 1.4.02 … 1.4.99; major changes move to the next tenth (1.5).
 
-## Status: iteration 1 done (single-user, offline); iteration 2 (online) started
+## Status: iteration 2 (online) done: accounts, two-way sync, friends
 
 ### Screens
 
 - **Home:** sign-in and "last synced" status (tap for Profile), and three tiles:
   - **Score a round** (shows how many are in progress) → continue an unfinished round, or **Start a new round** → choose the **round type** → New round.
   - **Score history** (finished rounds and best score) → finished rounds only, newest first, with Backed up / Waiting / Couldn't upload labels; tap for the scorecard.
-  - **Friends** (coming in step 7b).
+  - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).
   Pull down on Home or Score history to sync now.
+- **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
 - **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
@@ -80,9 +82,9 @@ No scoring arrow = 0.
 
 **Bow styles:** AFB, BB, BH, CL, XB, TXB, FS, HT, LB, PV, TD, TB, UL.
 
-## Server (iteration 2, in progress)
+## Server
 
-Rounds will sync to SQL Server 2025 on Mimir through an ASP.NET Core API on Odin; the app never talks to SQL Server directly. Accounts are a username and password (no email, no real names on the server). Friends (request + accept) will see each other's finished rounds read-only.
+Rounds sync to SQL Server 2025 on Mimir through an ASP.NET Core API on Odin; the app never talks to SQL Server directly. Accounts are a username and password (no email, no real names on the server). Friends (request + accept) see each other's finished rounds read-only.
 
 Database setup, run in SSMS in order (details in `docs/DESIGN.md`):
 
@@ -104,7 +106,8 @@ app/src/main/java/uk/co/fnurble/nfas/
   data/local/    Room entities, DAOs, database
   data/          Repositories (domain <-> database mapping)
   ui/            ViewModels, navigation, theme
-  ui/screens/    Home, Score a round, Round type, New round, Scoring, Scorecard (+ sheet), Score history, Profile, Account
+  ui/screens/    Home, Score a round, Round type, New round, Scoring, Scorecard (+ sheet), Score history,
+                 Friends, Friend's rounds, Friend's scorecard, Profile, Account
   ui/components/ Shared form fields, section cards, running stats panel
 server/sql/      Database and login scripts for SQL Server (run in order)
 server/api/      ASP.NET Core API (.NET 10) for IIS on Odin; deploy steps in server/README.md

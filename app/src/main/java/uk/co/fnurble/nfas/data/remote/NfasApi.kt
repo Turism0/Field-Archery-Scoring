@@ -70,6 +70,32 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
         return request("GET", "/api/rounds?$query", body = null, token = token)
     }
 
+    // ---- Friends ----
+
+    /** { friends: [...], incoming: [...], outgoing: [...] } */
+    suspend fun friends(token: String): JSONObject = request("GET", "/api/friends", body = null, token = token)
+
+    /** { result: "requested" | "accepted", message } */
+    suspend fun sendFriendRequest(token: String, username: String): JSONObject =
+        request("POST", "/api/friends/requests", JSONObject().put("username", username), token)
+
+    suspend fun acceptFriend(token: String, archerId: String) {
+        request("POST", "/api/friends/$archerId/accept", body = null, token = token)
+    }
+
+    /** Decline, cancel or unfriend. */
+    suspend fun removeFriend(token: String, archerId: String) {
+        request("DELETE", "/api/friends/$archerId", body = null, token = token)
+    }
+
+    /** { rounds: [ { roundId, shootDate, targetCount, archerClass, ageGroup, bowStyle, totalPoints } ] } */
+    suspend fun friendRounds(token: String, archerId: String): JSONObject =
+        request("GET", "/api/friends/$archerId/rounds", body = null, token = token)
+
+    /** One of a friend's finished rounds, same shape as the download list. */
+    suspend fun friendRound(token: String, archerId: String, roundId: String): JSONObject =
+        request("GET", "/api/friends/$archerId/rounds/$roundId", body = null, token = token)
+
     private fun credentials(username: String, password: String, deviceName: String) =
         JSONObject().put("username", username).put("password", password).put("deviceName", deviceName)
 

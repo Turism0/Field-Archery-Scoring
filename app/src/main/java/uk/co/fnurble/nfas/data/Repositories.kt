@@ -9,6 +9,7 @@ import uk.co.fnurble.nfas.data.local.AnimalState
 import uk.co.fnurble.nfas.data.local.ProfileDao
 import uk.co.fnurble.nfas.data.local.ProfileEntity
 import uk.co.fnurble.nfas.data.local.RoundDao
+import uk.co.fnurble.nfas.data.local.RoundData
 import uk.co.fnurble.nfas.data.local.RoundEntity
 import uk.co.fnurble.nfas.data.local.SyncState
 import uk.co.fnurble.nfas.data.local.TargetEntity
@@ -152,6 +153,9 @@ class RoundRepository(
 }
 
 // ---- Mapping ----
+
+/** A round as phone database rows → the domain model (also used for friends' rounds from the server). */
+fun RoundData.toDomain(): Round = round.toDomain(targets, animals)
 
 private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<AnimalEntity>): Round {
     val byTarget = animals.groupBy { it.targetNo }

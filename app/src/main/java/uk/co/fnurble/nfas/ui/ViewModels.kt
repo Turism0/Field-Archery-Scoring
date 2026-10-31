@@ -21,6 +21,10 @@ import uk.co.fnurble.nfas.AppContainer
 import uk.co.fnurble.nfas.NfasApp
 import uk.co.fnurble.nfas.data.Account
 import uk.co.fnurble.nfas.data.AccountStore
+import uk.co.fnurble.nfas.data.FriendRequest
+import uk.co.fnurble.nfas.data.FriendRoundSummary
+import uk.co.fnurble.nfas.data.FriendsOverview
+import uk.co.fnurble.nfas.data.FriendsRepository
 import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.Profile
 import uk.co.fnurble.nfas.data.ProfileRepository
@@ -152,6 +156,175 @@ class ScoreRoundViewModel(profiles: ProfileRepository, roundRepo: RoundRepositor
     val profileReady: StateFlow<Boolean> = profiles.profile.map { p ->
         p.archerClass != null && p.mainBowStyle != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+}
+
+// ---------------- Friends ----------------
+
+/** Something loaded from the server: still loading, failed with a message, or ready. */
+sealed interface Load<out T> {
+    data object Loading : Load<Nothing>
+    data class Failed(val message: String) : Load<Nothing>
+    data class Ready<T>(val value: T) : Load<T>
+}
+
+private fun Throwable.friendlyMessage(): String = when (this) {
+    is ApiException -> message
+    else -> message ?: "Something went wrong. Try again."
+}
+
+/** Friends screen: add by username, incoming / outgoing requests, friends with summaries. */
+class FriendsViewModel(private val friends: FriendsRepository, accounts: AccountRepository) : ViewModel() {
+    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
+    private val _overview = MutableStateFlow<Load<FriendsOverview>>(Load.Loading)
+    val overview: StateFlow<Load<FriendsOverview>> = _overview.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _username = MutableStateFlow("")
+    val username: StateFlow<String> = _username.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    /** One-off result message for a snackbar (request sent, accepted, errors). */
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+    fun onUsername(v: String) { _username.value = v.trim() }
+
+    /** Pull to refresh, or reload after a change. */
+    fun load(showSpinner: Boolean = false) {
+        viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            _overview.value = try {
+                Load.Ready(friends.overview())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (_overview.value is Load.Ready) {
+                    _message.value = e.friendlyMessage()   // keep showing the last good list
+                    _overview.value
+                } else {
+                    Load.Failed(e.friendlyMessage())
+                }
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    fun sendRequest() {
+        val name = _username.value
+        if (name.isEmpty()) return
+        act {
+            _message.value = friends.sendRequest(name)
+            _username.value = ""
+        }
+    }
+
+    fun accept(request: FriendRequest) = act {
+        friends.accept(request.archerId)
+        _message.value = "You and ${request.username} are now friends."
+    }
+
+    fun decline(request: FriendRequest) = act {
+        friends.remove(request.archerId)
+        _message.value = "Request from ${request.username} declined."
+    }
+
+    fun cancel(request: FriendRequest) = act {
+        friends.remove(request.archerId)
+        _message.value = "Request to ${request.username} cancelled."
+    }
+
+    /** Runs a change on the server, then reloads the list. */
+    private fun act(block: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                block()
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+}
+
+/** A friend's finished rounds, newest first. */
+class FriendRoundsViewModel(private val friends: FriendsRepository, saved: SavedStateHandle) : ViewModel() {
+    val archerId: String = checkNotNull(saved["archerId"])
+    val username: String = checkNotNull(saved["username"])
+
+    private val _rounds = MutableStateFlow<Load<List<FriendRoundSummary>>>(Load.Loading)
+    val rounds: StateFlow<Load<List<FriendRoundSummary>>> = _rounds.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    init { load() }
+
+    fun messageShown() { _message.value = null }
+
+    fun load(showSpinner: Boolean = false) {
+        viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            _rounds.value = try {
+                Load.Ready(friends.rounds(archerId))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    fun removeFriend(onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                friends.remove(archerId)
+                onDone()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            }
+        }
+    }
+}
+
+/** One of a friend's scorecards, read-only. */
+class FriendScorecardViewModel(private val friends: FriendsRepository, saved: SavedStateHandle) : ViewModel() {
+    private val archerId: String = checkNotNull(saved["archerId"])
+    private val roundId: String = checkNotNull(saved["roundId"])
+    val username: String = checkNotNull(saved["username"])
+
+    private val _round = MutableStateFlow<Load<Round>>(Load.Loading)
+    val round: StateFlow<Load<Round>> = _round.asStateFlow()
+
+    init { load() }
+
+    fun load() {
+        viewModelScope.launch {
+            _round.value = Load.Loading
+            _round.value = try {
+                Load.Ready(friends.round(archerId, roundId))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
 }
 
 // ---------------- Profile ----------------

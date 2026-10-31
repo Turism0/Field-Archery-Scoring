@@ -55,6 +55,7 @@ fun HomeScreen(
     onProfile: () -> Unit,
     onScoreRound: () -> Unit,
     onHistory: () -> Unit,
+    onFriends: () -> Unit,
 ) {
     val summary by vm.summary.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
@@ -123,9 +124,8 @@ fun HomeScreen(
                 HomeTile(
                     icon = Icons.Filled.Face,
                     title = "Friends",
-                    subtitle = "Coming next: see friends' scorecards and stats",
-                    enabled = false,
-                    onClick = {},
+                    subtitle = if (signedIn) "Friends' scorecards and stats, requests" else "Sign in to see friends' scorecards",
+                    onClick = onFriends,
                 )
             }
         }

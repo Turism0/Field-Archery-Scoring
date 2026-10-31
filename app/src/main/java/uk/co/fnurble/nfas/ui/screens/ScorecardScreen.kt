@@ -145,7 +145,7 @@ fun ScorecardScreen(
 }
 
 @Composable
-private fun RoundHeader(r: Round) {
+internal fun RoundHeader(r: Round) {
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -176,7 +176,7 @@ private fun RoundHeader(r: Round) {
 
 /** Percentages for the round. Rates leave out overridden targets (no arrows recorded). */
 @Composable
-private fun MoreStats(s: RoundStats) {
+internal fun MoreStats(s: RoundStats) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth()) {

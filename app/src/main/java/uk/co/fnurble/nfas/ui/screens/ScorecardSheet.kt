@@ -92,13 +92,17 @@ internal fun ScorecardTargetRow(
     locked: Boolean,
     onGoTo: () -> Unit,
     goToLabel: String = "Go to target ${t.targetNo}",
+    /** Friends' scorecards: predator/prey and fans still expand, but nothing opens for editing. */
+    readOnly: Boolean = false,
 ) {
     var expanded by rememberSaveable(t.targetNo) { mutableStateOf(false) }
     val multi = t.animals.size > 1
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.alpha(if (locked) 0.45f else 1f)) {
         ListItem(
-            modifier = Modifier.clickable(enabled = !locked) { if (multi) expanded = !expanded else onGoTo() },
+            modifier = Modifier.clickable(enabled = !locked && (multi || !readOnly)) {
+                if (multi) expanded = !expanded else onGoTo()
+            },
             colors = ListItemDefaults.colors(
                 containerColor = if (isCurrent) scheme.secondaryContainer else scheme.surfaceContainerLow,
             ),
@@ -158,7 +162,7 @@ internal fun ScorecardTargetRow(
                         Text("${a.points}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                TextButton(onClick = onGoTo) { Text(goToLabel) }
+                if (!readOnly) TextButton(onClick = onGoTo) { Text(goToLabel) }
             }
         }
     }

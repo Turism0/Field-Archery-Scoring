@@ -9,6 +9,9 @@ import androidx.navigation.navArgument
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.screens.AccountScreen
+import uk.co.fnurble.nfas.ui.screens.FriendRoundsScreen
+import uk.co.fnurble.nfas.ui.screens.FriendScorecardScreen
+import uk.co.fnurble.nfas.ui.screens.FriendsScreen
 import uk.co.fnurble.nfas.ui.screens.HistoryScreen
 import uk.co.fnurble.nfas.ui.screens.HomeScreen
 import uk.co.fnurble.nfas.ui.screens.NewRoundScreen
@@ -37,6 +40,44 @@ fun NfasNavHost() {
                 onProfile = { nav.navigate("profile") },
                 onScoreRound = { nav.navigate("scoreRound") },
                 onHistory = { nav.navigate("history") },
+                onFriends = { nav.navigate("friends") },
+            )
+        }
+        // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).
+        composable("friends") {
+            FriendsScreen(
+                vm = appViewModel { c, _ -> FriendsViewModel(c.friendsRepository, c.accountRepository) },
+                onBack = { nav.popBackStack() },
+                onProfile = { nav.navigate("profile") },
+                onOpenFriend = { f -> nav.navigate("friend/${f.archerId}/${f.username}") },
+            )
+        }
+        composable(
+            "friend/{archerId}/{username}",
+            arguments = listOf(
+                navArgument("archerId") { type = NavType.StringType },
+                navArgument("username") { type = NavType.StringType },
+            ),
+        ) { entry ->
+            val archerId = entry.arguments?.getString("archerId").orEmpty()
+            val username = entry.arguments?.getString("username").orEmpty()
+            FriendRoundsScreen(
+                vm = appViewModel { c, saved -> FriendRoundsViewModel(c.friendsRepository, saved) },
+                onBack = { nav.popBackStack() },
+                onOpenRound = { r -> nav.navigate("friendCard/$archerId/$username/${r.roundId}") },
+            )
+        }
+        composable(
+            "friendCard/{archerId}/{username}/{roundId}",
+            arguments = listOf(
+                navArgument("archerId") { type = NavType.StringType },
+                navArgument("username") { type = NavType.StringType },
+                navArgument("roundId") { type = NavType.StringType },
+            ),
+        ) {
+            FriendScorecardScreen(
+                vm = appViewModel { c, saved -> FriendScorecardViewModel(c.friendsRepository, saved) },
+                onBack = { nav.popBackStack() },
             )
         }
         // Continue an unfinished round or start a new one.
