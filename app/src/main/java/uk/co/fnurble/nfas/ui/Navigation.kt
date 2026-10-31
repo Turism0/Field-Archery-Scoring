@@ -29,7 +29,7 @@ fun NfasNavHost() {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                vm = appViewModel { c, _ -> HomeViewModel(c.profileRepository, c.roundRepository) },
+                vm = appViewModel { c, _ -> HomeViewModel(c.profileRepository, c.roundRepository, c.accountRepository) },
                 onProfile = { nav.navigate("profile") },
                 onNewRound = { nav.navigate("newRound") },
                 onOpenRound = { r ->

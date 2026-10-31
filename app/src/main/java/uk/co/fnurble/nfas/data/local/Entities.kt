@@ -15,7 +15,8 @@ import java.time.Instant
 import java.time.LocalDate
 
 /** Sync state of a row. Iteration 2 uploads PENDING rows and marks them SYNCED. */
-enum class SyncState { PENDING, SYNCED }
+/** Upload state of a round. FAILED = the server refused it (e.g. another account's round); retried after the next edit. */
+enum class SyncState { PENDING, SYNCED, FAILED }
 
 enum class AnimalState { PENDING, MISSED, SCORED }
 

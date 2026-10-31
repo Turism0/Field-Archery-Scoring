@@ -30,6 +30,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import uk.co.fnurble.nfas.data.local.SyncState
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +59,7 @@ fun HomeScreen(
 ) {
     val rounds by vm.rounds.collectAsStateWithLifecycle()
     val profileReady by vm.profileReady.collectAsStateWithLifecycle()
+    val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -103,14 +109,14 @@ fun HomeScreen(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(list, key = { it.id }) { r -> RoundCard(r) { onOpenRound(r) } }
+                items(list, key = { it.id }) { r -> RoundCard(r, showSync = signedIn) { onOpenRound(r) } }
             }
         }
     }
 }
 
 @Composable
-private fun RoundCard(r: RoundSummary, onClick: () -> Unit) {
+private fun RoundCard(r: RoundSummary, showSync: Boolean, onClick: () -> Unit) {
     val inProgress = r.status == RoundStatus.IN_PROGRESS
     val scheme = MaterialTheme.colorScheme
     Card(
@@ -137,11 +143,27 @@ private fun RoundCard(r: RoundSummary, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
+                // Finished rounds upload when signed in; in-progress ones stay on the phone until finished.
+                if (showSync && !inProgress) SyncLabel(r.syncState)
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("${r.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("points", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+@Composable
+private fun SyncLabel(state: SyncState) {
+    val scheme = MaterialTheme.colorScheme
+    val (icon, text, colour) = when (state) {
+        SyncState.SYNCED -> Triple(Icons.Filled.Check, "Backed up", scheme.primary)
+        SyncState.PENDING -> Triple(Icons.Filled.Refresh, "Waiting to upload", scheme.onSurfaceVariant)
+        SyncState.FAILED -> Triple(Icons.Filled.Warning, "Couldn't upload", scheme.error)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Icon(icon, contentDescription = null, tint = colour, modifier = Modifier.size(14.dp))
+        Text(text, style = MaterialTheme.typography.labelSmall, color = colour)
     }
 }

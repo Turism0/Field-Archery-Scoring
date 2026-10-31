@@ -57,6 +57,17 @@ abstract class RoundDao {
         return RoundData(round, getTargets(id), getAnimals(id))
     }
 
+    /** Rounds waiting to go to the server: finished rounds and deletions (in-progress rounds stay on the phone). */
+    @Query("SELECT id FROM round WHERE sync_state = 'PENDING' AND (deleted = 1 OR status = 'COMPLETED') ORDER BY updated_at")
+    abstract suspend fun pendingUploadIds(): List<String>
+
+    /**
+     * Records the upload result, but only if the round hasn't been edited since it was read
+     * (otherwise it stays PENDING and goes up again with the newer edit). Returns rows changed.
+     */
+    @Query("UPDATE round SET sync_state = :state WHERE id = :id AND updated_at = :updatedAtMillis")
+    abstract suspend fun markSync(id: String, updatedAtMillis: Long, state: String): Int
+
     @Query("SELECT COALESCE(SUM(points), 0) FROM target WHERE round_id = :roundId")
     abstract suspend fun sumPoints(roundId: String): Int
 

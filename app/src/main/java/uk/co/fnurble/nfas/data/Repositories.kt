@@ -69,11 +69,14 @@ data class RoundSummary(
     val classLine: String,
     val totalPoints: Int,
     val status: RoundStatus,
+    val syncState: SyncState,
 )
 
 class RoundRepository(
     private val dao: RoundDao,
     private val clock: Clock = Clock.systemUTC(),
+    /** Called after any change that may need uploading (asks the background sync to run). */
+    private val onChanged: () -> Unit = {},
 ) {
     val rounds: Flow<List<RoundSummary>> = dao.observeRounds().map { list ->
         list.map {
@@ -84,6 +87,7 @@ class RoundRepository(
                 classLine = "${it.archerClass.displayName} ${it.ageGroup.displayName} ${it.bowStyle.code}",
                 totalPoints = it.totalPoints,
                 status = it.status,
+                syncState = it.syncState,
             )
         }
     }
@@ -129,6 +133,7 @@ class RoundRepository(
 
     suspend fun saveTarget(roundId: String, target: TargetScore) {
         dao.saveTarget(target.toEntity(roundId, Instant.now(clock)), target.toAnimalEntities(roundId))
+        onChanged()
     }
 
     suspend fun setStatus(roundId: String, status: RoundStatus) = touch(roundId) { it.copy(status = status) }
@@ -138,6 +143,7 @@ class RoundRepository(
     private suspend fun touch(roundId: String, change: (RoundEntity) -> RoundEntity) {
         val r = dao.getRound(roundId) ?: return
         dao.upsertRound(change(r).copy(updatedAt = Instant.now(clock), syncState = SyncState.PENDING))
+        onChanged()
     }
 
     companion object {

@@ -53,7 +53,11 @@ inline fun <reified VM : ViewModel> appViewModel(
 
 // ---------------- Home ----------------
 
-class HomeViewModel(profiles: ProfileRepository, roundRepo: RoundRepository) : ViewModel() {
+class HomeViewModel(profiles: ProfileRepository, roundRepo: RoundRepository, accounts: AccountRepository) : ViewModel() {
+    /** Upload icons on round cards are only shown when signed in. */
+    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
     val rounds: StateFlow<List<RoundSummary>?> =
         roundRepo.rounds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
