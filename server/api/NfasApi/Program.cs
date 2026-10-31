@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using NfasApi.Auth;
 using NfasApi.Data;
+using NfasApi.Friends;
 using NfasApi.Rounds;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -108,10 +109,11 @@ app.MapGet("/health", async (Db db, ILogger<Program> log, CancellationToken ct) 
 
 app.MapAuthEndpoints();
 app.MapRoundEndpoints();
+app.MapFriendEndpoints();
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "1.2.09";
+    public const string Version = "1.3.01";
 }

@@ -32,6 +32,12 @@ Start-WebAppPool NfasApi
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
+| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal }], incoming: [...], outgoing: [...] }` |
+| POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
+| POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
+| DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
+| GET | `/api/friends/{archerId}/rounds` | Bearer token | `{ rounds: [{ roundId, shootDate, targetCount, archerClass, ageGroup, bowStyle, totalPoints }] }`: their finished rounds, newest first; 404 `not_friends` |
+| GET | `/api/friends/{archerId}/rounds/{roundId}` | Bearer token | One finished round with targets and animals (read-only) |
 | GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
@@ -77,6 +83,15 @@ Every line should start with OK. It creates a `zz_test_…` account each run; re
 ```
 
 Uploads, re-sends, edits, the download list, rule violations, another archer's access and delete. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing friends (step 7a)
+
+```powershell
+.\Test-Friends.ps1                                   # through NPM
+.\Test-Friends.ps1 -BaseUrl http://localhost:8085    # on Odin
+```
+
+Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing download on a phone (step 6)
 

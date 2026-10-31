@@ -19,6 +19,8 @@
       - 5b. App: background upload with WorkManager when signed in and online; synced / waiting indicator ← 1.2.08
    6. Download rounds: `GET /api/rounds?since=` plus a download pass after every upload; a new phone gets everything after signing in, two phones stay in step ← 1.2.09
    7. Friends: request / accept, view friends' finished rounds read-only
+      - 7a. API: `/api/friends` (list with summaries, requests, accept, remove, friends' finished rounds) ← 1.3.01
+      - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard
 3. History and stats
 4. Group scoring (one phone scoring several archers)
 
@@ -106,7 +108,9 @@ Decisions:
 - **Shared tables keyed by `ArcherId`, not one table per user.** Friends' scorecards are a simple join, schema changes happen once, and the API restricts every query to the signed-in archer and their accepted friends.
 - Deleting a round or archer cascades to scores and tokens. Friendships don't cascade (SQL Server allows only one cascade path to `Archer`), so the API removes them first.
 - Conflict handling: last write wins on `ClientUpdatedUtc` per round (only one phone edits a round until group scoring arrives).
-- Friends see **finished rounds only** (`Status = 'COMPLETED'`, not deleted), read-only.
+- Friends see **finished rounds only** (`Status = 'COMPLETED'`, not deleted), read-only. Every friends query checks `vFriend` (accepted, either direction); anything else is "not found".
+- Sending a request to someone who has already asked you accepts it. Declining, cancelling and unfriending all delete the row.
+- Friend summaries (rounds, best, latest, average per animal) are worked out by the API from finished rounds; the average divides total points by all animals on those rounds, so it can differ slightly from the app's (which skips unscored targets).
 
 ## Privacy (UK GDPR) — not legal advice
 
