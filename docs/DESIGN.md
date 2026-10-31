@@ -8,7 +8,7 @@
 
 ## Iterations
 
-1. **Single-user scoring, offline** ← done (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit)
+1. **Single-user scoring, offline** ← done (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit; 1.3: new home screen, round type choice, score history)
 2. **Online** ← in progress. Steps, each tested before the next:
    1. Database and API login on Mimir (`server/sql/`) ← 1.2.01, tested
    2. API skeleton on Odin (IIS) behind Nginx Proxy Manager, health check that reaches the database ← 1.2.02, tested
@@ -68,12 +68,16 @@ Design points:
 ## Screens and navigation
 
 ```
-home ──(in progress)──▶ round/{id}?target=n  (scoring) ──finish──▶ card/{id}  (scorecard)
-  │                                   ▲                                │
-  └──(finished)──▶ card/{id} ──edit / tap target──────────────────────┘
+home ─┬─ scoreRound ─┬─ (continue) ─────────────▶ round/{id}?target=n  (scoring) ──finish──▶ card/{id}
+      │              └─ roundType ─▶ newRound/{type} ─start─▶ round/{id}                       │
+      ├─ history ──(finished round)──▶ card/{id} ──edit / tap target──▶ round/{id}?target=n ◀──┘
+      ├─ friends (step 7b)
+      └─ profile ─▶ account
 ```
 
-- Finishing a round replaces the scoring screen with the scorecard; back from the scorecard goes home.
+- Home has tiles for Score a round, Score history and Friends; Score history shows finished rounds only.
+- Round types come from `domain/RoundType.kt` (one entry, NFAS Big Game). A second type will need a `round_type` column on the phone and server (Room migration + schema version 2).
+- Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
 ## Server data model (SQL Server 2025 on Mimir) — schema version 1

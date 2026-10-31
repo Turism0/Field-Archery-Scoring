@@ -30,6 +30,7 @@ import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.ArcherClass
 import uk.co.fnurble.nfas.domain.BowStyle
+import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.NewRoundViewModel
 import uk.co.fnurble.nfas.ui.components.BottomActionBar
 import uk.co.fnurble.nfas.ui.components.DateField
@@ -45,6 +46,7 @@ private val CommonTargetCounts = listOf(18, 20, 36, 40)
 @Composable
 fun NewRoundScreen(
     vm: NewRoundViewModel,
+    roundType: RoundType,
     onBack: () -> Unit,
     onEditProfile: () -> Unit,
     onStarted: (String) -> Unit,
@@ -54,7 +56,13 @@ fun NewRoundScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New round") },
+                title = {
+                    Column {
+                        Text("New round")
+                        Text(roundType.displayName, style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },

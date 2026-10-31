@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.2.11
+## Version 1.3
 
+- **1.3:** new home screen with tiles for **Score a round**, **Score history** and **Friends** (coming next), plus sign-in / last-synced status and pull-to-sync. Score a round lists unfinished rounds to continue, or starts a new round via a **round type** choice (NFAS Big Game for now; more types can be added in `domain/RoundType.kt`). Score history shows finished rounds only.
 - **1.2.11:** pull down on the home screen to sync now (upload and download), with a message saying how it went and a "Last synced" line. Sync problems are now reported instead of ignored.
 - **1.2.10:** `server/tests/Test-Download.ps1`: acts as a second phone on your account to check the app downloads new, edited and deleted rounds. No app or API changes.
 - **1.2.09:** download rounds: after uploading, the app fetches this archer's rounds changed on the server (new API `GET /api/rounds?since=`), so a new or reset phone gets all its rounds back after signing in, and two phones on one account stay in step, deletions included. Newest edit wins.
@@ -19,13 +20,18 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
 - **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
 
-Versioning: minor changes go 1.2.01, 1.2.02 … 1.2.99; major changes move to the next tenth (1.3).
+Versioning: minor changes go 1.3.01, 1.3.02 … 1.3.99; major changes move to the next tenth (1.4).
 
 ## Status: iteration 1 done (single-user, offline); iteration 2 (online) started
 
 ### Screens
 
-- **Home:** list of rounds, newest first. Rounds in progress are highlighted and open on the scoring screen; finished rounds open on the scorecard. When signed in, finished rounds show whether they're backed up to the server; pull down to sync now ("Last synced" shows at the top).
+- **Home:** sign-in and "last synced" status (tap for Profile), and three tiles:
+  - **Score a round** (shows how many are in progress) → continue an unfinished round, or **Start a new round** → choose the **round type** → New round.
+  - **Score history** (finished rounds and best score) → finished rounds only, newest first, with Backed up / Waiting / Couldn't upload labels; tap for the scorecard.
+  - **Friends** (coming in step 7b).
+  Pull down on Home or Score history to sync now.
+- **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.
@@ -97,7 +103,7 @@ app/src/main/java/uk/co/fnurble/nfas/
   data/local/    Room entities, DAOs, database
   data/          Repositories (domain <-> database mapping)
   ui/            ViewModels, navigation, theme
-  ui/screens/    Home, Profile, New round, Scoring, Scorecard (+ scorecard sheet)
+  ui/screens/    Home, Score a round, Round type, New round, Scoring, Scorecard (+ sheet), Score history, Profile, Account
   ui/components/ Shared form fields, section cards, running stats panel
 server/sql/      Database and login scripts for SQL Server (run in order)
 server/api/      ASP.NET Core API (.NET 10) for IIS on Odin; deploy steps in server/README.md

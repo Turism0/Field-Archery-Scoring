@@ -56,24 +56,21 @@ inline fun <reified VM : ViewModel> appViewModel(
 
 // ---------------- Home ----------------
 
-class HomeViewModel(
-    profiles: ProfileRepository,
-    roundRepo: RoundRepository,
-    accounts: AccountRepository,
+/**
+ * Pull-to-refresh sync shared by the home and history screens: runs the sync now and
+ * turns the result into a short message for a snackbar.
+ */
+abstract class SyncingViewModel(
     private val syncer: RoundSyncer,
     accountStore: AccountStore,
+    accounts: AccountRepository,
 ) : ViewModel() {
-    val rounds: StateFlow<List<RoundSummary>?> =
-        roundRepo.rounds.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    /** True once class and main bow style are set, so a round can be started. */
-    val profileReady: StateFlow<Boolean> = profiles.profile.map { p ->
-        p.archerClass != null && p.mainBowStyle != null
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     /** Upload labels and "last synced" are only shown when signed in. */
     val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
+    val username: StateFlow<String?> = accounts.account.map { it?.username }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value?.username)
 
     val lastSync: StateFlow<Instant?> = accountStore.lastSync
 
@@ -111,6 +108,50 @@ class HomeViewModel(
             }
         }
     }
+}
+
+/** Figures for the home screen tiles. */
+data class HomeSummary(val inProgress: Int, val finished: Int, val best: Int?)
+
+/** Home: tiles for Score a round, Score history and Friends, plus account / sync status. */
+class HomeViewModel(
+    roundRepo: RoundRepository,
+    accounts: AccountRepository,
+    syncer: RoundSyncer,
+    accountStore: AccountStore,
+) : SyncingViewModel(syncer, accountStore, accounts) {
+    val summary: StateFlow<HomeSummary?> = roundRepo.rounds.map { list ->
+        val finished = list.filter { it.status == RoundStatus.COMPLETED }
+        HomeSummary(
+            inProgress = list.count { it.status == RoundStatus.IN_PROGRESS },
+            finished = finished.size,
+            best = finished.maxOfOrNull { it.totalPoints },
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+}
+
+/** Score history: finished rounds only, newest first. */
+class HistoryViewModel(
+    roundRepo: RoundRepository,
+    accounts: AccountRepository,
+    syncer: RoundSyncer,
+    accountStore: AccountStore,
+) : SyncingViewModel(syncer, accountStore, accounts) {
+    val rounds: StateFlow<List<RoundSummary>?> = roundRepo.rounds
+        .map { list -> list.filter { it.status == RoundStatus.COMPLETED } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+}
+
+/** Score a round: continue an unfinished round or start a new one. */
+class ScoreRoundViewModel(profiles: ProfileRepository, roundRepo: RoundRepository) : ViewModel() {
+    val inProgress: StateFlow<List<RoundSummary>?> = roundRepo.rounds
+        .map { list -> list.filter { it.status == RoundStatus.IN_PROGRESS } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** True once class and main bow style are set, so a round can be started. */
+    val profileReady: StateFlow<Boolean> = profiles.profile.map { p ->
+        p.archerClass != null && p.mainBowStyle != null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 }
 
 // ---------------- Profile ----------------

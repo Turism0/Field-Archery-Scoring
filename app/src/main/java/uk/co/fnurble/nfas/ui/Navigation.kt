@@ -7,10 +7,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import uk.co.fnurble.nfas.domain.RoundStatus
+import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.screens.AccountScreen
+import uk.co.fnurble.nfas.ui.screens.HistoryScreen
 import uk.co.fnurble.nfas.ui.screens.HomeScreen
 import uk.co.fnurble.nfas.ui.screens.NewRoundScreen
 import uk.co.fnurble.nfas.ui.screens.ProfileScreen
+import uk.co.fnurble.nfas.ui.screens.RoundTypeScreen
+import uk.co.fnurble.nfas.ui.screens.ScoreRoundScreen
 import uk.co.fnurble.nfas.ui.screens.ScorecardScreen
 import uk.co.fnurble.nfas.ui.screens.ScoringScreen
 
@@ -29,9 +33,33 @@ fun NfasNavHost() {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                vm = appViewModel { c, _ -> HomeViewModel(c.profileRepository, c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore) },
+                vm = appViewModel { c, _ -> HomeViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore) },
                 onProfile = { nav.navigate("profile") },
-                onNewRound = { nav.navigate("newRound") },
+                onScoreRound = { nav.navigate("scoreRound") },
+                onHistory = { nav.navigate("history") },
+            )
+        }
+        // Continue an unfinished round or start a new one.
+        composable("scoreRound") {
+            ScoreRoundScreen(
+                vm = appViewModel { c, _ -> ScoreRoundViewModel(c.profileRepository, c.roundRepository) },
+                onBack = { nav.popBackStack() },
+                onContinue = { r -> nav.navigate(scoringRoute(r.id)) },
+                onStartNew = { nav.navigate("roundType") },
+                onProfile = { nav.navigate("profile") },
+            )
+        }
+        composable("roundType") {
+            RoundTypeScreen(
+                onBack = { nav.popBackStack() },
+                onChoose = { type -> nav.navigate("newRound/${type.name}") },
+            )
+        }
+        // Finished rounds only; each opens its scorecard.
+        composable("history") {
+            HistoryScreen(
+                vm = appViewModel { c, _ -> HistoryViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore) },
+                onBack = { nav.popBackStack() },
                 onOpenRound = { r ->
                     nav.navigate(if (r.status == RoundStatus.COMPLETED) scorecardRoute(r.id) else scoringRoute(r.id))
                 },
@@ -50,9 +78,15 @@ fun NfasNavHost() {
                 onBack = { nav.popBackStack() },
             )
         }
-        composable("newRound") {
+        composable(
+            "newRound/{roundType}",
+            arguments = listOf(navArgument("roundType") { type = NavType.StringType }),
+        ) { entry ->
+            val roundType = entry.arguments?.getString("roundType")
+                ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
                 vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository) },
+                roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },
                 onStarted = { id ->
