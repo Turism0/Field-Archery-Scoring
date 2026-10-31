@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.2.09
+## Version 1.2.10
 
+- **1.2.10:** `server/tests/Test-Download.ps1`: acts as a second phone on your account to check the app downloads new, edited and deleted rounds. No app or API changes.
 - **1.2.09:** download rounds: after uploading, the app fetches this archer's rounds changed on the server (new API `GET /api/rounds?since=`), so a new or reset phone gets all its rounds back after signing in, and two phones on one account stay in step, deletions included. Newest edit wins.
 - **1.2.08:** the app uploads finished rounds (and deletions) in the background when signed in, using WorkManager: waits for signal, retries automatically, catches up on app start and after signing in. Round cards show Backed up / Waiting to upload / Couldn't upload.
 - **1.2.07:** test script fix: `Test-Accounts.ps1` version check failed on API 1.2.05 and later. No app or API changes.

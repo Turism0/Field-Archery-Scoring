@@ -78,6 +78,14 @@ Every line should start with OK. It creates a `zz_test_…` account each run; re
 
 Uploads, re-sends, edits, the download list, rule violations, another archer's access and delete. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
+## Testing download on a phone (step 6)
+
+```powershell
+.\Test-Download.ps1 -Username <your username>
+```
+
+Acts as a second phone on your real account: lists the rounds the server holds for you, then adds, edits and deletes a TEST round, pausing after each step so you can check the phone picks it up (close the app fully and reopen it to make it check). Signs itself out at the end. Leaves nothing behind except the deleted test round (hidden, kept as a deletion record).
+
 ## Deploying the API to Odin (step 2, first time)
 
 ### 1. Install .NET 10 on Odin
