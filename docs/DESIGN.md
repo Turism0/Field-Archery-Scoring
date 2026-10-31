@@ -8,8 +8,15 @@
 
 ## Iterations
 
-1. **Single-user scoring, offline** ← current (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit)
-2. API + central database + background sync, anonymous registration and recovery code
+1. **Single-user scoring, offline** ← done (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit)
+2. **Online** ← in progress. Steps, each tested before the next:
+   1. Database and API login on Mimir (`server/sql/`) ← 1.2.01, tested
+   2. API skeleton on Odin (IIS) behind Nginx Proxy Manager, health check that reaches the database ← 1.2.02, tested
+   3. Accounts in the API: check username, register, sign in ← 1.2.03
+   4. Accounts in the app
+   5. Upload rounds (background sync)
+   6. Download rounds after signing in on a new phone
+   7. Friends: request / accept, view friends' finished rounds read-only
 3. History and stats
 4. Group scoring (one phone scoring several archers)
 
@@ -20,13 +27,14 @@ Phone (Kotlin/Compose)                         Home server
 ┌───────────────────────────┐   HTTPS (NPM,   ┌──────────────────────┐    ┌──────────────┐
 │ UI → ViewModels           │   wildcard TLS) │ ASP.NET Core Web API │ →  │ SQL Server   │
 │ Repositories              │ ──────────────▶ │ on Odin (IIS)        │    │ on Mimir     │
-│ Room (SQLite) = truth     │                 └──────────────────────┘    └──────────────┘
+│ Room (SQLite) = truth     │  nfas.fnurble    └──────────────────────┘    └──────────────┘
 │ WorkManager sync (iter 2) │
 └───────────────────────────┘
 ```
 
 - The phone's Room database is the source of truth while scoring. Every write is local first.
-- The app never talks to SQL Server directly — only to the API.
+- The app never talks to SQL Server directly — only to the API at `https://nfas.fnurble.co.uk`.
+- API: ASP.NET Core minimal API on **.NET 10 LTS** (supported to Nov 2028), IIS on Odin (app pool "No Managed Code"), Microsoft.Data.SqlClient to `sql.fnurble.co.uk` with encryption. The connection string sits in `appsettings.Production.json` on Odin only.
 - Sync (iteration 2) runs through WorkManager with a network constraint, so it waits for signal and retries automatically.
 
 ## Local data model (Room) — implemented
@@ -59,56 +67,33 @@ home ──(in progress)──▶ round/{id}?target=n  (scoring) ──finish─
 - Finishing a round replaces the scoring screen with the scorecard; back from the scorecard goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
-## Server data model (SQL Server) — draft for iteration 2
+## Server data model (SQL Server 2025 on Mimir) — schema version 1
 
-```sql
-CREATE TABLE Archer (
-    ArcherId      UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,   -- random, made by server
-    Username      NVARCHAR(40)     NOT NULL UNIQUE,
-    SecretHash    VARBINARY(64)    NOT NULL,               -- hash of device secret
-    RecoveryHash  VARBINARY(64)    NOT NULL,               -- hash of recovery code
-    CreatedUtc    DATETIME2        NOT NULL
-);
+Scripts in `server/sql/`, run in order in SSMS:
 
-CREATE TABLE Round (
-    RoundId       UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,   -- from phone
-    ArcherId      UNIQUEIDENTIFIER NOT NULL REFERENCES Archer(ArcherId),
-    ShootDate     DATE             NOT NULL,
-    TargetCount   SMALLINT         NOT NULL,
-    ArcherClass   CHAR(1)          NOT NULL,               -- L / G
-    AgeGroup      VARCHAR(10)      NOT NULL,               -- ADULT / JUNIOR / CUB
-    BowStyle      VARCHAR(4)       NOT NULL,               -- AFB, BB, ...
-    Status        VARCHAR(12)      NOT NULL,
-    TotalPoints   INT              NOT NULL,
-    IsDeleted     BIT              NOT NULL DEFAULT 0,
-    UpdatedUtc    DATETIME2        NOT NULL,
-    RowVer        ROWVERSION
-);
+| Script | Run as | Does |
+|---|---|---|
+| `001_create_database_and_login.sql` | sysadmin | Creates database `NfasScoring` and login/user `nfas_api` (db_datareader + db_datawriter only, no schema changes). Set a strong password first; it never goes in Git. |
+| `002_create_tables.sql` | sysadmin | Creates the tables below and records schema version 1 |
+| `003_test_as_api_login.sql` | `nfas_api` | Inserts test data inside a transaction, checks constraints, cascades and the friend view, then rolls back; also checks the login can't change the schema |
 
-CREATE TABLE TargetScore (
-    RoundId        UNIQUEIDENTIFIER NOT NULL REFERENCES Round(RoundId) ON DELETE CASCADE,
-    TargetNo       SMALLINT         NOT NULL,
-    TargetType     VARCHAR(16)      NOT NULL,              -- STANDARD / PREDATOR_PREY / FAN
-    OverridePoints SMALLINT         NULL,
-    Points         SMALLINT         NOT NULL,
-    UpdatedUtc     DATETIME2        NOT NULL,
-    PRIMARY KEY (RoundId, TargetNo)
-);
+| Table | Key | Holds |
+|---|---|---|
+| `Archer` | `ArcherId` (server GUID) | `Username` (unique, case-insensitive, 3–30 of A–Z 0–9 _ . -), `PasswordHash`, created / last login, failed-login count and lockout, disabled flag |
+| `AuthToken` | `TokenId` | One per signed-in phone: SHA-256 `TokenHash`, device name, created / last used / expires / revoked |
+| `Round` | `RoundId` (phone GUID) | `ArcherId`, shoot date, target count, class (L/G), age group, bow style, status, total, deleted flag, phone created/updated times, server updated time, rowversion |
+| `TargetScore` | `RoundId` + `TargetNo` | Target type, override, points |
+| `AnimalScore` | `RoundId` + `TargetNo` + `AnimalIndex` | State, arrow, hit, points (checks enforce valid combinations, inner kill on 1st arrow only) |
+| `Friendship` | `ArcherLowId` + `ArcherHighId` | One row per pair: who asked, PENDING / ACCEPTED, dates. Declining or removing deletes the row |
+| `vFriend` (view) | | Accepted friends in both directions |
+| `SchemaVersion` | `Version` | Applied schema scripts |
 
-CREATE TABLE AnimalScore (
-    RoundId     UNIQUEIDENTIFIER NOT NULL,
-    TargetNo    SMALLINT         NOT NULL,
-    AnimalIndex TINYINT          NOT NULL,
-    State       VARCHAR(8)       NOT NULL,                 -- PENDING / MISSED / SCORED
-    ArrowNo     TINYINT          NULL,
-    Hit         VARCHAR(10)      NULL,                     -- INNER_KILL / KILL / WOUND
-    Points      SMALLINT         NOT NULL,
-    PRIMARY KEY (RoundId, TargetNo, AnimalIndex),
-    FOREIGN KEY (RoundId, TargetNo) REFERENCES TargetScore(RoundId, TargetNo) ON DELETE CASCADE
-);
-```
+Decisions:
 
-Conflict handling: last write wins on `UpdatedUtc` per round (only one device edits a round until group scoring arrives; revisit then).
+- **Shared tables keyed by `ArcherId`, not one table per user.** Friends' scorecards are a simple join, schema changes happen once, and the API restricts every query to the signed-in archer and their accepted friends.
+- Deleting a round or archer cascades to scores and tokens. Friendships don't cascade (SQL Server allows only one cascade path to `Archer`), so the API removes them first.
+- Conflict handling: last write wins on `ClientUpdatedUtc` per round (only one phone edits a round until group scoring arrives).
+- Friends see **finished rounds only** (`Status = 'COMPLETED'`, not deleted), read-only.
 
 ## Privacy (UK GDPR) — not legal advice
 
@@ -117,11 +102,17 @@ Conflict handling: last write wins on `UpdatedUtc` per round (only one device ed
 - Class, age group and bow style are categories, not identifiers.
 - The API should not log client IPs (or should truncate them) and keep log retention short.
 
-## Security — iteration 2 plan
+## Security — iteration 2
 
-- No passwords or emails. On first sync the app registers a username; the server returns a random archer ID and secret. Only a hash of the secret is stored on the server; the phone keeps the secret in the Android Keystore (excluded from backup).
-- A one-time recovery code (also stored hashed) lets the user restore their account on a new phone.
-- HTTPS only via Nginx Proxy Manager; rate limiting and request size limits on the API.
+- **Accounts:** username + password, no email. The app asks for a username; the API says whether it exists. Existing → "user already exists, enter password". New → create the account with a password.
+- Passwords are hashed by the API with ASP.NET Core's `PasswordHasher` (salted PBKDF2); only the hash is stored.
+- After signing in, the API issues a random token for that phone; the phone stores the token (Android Keystore-backed, excluded from backup), never the password. Only a SHA-256 hash of the token is stored on the server, so it can be revoked per phone.
+- Brute-force protection: sign-in calls limited per IP (30/minute, in memory only) and a 15-minute lockout after 5 wrong passwords.
+- Tokens are 32 random bytes (64 hex characters), valid for a year and extended while in use; signing out revokes only that phone's token.
+- Endpoints and error codes: see `server/README.md`.
+- Checking whether a username exists does reveal which usernames are taken; accepted, as usernames are public to friends anyway. Rate-limited.
+- **No password reset for now** (to revisit): a forgotten password means a new account.
+- HTTPS only via Nginx Proxy Manager; request size limits on the API.
 - Server-side validation of every score against the scoring rules (allowed values, arrow limits, predator/prey rules, flagged overrides).
-- SQL Server on Mimir is only reached by the API, never by the app.
+- SQL Server on Mimir is only reached by the API (login `nfas_api`), never by the app. Port 1433 is open to the internet, so `nfas_api` needs a long random password.
 - Note: the home network's UK-only inbound geoblock means syncing from abroad will fail; scores stay on the phone and sync on return.

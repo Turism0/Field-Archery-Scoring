@@ -4,7 +4,16 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Status: iteration 1.2 – single-user scoring (offline)
+## Version 1.2.03
+
+- **1.2.03:** accounts in the API: check username, register, sign in / out, `/api/me`; password hashing, per-phone tokens, lockout and rate limiting. PowerShell test script `server/tests/Test-Accounts.ps1`. No app changes.
+- **1.2.02:** API skeleton (`server/api/NfasApi`, .NET 10) with a `/health` check, and deployment steps for Odin (`server/README.md`). No app changes.
+- **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
+- **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
+
+Versioning: minor changes go 1.2.01, 1.2.02 … 1.2.99; major changes move to the next tenth (1.3).
+
+## Status: iteration 1 done (single-user, offline); iteration 2 (online) started
 
 ### Screens
 
@@ -55,6 +64,18 @@ No scoring arrow = 0.
 
 **Bow styles:** AFB, BB, BH, CL, XB, TXB, FS, HT, LB, PV, TD, TB, UL.
 
+## Server (iteration 2, in progress)
+
+Rounds will sync to SQL Server 2025 on Mimir through an ASP.NET Core API on Odin; the app never talks to SQL Server directly. Accounts are a username and password (no email, no real names on the server). Friends (request + accept) will see each other's finished rounds read-only.
+
+Database setup, run in SSMS in order (details in `docs/DESIGN.md`):
+
+1. `server/sql/001_create_database_and_login.sql` as sysadmin. Change the `nfas_api` password first.
+2. `server/sql/002_create_tables.sql` as sysadmin.
+3. `server/sql/003_test_as_api_login.sql` connected as `nfas_api`; every message should start with OK.
+
+API: ASP.NET Core on .NET 10 under IIS on Odin, at https://nfas.fnurble.co.uk. Build, update and test steps and the list of endpoints are in `server/README.md`.
+
 ## Building
 
 Open the folder in Android Studio and run the `app` configuration. Unit tests for the scoring engine: `./gradlew test`.
@@ -69,5 +90,8 @@ app/src/main/java/uk/co/fnurble/nfas/
   ui/            ViewModels, navigation, theme
   ui/screens/    Home, Profile, New round, Scoring, Scorecard (+ scorecard sheet)
   ui/components/ Shared form fields, section cards, running stats panel
+server/sql/      Database and login scripts for SQL Server (run in order)
+server/api/      ASP.NET Core API (.NET 10) for IIS on Odin; deploy steps in server/README.md
+server/tests/    PowerShell scripts that test the live API
 docs/DESIGN.md   Architecture, data model, privacy and sync design
 ```
