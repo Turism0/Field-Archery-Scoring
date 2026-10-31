@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.2.04
+## Version 1.2.05
 
+- **1.2.05:** round upload in the API (`PUT/GET/DELETE /api/rounds/{id}`) with full Big Game rule checks, safe re-sends (newest edit wins) and soft delete; test script `server/tests/Test-Rounds.ps1`. No app changes yet.
 - **1.2.04:** sign in / create account in the app (optional). Profile has an Account card; the Account screen checks the username, then asks for the password (existing user) or a new password typed twice (new user). Token stored encrypted with the Android Keystore and left out of backups.
 - **1.2.03:** accounts in the API: check username, register, sign in / out, `/api/me`; password hashing, per-phone tokens, lockout and rate limiting. PowerShell test script `server/tests/Test-Accounts.ps1`. No app changes.
 - **1.2.02:** API skeleton (`server/api/NfasApi`, .NET 10) with a `/health` check, and deployment steps for Odin (`server/README.md`). No app changes.

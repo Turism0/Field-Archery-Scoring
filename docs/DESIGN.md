@@ -13,8 +13,10 @@
    1. Database and API login on Mimir (`server/sql/`) ← 1.2.01, tested
    2. API skeleton on Odin (IIS) behind Nginx Proxy Manager, health check that reaches the database ← 1.2.02, tested
    3. Accounts in the API: check username, register, sign in ← 1.2.03, tested
-   4. Accounts in the app (optional sign-in, Account card on Profile) ← 1.2.04
-   5. Upload rounds (background sync)
+   4. Accounts in the app (optional sign-in, Account card on Profile) ← 1.2.04, tested
+   5. Upload rounds: **finished rounds only** (the phone saves every change as you score, so in-progress rounds aren't at risk). Edits to finished rounds and deletions sync too.
+      - 5a. API: `PUT/GET/DELETE /api/rounds/{id}` with server-side rule checks ← 1.2.05
+      - 5b. App: background upload with WorkManager when signed in and online; synced / waiting indicator
    6. Download rounds after signing in on a new phone
    7. Friends: request / accept, view friends' finished rounds read-only
 3. History and stats
