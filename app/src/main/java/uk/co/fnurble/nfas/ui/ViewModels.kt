@@ -157,22 +157,27 @@ class ScoringViewModel(
     val round: StateFlow<Round?> =
         rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _targetNo = MutableStateFlow(saved.get<Int>(KEY_TARGET) ?: 0)
+    /** Restored target, else the one asked for in the nav route (e.g. "Edit target 7" on the scorecard). */
+    private val _targetNo = MutableStateFlow(saved.get<Int>(KEY_TARGET) ?: saved.get<Int>(ARG_START_TARGET) ?: 0)
 
     /** Current target number; 0 until the round has loaded and we pick the first unscored target. */
     val targetNo: StateFlow<Int> = _targetNo.asStateFlow()
 
     fun ensureTargetSelected(r: Round) {
-        if (_targetNo.value == 0) {
-            goTo(r.targets.firstOrNull { !it.isComplete }?.targetNo ?: 1)
+        if (_targetNo.value == 0 || !r.canGoTo(_targetNo.value)) {
+            setTarget(r.firstUnscoredTargetNo ?: 1)
         }
     }
 
+    /** Opens a target, unless it's ahead of the next unscored one (no skipping ahead). */
     fun goTo(n: Int) {
-        val count = round.value?.targetCount ?: n
-        val clamped = n.coerceIn(1, maxOf(1, count))
-        _targetNo.value = clamped
-        saved[KEY_TARGET] = clamped
+        val r = round.value ?: return
+        if (r.canGoTo(n)) setTarget(n)
+    }
+
+    private fun setTarget(n: Int) {
+        _targetNo.value = n
+        saved[KEY_TARGET] = n
     }
 
     private fun edit(change: (TargetScore) -> TargetScore) {
@@ -206,7 +211,29 @@ class ScoringViewModel(
         onDone()
     }
 
-    private companion object {
-        const val KEY_TARGET = "targetNo"
+    companion object {
+        private const val KEY_TARGET = "targetNo"
+
+        /** Optional nav argument: target to open first (0 = next unscored). */
+        const val ARG_START_TARGET = "target"
+    }
+}
+
+// ---------------- Scorecard (end of round / reviewing a past round) ----------------
+
+class ScorecardViewModel(
+    private val rounds: RoundRepository,
+    saved: SavedStateHandle,
+) : ViewModel() {
+    val roundId: String = checkNotNull(saved["roundId"])
+
+    val round: StateFlow<Round?> =
+        rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun reopen() = viewModelScope.launch { rounds.setStatus(roundId, RoundStatus.IN_PROGRESS) }
+
+    fun delete(onDone: () -> Unit) = viewModelScope.launch {
+        rounds.delete(roundId)
+        onDone()
     }
 }

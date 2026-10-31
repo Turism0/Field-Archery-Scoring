@@ -1,21 +1,35 @@
 package uk.co.fnurble.nfas.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -24,7 +38,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -34,6 +47,69 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
 val UkDate: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy")
+val UkDateLong: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMMM yyyy")
+
+/** A titled group of form fields on a tonal card. */
+@Composable
+fun SectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                if (subtitle != null) {
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            content()
+        }
+    }
+}
+
+/** A full-width primary button pinned to the bottom of the screen (above the keyboard). */
+@Composable
+fun BottomActionBar(text: String, enabled: Boolean, onClick: () -> Unit) {
+    Surface(tonalElevation = 3.dp) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(16.dp)
+                .height(52.dp),
+        ) { Text(text, style = MaterialTheme.typography.titleMedium) }
+    }
+}
+
+/** Material 3 segmented buttons for a short single choice (e.g. Ladies / Gents). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> SegmentedChoice(
+    options: List<T>,
+    selected: T?,
+    label: (T) -> String,
+    modifier: Modifier = Modifier,
+    onSelect: (T) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(modifier.fillMaxWidth()) {
+        options.forEachIndexed { i, o ->
+            SegmentedButton(
+                selected = o == selected,
+                onClick = { onSelect(o) },
+                shape = SegmentedButtonDefaults.itemShape(i, options.size),
+            ) { Text(label(o)) }
+        }
+    }
+}
 
 /** A read-only dropdown for picking one option. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,16 +142,6 @@ fun <T> OptionDropdown(
             options.forEach { o ->
                 DropdownMenuItem(text = { Text(optionLabel(o)) }, onClick = { onSelect(o); expanded = false })
             }
-        }
-    }
-}
-
-/** Two or three chips side by side for a short single choice. */
-@Composable
-fun <T> ChipChoice(options: List<T>, selected: T?, label: (T) -> String, onSelect: (T) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { o ->
-            FilterChip(selected = o == selected, onClick = { onSelect(o) }, label = { Text(label(o)) })
         }
     }
 }
@@ -128,7 +194,14 @@ fun DateField(
 }
 
 @Composable
-fun NumberField(label: String, value: String, onValue: (String) -> Unit, modifier: Modifier = Modifier, isError: Boolean = false, supportingText: String? = null) {
+fun NumberField(
+    label: String,
+    value: String,
+    onValue: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    supportingText: String? = null,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = { v -> onValue(v.filter(Char::isDigit).take(3)) },

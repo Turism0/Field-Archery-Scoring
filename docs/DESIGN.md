@@ -8,7 +8,7 @@
 
 ## Iterations
 
-1. **Single-user scoring, offline** ← current
+1. **Single-user scoring, offline** ← current (1.2: Material 3 UI, no skipping ahead, running stats, end-of-round scorecard with edit)
 2. API + central database + background sync, anonymous registration and recovery code
 3. History and stats
 4. Group scoring (one phone scoring several archers)
@@ -46,6 +46,18 @@ Design points:
 - **Class, age group and bow style are copied onto each round**, so later profile changes (or a junior moving up a group) don't rewrite history.
 - **Points are stored** as well as the raw result (arrow + hit), so overrides and any future rule change don't alter old cards, and the server can report without re-implementing the rules.
 - Room schema JSON is exported to `app/schemas/` for writing migrations.
+- **Stats are derived, not stored:** total, average per animal (predator/prey = 2, fan = n), hit counts and rates are worked out from the round each time (`RoundStats` in `domain/Round.kt`), so changing a definition never needs a migration.
+
+## Screens and navigation
+
+```
+home ──(in progress)──▶ round/{id}?target=n  (scoring) ──finish──▶ card/{id}  (scorecard)
+  │                                   ▲                                │
+  └──(finished)──▶ card/{id} ──edit / tap target──────────────────────┘
+```
+
+- Finishing a round replaces the scoring screen with the scorecard; back from the scorecard goes home.
+- The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
 ## Server data model (SQL Server) — draft for iteration 2
 

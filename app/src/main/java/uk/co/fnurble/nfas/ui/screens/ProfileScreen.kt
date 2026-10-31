@@ -10,12 +10,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,9 +29,11 @@ import uk.co.fnurble.nfas.domain.ArcherClass
 import uk.co.fnurble.nfas.domain.BowStyle
 import uk.co.fnurble.nfas.domain.resolveAgeGroup
 import uk.co.fnurble.nfas.ui.ProfileViewModel
-import uk.co.fnurble.nfas.ui.components.ChipChoice
+import uk.co.fnurble.nfas.ui.components.BottomActionBar
 import uk.co.fnurble.nfas.ui.components.DateField
 import uk.co.fnurble.nfas.ui.components.OptionDropdown
+import uk.co.fnurble.nfas.ui.components.SectionCard
+import uk.co.fnurble.nfas.ui.components.SegmentedChoice
 import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +50,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
                 },
             )
         },
+        bottomBar = { BottomActionBar(text = "Save", enabled = profile != null) { vm.save(onBack) } },
     ) { padding ->
         val p = profile
         if (p == null) {
@@ -57,59 +58,57 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit) {
             return@Scaffold
         }
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Stored on this phone only", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            OutlinedTextField(
-                value = p.realName.orEmpty(),
-                onValueChange = { v -> vm.update { it.copy(realName = v) } },
-                label = { Text("Your name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            DateField(
-                label = "Date of birth (optional)",
-                date = p.dateOfBirth,
-                onDate = { d -> vm.update { it.copy(dateOfBirth = d) } },
-                allowClear = true,
-                supportingText = "Used to work out your age group on each shoot day",
-            )
+            SectionCard(title = "About you", subtitle = "Stored on this phone only. Never sent anywhere.") {
+                OutlinedTextField(
+                    value = p.realName.orEmpty(),
+                    onValueChange = { v -> vm.update { it.copy(realName = v) } },
+                    label = { Text("Your name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                DateField(
+                    label = "Date of birth (optional)",
+                    date = p.dateOfBirth,
+                    onDate = { d -> vm.update { it.copy(dateOfBirth = d) } },
+                    allowClear = true,
+                    supportingText = "Used to work out your age group on each shoot day",
+                )
+            }
 
-            Text("Shared when syncing (added in a later version)", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            OutlinedTextField(
-                value = p.username.orEmpty(),
-                onValueChange = { v -> vm.update { it.copy(username = v) } },
-                label = { Text("Username") },
-                supportingText = { Text("Don't use your real name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Text("Class", style = MaterialTheme.typography.titleSmall)
-            ChipChoice(ArcherClass.entries, p.archerClass, { it.displayName }) { c -> vm.update { it.copy(archerClass = c) } }
-
-            val fromDob = resolveAgeGroup(null, p.dateOfBirth, LocalDate.now())
-            OptionDropdown(
-                label = "Age group",
-                options = AgeGroup.entries,
-                selected = p.ageGroupManual,
-                optionLabel = { it.displayName },
-                onSelect = { g -> vm.update { it.copy(ageGroupManual = g) } },
-                noneLabel = if (fromDob != null) "Automatic (${fromDob.displayName} today)" else "Not set",
-                supportingText = "Leave on automatic to work it out from your date of birth",
-            )
-
-            OptionDropdown(
-                label = "Main bow style",
-                options = BowStyle.entries,
-                selected = p.mainBowStyle,
-                optionLabel = { it.label },
-                onSelect = { b -> vm.update { it.copy(mainBowStyle = b) } },
-                noneLabel = "Not set",
-            )
-
-            Button(onClick = { vm.save(onBack) }, modifier = Modifier.fillMaxWidth()) { Text("Save") }
+            SectionCard(title = "Archery", subtitle = "Shared with your scores when syncing (coming in a later version).") {
+                OutlinedTextField(
+                    value = p.username.orEmpty(),
+                    onValueChange = { v -> vm.update { it.copy(username = v) } },
+                    label = { Text("Username") },
+                    supportingText = { Text("Don't use your real name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                SegmentedChoice(ArcherClass.entries, p.archerClass, { it.displayName }) { c ->
+                    vm.update { it.copy(archerClass = c) }
+                }
+                val fromDob = resolveAgeGroup(null, p.dateOfBirth, LocalDate.now())
+                OptionDropdown(
+                    label = "Age group",
+                    options = AgeGroup.entries,
+                    selected = p.ageGroupManual,
+                    optionLabel = { it.displayName },
+                    onSelect = { g -> vm.update { it.copy(ageGroupManual = g) } },
+                    noneLabel = if (fromDob != null) "Automatic (${fromDob.displayName} today)" else "Not set",
+                    supportingText = "Leave on automatic to work it out from your date of birth",
+                )
+                OptionDropdown(
+                    label = "Main bow style",
+                    options = BowStyle.entries,
+                    selected = p.mainBowStyle,
+                    optionLabel = { it.label },
+                    onSelect = { b -> vm.update { it.copy(mainBowStyle = b) } },
+                    noneLabel = "Not set",
+                )
+            }
         }
     }
 }

@@ -189,5 +189,89 @@ class ScoringTest {
         assertEquals(1, s.wounds)
         assertEquals(3, s.byArrow[1])
         assertEquals(1, s.overrides)
+        assertEquals(3, s.targetsScored)
+        // 72 points over 4 animals (standard 1 + predator/prey 2 + overridden standard 1)
+        assertEquals(18.0, s.averagePerAnimal!!, 0.001)
+    }
+
+    private fun roundOf(vararg targets: TargetScore, count: Int = targets.size) = Round(
+        id = "r",
+        shootDate = java.time.LocalDate.of(2026, 10, 30),
+        targetCount = count,
+        archerClass = ArcherClass.GENTS,
+        ageGroup = AgeGroup.ADULT,
+        bowStyle = BowStyle.LONGBOW,
+        status = RoundStatus.IN_PROGRESS,
+        targets = targets.toList(),
+    )
+
+    @Test
+    fun cannotSkipAheadOfUnscoredTarget() {
+        val round = roundOf(
+            TargetScore(1).withAnimalResult(0, Scored(2, KILL)),
+            TargetScore(2),
+            TargetScore(3),
+        )
+        assertEquals(2, round.firstUnscoredTargetNo)
+        assertTrue(round.canGoTo(1))
+        assertTrue(round.canGoTo(2))
+        assertFalse(round.canGoTo(3))
+        assertFalse(round.canGoTo(0))
+        assertFalse(round.canGoTo(4))
+    }
+
+    @Test
+    fun partlyScoredPredatorPreyBlocksNextTarget() {
+        val round = roundOf(
+            TargetScore(1).withType(TargetType.PREDATOR_PREY).withAnimalResult(0, Scored(1, KILL)),
+            TargetScore(2),
+        )
+        assertEquals(1, round.firstUnscoredTargetNo)
+        assertFalse(round.canGoTo(2))
+    }
+
+    @Test
+    fun runningAverageIsPerAnimalOnScoredTargets() {
+        val round = roundOf(
+            TargetScore(1).withAnimalResult(0, Scored(1, KILL)),
+            TargetScore(2).withAnimalResult(0, Missed),
+            TargetScore(3),
+            count = 3,
+        )
+        val s = round.stats
+        assertEquals(2, s.targetsScored)
+        assertEquals(10.0, s.averagePerAnimal!!, 0.001)
+        assertEquals(1, s.misses)
+        assertEquals(null, roundOf(TargetScore(1)).stats.averagePerAnimal)
+    }
+
+    @Test
+    fun predatorPreyAndFanCountEachAnimalInAverage() {
+        // Standard 20, predator/prey 20 + 10 (prey's 2nd arrow), 4-animal fan 24+20+0+0
+        val round = roundOf(
+            TargetScore(1).withAnimalResult(0, Scored(1, KILL)),
+            TargetScore(2).withType(TargetType.PREDATOR_PREY)
+                .withAnimalResult(0, Scored(1, KILL)).withAnimalResult(1, Scored(2, WOUND)),
+            TargetScore(3).withType(TargetType.FAN, 4)
+                .withAnimalResult(0, Scored(1, INNER_KILL)).withAnimalResult(1, Scored(1, KILL))
+                .withAnimalResult(2, Missed).withAnimalResult(3, Missed),
+        )
+        val s = round.stats
+        assertEquals(94, s.totalPoints)
+        assertEquals(94.0 / 7, s.averagePerAnimal!!, 0.001)
+        assertEquals(7, s.animalsScored)
+        assertEquals(94.0 / (7 * 24), s.shareOfMax!!, 0.001)
+        assertEquals(4.0 / 7, s.firstArrowRate!!, 0.001) // std, predator, fan 1, fan 2
+        assertEquals(4.0 / 7, s.killRate!!, 0.001)       // IK + kills; prey was a wound
+        assertEquals(2.0 / 7, s.missRate!!, 0.001)
+    }
+
+    @Test
+    fun preyWithNoArrowsLeftCountsAsAnAnimalScoringZero() {
+        val round = roundOf(
+            TargetScore(1).withType(TargetType.PREDATOR_PREY).withAnimalResult(0, Scored(3, KILL)),
+        )
+        assertTrue(round.target(1).isComplete)
+        assertEquals(4.0, round.stats.averagePerAnimal!!, 0.001)
     }
 }
