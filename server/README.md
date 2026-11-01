@@ -93,6 +93,14 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
+## Testing Friends on a phone
+
+```powershell
+.\Test-FriendView.ps1 -Username <your username>
+```
+
+Doesn't need your password. Creates a throwaway friend (`zz_test_…`) with two finished rounds (50 and 54) and one unfinished, and sends you a friend request. It pauses while you accept on the phone, check the friend's summary, rounds and read-only scorecards (the unfinished round must not show), then remove the friend; the script checks the server agrees after each step. Tidy up with `900_delete_test_accounts.sql`.
+
 ## Testing download on a phone (step 6)
 
 ```powershell
