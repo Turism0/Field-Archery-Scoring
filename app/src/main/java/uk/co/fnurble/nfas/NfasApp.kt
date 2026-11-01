@@ -6,6 +6,7 @@ import uk.co.fnurble.nfas.data.AccountStore
 import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendsRepository
 import uk.co.fnurble.nfas.data.LocationRepository
+import uk.co.fnurble.nfas.data.NetworkStatus
 import uk.co.fnurble.nfas.data.ProfileRepository
 import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.data.local.NfasDatabase
@@ -16,7 +17,9 @@ import uk.co.fnurble.nfas.data.sync.SyncScheduler
 /** Simple manual dependency container. */
 class AppContainer(app: Application) {
     private val db = NfasDatabase.create(app)
-    private val api = NfasApi()
+    /** Device online / server available, for the home screen notices. */
+    val networkStatus = NetworkStatus(app)
+    private val api = NfasApi(network = networkStatus)
     val accountStore = AccountStore(app)
 
     val syncScheduler = SyncScheduler(app, accountStore)
@@ -27,6 +30,11 @@ class AppContainer(app: Application) {
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })
     val friendsRepository = FriendsRepository(api, accountStore)
     val adminRepository = AdminRepository(api, accountStore)
+    /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
+    suspend fun checkServer() {
+        runCatching { api.health() }
+    }
+
     val accountRepository = AccountRepository(api, accountStore, profileRepository, onSignedIn = { syncScheduler.request() })
 }
 

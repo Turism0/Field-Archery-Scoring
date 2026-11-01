@@ -3,6 +3,8 @@
 
     <!-- Talks to the NFAS API (https only). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- To tell "device offline" apart from "server unavailable" on the home screen. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- One position when a round starts, to find the shoot location. Never sent with the round. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

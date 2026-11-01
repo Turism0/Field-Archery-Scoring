@@ -76,7 +76,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                 val a = account
                 if (a == null) {
                     Text(
-                        "Sign in to back up your rounds to the NFAS server and, later, share scorecards with friends.",
+                        "Sign in to back up your rounds to the server and, later, share scorecards with friends.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Button(onClick = onAccount, modifier = Modifier.fillMaxWidth()) { Text("Sign in or create account") }

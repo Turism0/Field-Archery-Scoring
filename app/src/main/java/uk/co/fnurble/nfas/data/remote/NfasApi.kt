@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.json.JSONObject
+import uk.co.fnurble.nfas.data.NetworkStatus
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -36,7 +37,15 @@ data class AuthResult(val archerId: String, val username: String, val token: Str
  * Small client for the NFAS API using the platform's HttpURLConnection and org.json,
  * so the app needs no extra libraries. All calls run on the IO dispatcher.
  */
-class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
+class NfasApi(
+    private val baseUrl: String = ApiConfig.BASE_URL,
+    /** Told whether each call reached the server, for the home screen notices and error wording. */
+    private val network: NetworkStatus? = null,
+) {
+
+    /** Checks the server is up (no sign-in needed). Throws [ApiException] if it isn't. */
+    suspend fun health(): JSONObject = request("GET", "/health", body = null)
+
 
     suspend fun checkUsername(username: String): UsernameCheck {
         val json = request("POST", "/api/auth/check", JSONObject().put("username", username))
@@ -168,6 +177,9 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
                 val stream = if (status in 200..299) conn.inputStream else conn.errorStream
                 val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
+                // Nginx Proxy Manager answers 502/504 when the API on Odin is down; the API says 503 if SQL is.
+                if (status in 502..504) network?.serverFailed() else network?.serverAnswered()
+
                 if (status in 200..299) {
                     if (text.isBlank()) JSONObject() else JSONObject(text)
                 } else {
@@ -182,19 +194,27 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
             } catch (e: IOException) {
                 throw networkError()
             } catch (e: JSONException) {
-                throw ApiException(-1, "bad_response", "The NFAS server sent an unexpected reply. Try again later.")
+                throw ApiException(-1, "bad_response", "The server sent an unexpected reply. Try again later.")
             } finally {
                 conn.disconnect()
             }
         }
 
-    private fun networkError() =
-        ApiException(0, "network", "Couldn't reach the NFAS server. Check your signal and try again.")
+    /** Couldn't connect: either this device is offline, or it's online and the server isn't answering. */
+    private fun networkError(): ApiException {
+        network?.serverFailed()
+        return if (network?.online?.value == false) {
+            ApiException(0, "offline", "Your device is offline. It'll catch up when you have signal.")
+        } else {
+            ApiException(0, "network", "The server isn't available at the moment. Try again later.")
+        }
+    }
 
     private fun defaultMessage(status: Int) = when (status) {
         401 -> "Your sign-in has expired. Please sign in again."
         429 -> "Too many attempts. Wait a minute and try again."
-        in 500..599 -> "The NFAS server had a problem. Try again later."
+        in 502..504 -> "The server isn't available at the moment. Try again later."
+        in 500..599 -> "The server had a problem. Try again later."
         else -> "Something went wrong ($status). Try again."
     }
 }

@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.6.02
+## Version 1.6.03
 
+- **1.6.03:** the app tells "device offline" apart from "server unavailable". Home shows a small **Device offline** notice when the phone has no working internet, or **Server unavailable** when it's online but the server doesn't answer (or Nginx Proxy Manager says it's down: 502/503/504). Home checks the server when it opens, when the phone comes back online, and every 30 seconds while it's down; the notice goes as soon as it answers. Error messages say which it is, and say "the server" (no more "NFAS server").
 - **1.6.02:** `server/api/NfasApi/Update-Api.ps1`: one command on Odin to stop the app pool, publish, start it again (always, even if the publish fails) and check `/health` shows the new version and the database. Test scripts now say plainly when the API isn't answering. No app or API changes (API stays 1.6.01).
 - **1.6.01:** shoot location catchment cut from half a mile to a quarter mile (402 m) in the API (`Locations:CatchmentMetres` in `appsettings.json`). No app changes.
 - **1.6:** shoot locations in the app (roadmap step 2b). Starting a round asks for location permission (once) and takes one GPS position in the background. Signed in with signal, the app finds the shoot location nearby (within a quarter mile from 1.6.01); if none is known it asks you to name it (first to shoot there names it). No signal: the position waits on the phone and is looked up on the next sync. A location line on the scoring screen and scorecard shows the name; tap it for **Not here?** (pick another location within 10 km, or name a new one), or to get a position now for a round that has none. Locations show on round lists, scorecards and friends' rounds; renamed or merged locations update on sync. Your own position never leaves the phone except to ask what's nearby. Phone database v2 (adds location columns; existing rounds keep working with no location).
@@ -36,7 +37,7 @@ Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to th
 
 ### Screens
 
-- **Home:** sign-in and "last synced" status (tap for Profile), and three tiles (plus **Admin** for Admins and the Owner):
+- **Home:** "Device offline" / "Server unavailable" notice when needed, sign-in and "last synced" status (tap for Profile), and three tiles (plus **Admin** for Admins and the Owner):
   - **Score a round** (shows how many are in progress) → continue an unfinished round, or **Start a new round** → choose the **round type** → New round.
   - **Score history** (finished rounds and best score) → finished rounds only, newest first, with Backed up / Waiting / Couldn't upload labels; tap for the scorecard.
   - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).

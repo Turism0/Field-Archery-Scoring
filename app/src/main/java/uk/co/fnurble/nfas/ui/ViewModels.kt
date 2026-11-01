@@ -28,6 +28,8 @@ import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.FriendsOverview
 import uk.co.fnurble.nfas.data.FriendsRepository
 import uk.co.fnurble.nfas.data.LocationRepository
+import uk.co.fnurble.nfas.data.NetworkStatus
+import uk.co.fnurble.nfas.data.ServerState
 import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.Profile
 import uk.co.fnurble.nfas.data.ProfileRepository
@@ -111,7 +113,7 @@ abstract class SyncingViewModel(
                     if (report.skipped > 0) "Synced, but ${report.skipped} round(s) couldn't be read. Update the app?"
                     else "Up to date"
                 RoundSyncer.Outcome.NOT_SIGNED_IN -> "Sign in (Profile) to back up and sync your rounds."
-                RoundSyncer.Outcome.RETRY_LATER -> report.message ?: "Couldn't reach the NFAS server. It'll try again."
+                RoundSyncer.Outcome.RETRY_LATER -> report.message ?: "The server isn't available at the moment. It'll try again."
                 RoundSyncer.Outcome.SIGNED_OUT -> "Your sign-in has expired. Sign in again in Profile."
                 RoundSyncer.Outcome.FAILED -> "Sync problem: ${report.message}"
             }
@@ -128,7 +130,17 @@ class HomeViewModel(
     accounts: AccountRepository,
     syncer: RoundSyncer,
     accountStore: AccountStore,
+    network: NetworkStatus,
+    private val serverCheck: suspend () -> Unit,
 ) : SyncingViewModel(syncer, accountStore, accounts) {
+    /** For the "Device offline" / "Server unavailable" notices. */
+    val online: StateFlow<Boolean> = network.online
+    val server: StateFlow<ServerState> = network.server
+
+    fun checkServer() {
+        viewModelScope.launch { serverCheck() }
+    }
+
     val summary: StateFlow<HomeSummary?> = roundRepo.rounds.map { list ->
         val finished = list.filter { it.status == RoundStatus.COMPLETED }
         HomeSummary(

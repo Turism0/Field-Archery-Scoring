@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import uk.co.fnurble.nfas.data.ServerState
 import uk.co.fnurble.nfas.domain.AccountRole
 import uk.co.fnurble.nfas.ui.HomeViewModel
 import uk.co.fnurble.nfas.ui.components.syncStatusText
@@ -67,6 +70,17 @@ fun HomeScreen(
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val role by vm.role.collectAsStateWithLifecycle()
+    val online by vm.online.collectAsStateWithLifecycle()
+    val server by vm.server.collectAsStateWithLifecycle()
+
+    // Check the server when Home opens or the device comes back online; while it's down, every 30 s.
+    LaunchedEffect(online) { if (online) vm.checkServer() }
+    LaunchedEffect(online, server) {
+        while (online && server == ServerState.UNAVAILABLE) {
+            delay(30_000)
+            vm.checkServer()
+        }
+    }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbar = remember { SnackbarHostState() }
 
@@ -99,6 +113,7 @@ fun HomeScreen(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                ConnectionNotice(online, server)
                 AccountStrip(signedIn, username, role, syncStatusText(lastSync), onProfile)
 
                 val s = summary
@@ -139,6 +154,39 @@ fun HomeScreen(
                         onClick = onAdmin,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Small notice when this device is offline, or it's online but the server isn't answering. Nothing otherwise. */
+@Composable
+private fun ConnectionNotice(online: Boolean, server: ServerState) {
+    val scheme = MaterialTheme.colorScheme
+    val (title, text, colours) = when {
+        !online -> Triple(
+            "Device offline",
+            "Scoring works as normal. Rounds back up when you're online again.",
+            scheme.surfaceContainerHighest to scheme.onSurface,
+        )
+        server == ServerState.UNAVAILABLE -> Triple(
+            "Server unavailable",
+            "Scoring works as normal. Rounds back up when the server is back.",
+            scheme.errorContainer to scheme.onErrorContainer,
+        )
+        else -> return
+    }
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = colours.first,
+        contentColor = colours.second,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, contentDescription = null, Modifier.size(20.dp))
+            Column(Modifier.padding(start = 12.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(text, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
