@@ -7,6 +7,8 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 ## Updating the API on Odin
 
+If the release adds a database script (e.g. `sql/004_roles.sql`), run it in SSMS on Mimir **first**.
+
 After a new version (copy the changed files into `C:\zScripts\NfasApi`, or `git pull`), in **Windows PowerShell 5.1 as Administrator**:
 
 ```powershell
@@ -28,7 +30,7 @@ Start-WebAppPool NfasApi
 | POST | `/api/auth/register` | `{ username, password, deviceName }` | 201 `{ archerId, username, token, expiresUtc }`; 409 `username_taken` |
 | POST | `/api/auth/login` | `{ username, password, deviceName }` | 200 as above; 401 `invalid_credentials`; 423 `locked_out` |
 | POST | `/api/auth/logout` | `Authorization: Bearer <token>` | 204, revokes this phone's token |
-| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc }` |
+| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role }`; role is `USER`, `ADMIN` or `OWNER` |
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
@@ -39,6 +41,9 @@ Start-WebAppPool NfasApi
 | GET | `/api/friends/{archerId}/rounds` | Bearer token | `{ rounds: [{ roundId, shootDate, targetCount, archerClass, ageGroup, bowStyle, totalPoints }] }`: their finished rounds, newest first; 404 `not_friends` |
 | GET | `/api/friends/{archerId}/rounds/{roundId}` | Bearer token | One finished round with targets and animals (read-only) |
 | GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
+
+| GET | `/api/admin/archers` | Bearer token, Admin or Owner | `{ archers: [{ archerId, username, role, createdUtc, lastLoginUtc }] }`, Owner first, then Admins; 403 `not_admin` |
+| PUT | `/api/admin/archers/{archerId}/role` | Bearer token, Owner only; `{ role: "ADMIN" \| "USER" }` | `{ archerId, username, role }`; 403 `not_owner` / `not_admin`; 400 `invalid_role`; 404 `no_such_archer`; 409 `cannot_change_owner` |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
 Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); passwords 8–128 characters;
@@ -92,6 +97,15 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing roles (step 1)
+
+```powershell
+.\Test-Roles.ps1 -Username <your username>                                  # through NPM
+.\Test-Roles.ps1 -Username <your username> -BaseUrl http://localhost:8085   # on Odin
+```
+
+Asks for your (Owner) password. Two test accounts: Users are refused admin calls, the Owner lists accounts and makes one an Admin and back, nobody can become a second Owner or change the Owner, Admins can list but not make Admins, and a role change applies straight away. Your account isn't changed. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing Friends on a phone
 

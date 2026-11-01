@@ -4,8 +4,10 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.4.02
+## Version 1.5
 
+- **1.5:** roles in the app (roadmap step 1 done). The app learns the account's role when signing in and on every sync. Admins and the Owner get an **Admin** tile on Home ("Signed in as … · Owner/Admin" too); the Admin screen lists every account with its role, joined and last sign-in dates. The Owner switches Admin on or off per account; Admins see the list only. Everyone else sees nothing new. The server checks the role on every admin call.
+- **1.4.03:** roles in the database and API (roadmap step 1, first half). `server/sql/004_roles.sql` gives every account a role (User, Admin or Owner; only one Owner) and makes your account the Owner. `/api/me` now returns the role; new admin calls list accounts (Admins and Owner) and set Admin on or off (Owner only). Test script `server/tests/Test-Roles.ps1`. No app changes yet.
 - **1.4.02:** the app's version number now matches (1.4.02, shown in Android Settings → Apps → NFAS Big Game). New `server/tests/Test-FriendView.ps1`: a throwaway test friend sends you a request so you can check the Friends screens on the phone. No API changes.
 - **1.4.01:** agreed plan for the next features recorded in `docs/DESIGN.md` (roles and Admin menu, shoot locations, round types with Woodsman). No app or API changes.
 - **1.4:** Friends in the app: add friends by username, accept / decline / cancel requests, friends list with rounds, best and average per animal; tap a friend for their finished rounds and open any scorecard read-only. Remove a friend from their page. Completes the online features.
@@ -24,18 +26,19 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
 - **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
 
-Versioning: minor changes go 1.4.01, 1.4.02 … 1.4.99; major changes move to the next tenth (1.5).
+Versioning: minor changes go 1.5.01, 1.5.02 … 1.5.99; major changes move to the next tenth (1.6).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends. Next: roles and Admin menu, shoot locations, round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: shoot locations, round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
-- **Home:** sign-in and "last synced" status (tap for Profile), and three tiles:
+- **Home:** sign-in and "last synced" status (tap for Profile), and three tiles (plus **Admin** for Admins and the Owner):
   - **Score a round** (shows how many are in progress) → continue an unfinished round, or **Start a new round** → choose the **round type** → New round.
   - **Score history** (finished rounds and best score) → finished rounds only, newest first, with Backed up / Waiting / Couldn't upload labels; tap for the scorecard.
   - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).
   Pull down on Home or Score history to sync now.
 - **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
+- **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. Shoot location names will be edited here (next step). Pull down to refresh.
 - **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.

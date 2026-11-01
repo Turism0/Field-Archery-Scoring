@@ -13,7 +13,7 @@ namespace NfasApi.Auth;
 ///   POST /api/auth/register  { username, password, deviceName }  → 201 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/login     { username, password, deviceName }  → 200 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/logout    (Bearer token)                      → 204, revokes this phone's token
-///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc }
+///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role }
 /// Errors are JSON: { error: "code", message: "text for the user" }.
 /// </summary>
 public static partial class AuthEndpoints
@@ -34,7 +34,7 @@ public static partial class AuthEndpoints
     public sealed record CheckResponse(string Username, bool Exists);
     public sealed record CredentialsRequest(string? Username, string? Password, string? DeviceName);
     public sealed record AuthResponse(Guid ArcherId, string Username, string Token, DateTime ExpiresUtc);
-    public sealed record MeResponse(Guid ArcherId, string Username, DateTime CreatedUtc);
+    public sealed record MeResponse(Guid ArcherId, string Username, DateTime CreatedUtc, string Role);
 
     public static void MapAuthEndpoints(this WebApplication app)
     {
@@ -162,7 +162,7 @@ public static partial class AuthEndpoints
     {
         await using var conn = await db.OpenAsync(ct);
         var me = await conn.QuerySingleAsync<MeResponse>(new CommandDefinition(
-            "SELECT ArcherId, Username, CreatedUtc FROM dbo.Archer WHERE ArcherId = @archerId;",
+            "SELECT ArcherId, Username, CreatedUtc, Role FROM dbo.Archer WHERE ArcherId = @archerId;",
             new { archerId = user.ArcherId() }, cancellationToken: ct));
         return Results.Ok(me);
     }

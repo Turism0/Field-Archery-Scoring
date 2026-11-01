@@ -9,6 +9,7 @@ using System.Threading.RateLimiting;
 using Dapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
+using NfasApi.Admin;
 using NfasApi.Auth;
 using NfasApi.Data;
 using NfasApi.Friends;
@@ -110,10 +111,11 @@ app.MapGet("/health", async (Db db, ILogger<Program> log, CancellationToken ct) 
 app.MapAuthEndpoints();
 app.MapRoundEndpoints();
 app.MapFriendEndpoints();
+app.MapAdminEndpoints();
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "1.3.01";
+    public const string Version = "1.4.03";
 }

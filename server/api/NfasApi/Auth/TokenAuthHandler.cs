@@ -35,6 +35,7 @@ public sealed class TokenAuthHandler(
                 new Claim(ClaimTypes.NameIdentifier, archer.ArcherId.ToString()),
                 new Claim(ClaimTypes.Name, archer.Username),
                 new Claim(TokenIdClaim, archer.TokenId.ToString()),
+                new Claim(ClaimTypes.Role, archer.Role),
             ],
             SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
@@ -48,4 +49,20 @@ public static class ClaimsExtensions
 
     public static Guid TokenId(this ClaimsPrincipal user) =>
         Guid.Parse(user.FindFirstValue(TokenAuthHandler.TokenIdClaim)!);
+
+    /// <summary>USER, ADMIN or OWNER, as stored in the database when this request was signed in.</summary>
+    public static string Role(this ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.Role) ?? Roles.User;
+
+    public static bool IsOwner(this ClaimsPrincipal user) => user.Role() == Roles.Owner;
+
+    /// <summary>Admins and the Owner.</summary>
+    public static bool IsAdmin(this ClaimsPrincipal user) => user.Role() is Roles.Admin or Roles.Owner;
+}
+
+/// <summary>Account roles (dbo.Archer.Role). Only one Owner; only the Owner can make or remove Admins.</summary>
+public static class Roles
+{
+    public const string User = "USER";
+    public const string Admin = "ADMIN";
+    public const string Owner = "OWNER";
 }

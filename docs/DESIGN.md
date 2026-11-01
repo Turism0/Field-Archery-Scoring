@@ -23,7 +23,7 @@
       - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard ← 1.4
 3. **Next (agreed order, each step tested before the next):**
    0. Housekeeping: app version number to match (1.4.x); test Friends.
-   1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only.
+   1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only. *DB + API done in 1.4.03; app next.* The role is read from the database on every request, so changes apply at once.
    2. **Shoot locations:**
       - 2a. Database + API: `ShootLocation` (name, latitude, longitude); nearest-location lookup within half a mile (~800 m); add a location; Admin rename and merge.
       - 2b. App: GPS fix when a new round starts. With signal: look it up; known club → name filled in; new → ask for a name once (whoever shoots there first names it). No signal: keep the fix with the round, look it up when there's signal, ask for a name only if it's new. Location shown on rounds, scorecards, history and friends' scorecards.
@@ -105,7 +105,7 @@ Scripts in `server/sql/`, run in order in SSMS:
 
 | Table | Key | Holds |
 |---|---|---|
-| `Archer` | `ArcherId` (server GUID) | `Username` (unique, case-insensitive, 3–30 of A–Z 0–9 _ . -), `PasswordHash`, created / last login, failed-login count and lockout, disabled flag |
+| `Archer` | `ArcherId` (server GUID) | `Username` (unique, case-insensitive, 3–30 of A–Z 0–9 _ . -), `PasswordHash`, created / last login, failed-login count and lockout, disabled flag, `Role` (USER / ADMIN / OWNER, only one OWNER; schema v2, `004_roles.sql`) with who changed it and when |
 | `AuthToken` | `TokenId` | One per signed-in phone: SHA-256 `TokenHash`, device name, created / last used / expires / revoked |
 | `Round` | `RoundId` (phone GUID) | `ArcherId`, shoot date, target count, class (L/G), age group, bow style, status, total, deleted flag, phone created/updated times, server updated time, rowversion |
 | `TargetScore` | `RoundId` + `TargetNo` | Target type, override, points |

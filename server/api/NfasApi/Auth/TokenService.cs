@@ -8,7 +8,7 @@ namespace NfasApi.Auth;
 
 public sealed record IssuedToken(string Token, DateTime ExpiresUtc);
 
-public sealed record TokenArcher(Guid TokenId, Guid ArcherId, string Username);
+public sealed record TokenArcher(Guid TokenId, Guid ArcherId, string Username, string Role);
 
 /// <summary>
 /// Sign-in tokens, one per phone. The phone keeps the token instead of the password.
@@ -32,13 +32,16 @@ public sealed class TokenService(Db db)
         return new IssuedToken(token, expires);
     }
 
-    /// <summary>Returns the archer for a valid, unexpired, unrevoked token, or null.</summary>
+    /// <summary>
+    /// Returns the archer for a valid, unexpired, unrevoked token, or null. The role is read from the
+    /// database on every request, so a role change takes effect straight away.
+    /// </summary>
     public async Task<TokenArcher?> ValidateAsync(string token, CancellationToken ct)
     {
         if (token.Length != 64) return null;
         await using var conn = await db.OpenAsync(ct);
         var row = await conn.QuerySingleOrDefaultAsync<TokenRow>(new CommandDefinition("""
-            SELECT t.TokenId, t.ArcherId, a.Username, t.LastUsedUtc
+            SELECT t.TokenId, t.ArcherId, a.Username, a.Role, t.LastUsedUtc
             FROM dbo.AuthToken t
             JOIN dbo.Archer a ON a.ArcherId = t.ArcherId
             WHERE t.TokenHash = @hash
@@ -57,7 +60,7 @@ public sealed class TokenService(Db db)
                 WHERE TokenId = @tokenId;
                 """, new { tokenId = row.TokenId, days = (int)Lifetime.TotalDays }, cancellationToken: ct));
         }
-        return new TokenArcher(row.TokenId, row.ArcherId, row.Username);
+        return new TokenArcher(row.TokenId, row.ArcherId, row.Username, row.Role);
     }
 
     public async Task RevokeAsync(Guid tokenId, CancellationToken ct)
@@ -77,5 +80,5 @@ public sealed class TokenService(Db db)
         return t.Length > max ? t[..max] : t;
     }
 
-    private sealed record TokenRow(Guid TokenId, Guid ArcherId, string Username, DateTime? LastUsedUtc);
+    private sealed record TokenRow(Guid TokenId, Guid ArcherId, string Username, string Role, DateTime? LastUsedUtc);
 }
