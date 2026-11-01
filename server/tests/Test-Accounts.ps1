@@ -34,6 +34,7 @@ $password = 'Test-password-123'
 Write-Host "Testing $BaseUrl with user $user`n"
 
 $r = Call GET '/health'
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started? (server\api\NfasApi\Update-Api.ps1 starts it)" }
 Expect 'API healthy, database reachable' ($r.Status -eq 200 -and $r.Body.database -eq 'ok') "($($r.Status))"
 Expect 'API is version 1.2.03 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.2.3') "(got $($r.Body.apiVersion) – publish the new build?)"
 

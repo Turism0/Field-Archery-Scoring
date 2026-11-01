@@ -9,17 +9,23 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 If the release adds a database script (e.g. `sql/005_shoot_locations.sql`), run it in SSMS on Mimir **first**.
 
-After a new version (copy the changed files into `C:\zScripts\NfasApi`, or `git pull`), in **Windows PowerShell 5.1 as Administrator**:
+After a new version, copy the changed files into `C:\zScripts\NfasApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
+
+```powershell
+C:\zScripts\NfasApi\Update-Api.ps1
+```
+
+It stops the `NfasApi` app pool, publishes into `C:\inetpub\nfas-api`, starts the pool again (even if the publish failed, so the old version keeps running), then checks `/health` shows the version in `NfasApi.csproj` and that the database is reachable. Every line should start with OK; anything else is in red. `appsettings.Production.json` in `C:\inetpub\nfas-api` is left alone. If Windows says the script is blocked, run `Unblock-File C:\zScripts\NfasApi\Update-Api.ps1` once.
+
+The same by hand:
 
 ```powershell
 Import-Module WebAdministration
 Stop-WebAppPool NfasApi                     # releases the files so they can be replaced
 cd C:\zScripts\NfasApi
 dotnet publish -c Release -o C:\inetpub\nfas-api
-Start-WebAppPool NfasApi
+Start-WebAppPool NfasApi                    # press Enter: a pasted last line doesn't run by itself
 ```
-
-`appsettings.Production.json` in `C:\inetpub\nfas-api` is left alone. Check http://localhost:8085/health shows the new `apiVersion`.
 
 ## API endpoints
 

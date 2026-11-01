@@ -47,6 +47,7 @@ function Set-Role($Target, [string]$Role, [string]$Token) {
 
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started? (server\api\NfasApi\Update-Api.ps1 starts it)" }
 Expect 'API is version 1.4.03 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.4.3') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 2 or later (004_roles.sql run)' ($r.Body.schemaVersion -ge 2) "(got $($r.Body.schemaVersion))"
 
