@@ -100,6 +100,17 @@ class NfasApi(
 
     // ---- Shoot locations ----
 
+    /** Admins and Owner: { locations: [ { locationId, name, latitude, longitude, createdUtc, createdBy, rounds } ] } */
+    suspend fun adminLocations(token: String): JSONObject = request("GET", "/api/admin/locations", body = null, token = token)
+
+    /** Admins and Owner: 409 name_taken if another live location has that name. */
+    suspend fun renameLocation(token: String, locationId: String, name: String): JSONObject =
+        request("PUT", "/api/admin/locations/$locationId", JSONObject().put("name", name), token)
+
+    /** Admins and Owner: { locationId, name, roundsMoved }; the duplicate's rounds move to [intoId]. */
+    suspend fun mergeLocation(token: String, locationId: String, intoId: String): JSONObject =
+        request("POST", "/api/admin/locations/$locationId/merge", JSONObject().put("intoId", intoId), token)
+
     /** { locations: [ { locationId, name, distanceMetres } ], catchmentMetres }, nearest first. Position isn't stored. */
     suspend fun nearbyLocations(token: String, lat: Double, lon: Double, radiusMetres: Int? = null): JSONObject {
         val query = listOfNotNull(

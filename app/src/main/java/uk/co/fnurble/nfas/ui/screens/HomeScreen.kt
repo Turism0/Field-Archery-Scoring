@@ -150,7 +150,7 @@ fun HomeScreen(
                     HomeTile(
                         icon = Icons.Filled.Settings,
                         title = "Admin",
-                        subtitle = if (role == AccountRole.OWNER) "Accounts and admins" else "Accounts",
+                        subtitle = if (role == AccountRole.OWNER) "Accounts, admins and shoot locations" else "Accounts and shoot locations",
                         onClick = onAdmin,
                     )
                 }

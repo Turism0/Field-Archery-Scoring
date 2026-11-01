@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.6.03
+## Version 1.6.04
 
+- **1.6.04:** Admin location tools (roadmap step 2c, completes shoot locations). Admin → **Shoot locations** lists every location with its rounds and who named it. Tap one to fix its name, or merge a duplicate into the location to keep (choices listed nearest first, with a confirm); its rounds move across. Your phone's rounds pick up the new names straight away; other phones on their next sync. Admins and the Owner only; uses the 1.5.01 API.
 - **1.6.03:** the app tells "device offline" apart from "server unavailable". Home shows a small **Device offline** notice when the phone has no working internet, or **Server unavailable** when it's online but the server doesn't answer (or Nginx Proxy Manager says it's down: 502/503/504). Home checks the server when it opens, when the phone comes back online, and every 30 seconds while it's down; the notice goes as soon as it answers. Error messages say which it is, and say "the server" (no more "NFAS server").
 - **1.6.02:** `server/api/NfasApi/Update-Api.ps1`: one command on Odin to stop the app pool, publish, start it again (always, even if the publish fails) and check `/health` shows the new version and the database. Test scripts now say plainly when the API isn't answering. No app or API changes (API stays 1.6.01).
 - **1.6.01:** shoot location catchment cut from half a mile to a quarter mile (402 m) in the API (`Locations:CatchmentMetres` in `appsettings.json`). No app changes.
@@ -33,7 +34,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to the next tenth (1.7).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: Admin location tools (rename, merge), then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
@@ -43,7 +44,7 @@ Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to th
   - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).
   Pull down on Home or Score history to sync now.
 - **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
-- **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. Shoot location names will be edited here (next step). Pull down to refresh.
+- **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. **Shoot locations** → rename a location, or merge a duplicate into another (nearest first, confirm first). Pull down to refresh.
 - **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.

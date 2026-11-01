@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,11 +49,11 @@ import java.time.ZoneId
 
 /**
  * Admin menu: every account and its role. The Owner switches Admin on or off; Admins see the list
- * only. Shoot location names will be edited here too (roadmap step 2). Pull down to refresh.
+ * only. Links to Shoot locations (rename / merge). Pull down to refresh.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit) {
+fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit) {
     val role by vm.role.collectAsStateWithLifecycle()
     val archers by vm.archers.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -90,10 +92,26 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "locations") {
+                    Card(
+                        onClick = onLocations,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.LocationOn, contentDescription = null)
+                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                Text("Shoot locations", style = MaterialTheme.typography.titleMedium)
+                                Text("Rename locations and merge duplicates", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                        }
+                    }
+                }
                 item(key = "intro") {
                     SectionCard(
                         title = "Accounts",
-                        subtitle = if (isOwner) "Switch Admin on to let someone edit shoot location names. Only you can make or remove admins."
+                        subtitle = if (isOwner) "Switch Admin on to let someone rename and merge shoot locations. Only you can make or remove admins."
                         else "Only the owner can make or remove admins.",
                     ) {}
                 }

@@ -14,6 +14,16 @@ data class AdminArcher(
     val lastLoginUtc: Instant?,
 )
 
+data class AdminLocation(
+    val id: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    val createdUtc: Instant?,
+    val createdBy: String?,
+    val rounds: Int,
+)
+
 /**
  * Admin menu, straight from the server (nothing stored on the phone). Needs signal.
  * The server checks the role on every call; failures are [ApiException]s with a message to show.
@@ -38,6 +48,30 @@ class AdminRepository(private val api: NfasApi, private val accounts: AccountSto
     /** Owner only: make an account an Admin, or back to a User. */
     suspend fun setAdmin(archerId: String, admin: Boolean) = call { token ->
         api.setRole(token, archerId, if (admin) AccountRole.ADMIN.name else AccountRole.USER.name)
+    }
+
+    /** Live shoot locations, by name. */
+    suspend fun locations(): List<AdminLocation> = call { token ->
+        val list = api.adminLocations(token).getJSONArray("locations")
+        (0 until list.length()).map { i ->
+            val l = list.getJSONObject(i)
+            AdminLocation(
+                id = l.getString("locationId"),
+                name = l.getString("name"),
+                latitude = l.getDouble("latitude"),
+                longitude = l.getDouble("longitude"),
+                createdUtc = l.instantOrNull("createdUtc"),
+                createdBy = if (l.isNull("createdBy")) null else l.getString("createdBy"),
+                rounds = l.getInt("rounds"),
+            )
+        }
+    }
+
+    suspend fun renameLocation(id: String, name: String) = call { token -> api.renameLocation(token, id, name.trim()) }
+
+    /** Returns how many rounds moved. */
+    suspend fun mergeLocation(id: String, intoId: String): Int = call { token ->
+        api.mergeLocation(token, id, intoId).optInt("roundsMoved")
     }
 
     private suspend fun <T> call(block: suspend (String) -> T): T {
