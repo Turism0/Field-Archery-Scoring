@@ -126,12 +126,12 @@ class LocationRepository(
      * Names a new location at the round's position. If that name is already taken, throws
      * [NameTaken] with the existing location so the archer can use it instead.
      */
-    suspend fun name(roundId: String, name: String) {
+    suspend fun name(roundId: String, name: String, isPrivate: Boolean = false) {
         val round = dao.getRound(roundId) ?: return
         val lat = round.fixLat ?: throw ApiException(400, "no_position", "This round has no GPS position.")
         val lon = round.fixLon!!
         val json = try {
-            call { token -> api.createLocation(token, name.trim(), lat, lon) }
+            call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
         } catch (e: ApiException) {
             val existing = e.body?.optJSONObject("existing")
             if (e.code == "name_taken" && existing != null) {

@@ -23,6 +23,7 @@ import uk.co.fnurble.nfas.data.Account
 import uk.co.fnurble.nfas.data.AccountStore
 import uk.co.fnurble.nfas.data.AdminArcher
 import uk.co.fnurble.nfas.data.AdminLocation
+import uk.co.fnurble.nfas.data.DuplicatePair
 import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendRoundSummary
@@ -153,6 +154,8 @@ class HomeViewModel(
 
     /** Admins and the Owner get the Admin tile. */
     val role: StateFlow<AccountRole> = accountStore.role
+    /** Possible duplicate locations waiting (badge on the Admin tile). */
+    val duplicateLocations: StateFlow<Int> = accountStore.duplicateLocations
 }
 
 /** Score history: finished rounds only, newest first. */
@@ -187,6 +190,7 @@ class ScoreRoundViewModel(profiles: ProfileRepository, roundRepo: RoundRepositor
  */
 class AdminViewModel(private val admin: AdminRepository, accountStore: AccountStore) : ViewModel() {
     val role: StateFlow<AccountRole> = accountStore.role
+    val duplicateLocations: StateFlow<Int> = accountStore.duplicateLocations
 
     private val _archers = MutableStateFlow<Load<List<AdminArcher>>>(Load.Loading)
     val archers: StateFlow<Load<List<AdminArcher>>> = _archers.asStateFlow()
@@ -288,9 +292,9 @@ class AdminLocationsViewModel(
         }
     }
 
-    fun rename(location: AdminLocation, name: String, onDone: () -> Unit) = act {
-        admin.renameLocation(location.id, name)
-        _message.value = "Renamed to ${name.trim()}."
+    fun rename(location: AdminLocation, name: String, isPrivate: Boolean, onDone: () -> Unit) = act {
+        admin.renameLocation(location.id, name, isPrivate)
+        _message.value = "Saved ${name.trim()}" + if (isPrivate) " (private)." else "."
         onDone()
     }
 
@@ -308,6 +312,74 @@ class AdminLocationsViewModel(
             try {
                 block()
                 runCatching { locations.refreshNames() }
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+}
+
+/** Admin → Possible duplicates: merge one into the other, or approve them as different places. */
+class AdminDuplicatesViewModel(
+    private val admin: AdminRepository,
+    private val locations: LocationRepository,
+    accountStore: AccountStore,
+) : ViewModel() {
+    val role: StateFlow<AccountRole> = accountStore.role
+
+    private val _pairs = MutableStateFlow<Load<List<DuplicatePair>>>(Load.Loading)
+    val pairs: StateFlow<Load<List<DuplicatePair>>> = _pairs.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+
+    init { load() }
+
+    fun load(showSpinner: Boolean = false) {
+        viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            _pairs.value = try {
+                Load.Ready(admin.duplicates())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (_pairs.value is Load.Ready) { _message.value = e.friendlyMessage(); _pairs.value }
+                else Load.Failed(e.friendlyMessage())
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    fun approve(pair: DuplicatePair) = act {
+        admin.approve(pair)
+        _message.value = "${pair.a.name} and ${pair.b.name} marked as different places."
+    }
+
+    /** Merges [duplicate] into [keep]; its rounds move across. */
+    fun merge(duplicate: AdminLocation, keep: AdminLocation) = act {
+        val moved = admin.mergeLocation(duplicate.id, keep.id)
+        runCatching { locations.refreshNames() }
+        _message.value = "${duplicate.name} merged into ${keep.name} ($moved round${if (moved == 1) "" else "s"} moved)."
+    }
+
+    private fun act(block: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                block()
                 load()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -757,9 +829,9 @@ class RoundLocationViewModel(
         onDone()
     }
 
-    fun name(name: String, onDone: () -> Unit) = act {
+    fun name(name: String, isPrivate: Boolean, onDone: () -> Unit) = act {
         try {
-            locations.name(roundId, name)
+            locations.name(roundId, name, isPrivate)
             onDone()
         } catch (e: LocationRepository.NameTaken) {
             _taken.value = e.existing

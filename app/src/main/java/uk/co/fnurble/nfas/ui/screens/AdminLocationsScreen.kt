@@ -33,6 +33,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -145,7 +147,7 @@ fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
             location = loc,
             others = all.filter { it.id != loc.id },
             busy = busy,
-            onRename = { name -> vm.rename(loc, name) { selected = null } },
+            onRename = { name, private -> vm.rename(loc, name, private) { selected = null } },
             onMerge = { keep -> vm.merge(loc, keep) { selected = null } },
             onDismiss = { selected = null },
         )
@@ -161,7 +163,10 @@ private fun LocationCard(loc: AdminLocation, onClick: () -> Unit) {
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(loc.name, style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(loc.name, style = MaterialTheme.typography.titleMedium)
+                    if (loc.isPrivate) PrivateBadge()
+                }
                 Text(
                     listOfNotNull(
                         "${loc.rounds} round${if (loc.rounds == 1) "" else "s"}",
@@ -184,11 +189,12 @@ private fun LocationActions(
     location: AdminLocation,
     others: List<AdminLocation>,
     busy: Boolean,
-    onRename: (String) -> Unit,
+    onRename: (String, Boolean) -> Unit,
     onMerge: (AdminLocation) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember(location.id) { mutableStateOf(location.name) }
+    var private by remember(location.id) { mutableStateOf(location.isPrivate) }
     var picking by remember(location.id) { mutableStateOf(false) }
     var confirmInto by remember(location.id) { mutableStateOf<AdminLocation?>(null) }
     val nearestFirst = remember(location.id, others) {
@@ -215,11 +221,19 @@ private fun LocationActions(
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Private", style = MaterialTheme.typography.bodyLarge)
+                        Text("Only the archer who named it and admins see it", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = private, onCheckedChange = { private = it }, enabled = !busy)
+                }
                 Button(
-                    onClick = { onRename(name) },
-                    enabled = !busy && name.trim().length >= 2 && name.trim() != location.name,
+                    onClick = { onRename(name, private) },
+                    enabled = !busy && name.trim().length >= 2 && (name.trim() != location.name || private != location.isPrivate),
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Save name") }
+                ) { Text("Save") }
                 OutlinedButton(
                     onClick = { picking = true },
                     enabled = !busy && others.isNotEmpty(),
@@ -263,3 +277,14 @@ private fun LocationActions(
 
 private fun distance(metres: Double): String =
     if (metres < 1000) "${metres.toInt()} m away" else String.format(Locale.UK, "%.1f km away", metres / 1000)
+
+@Composable
+internal fun PrivateBadge() {
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Text("PRIVATE", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+}

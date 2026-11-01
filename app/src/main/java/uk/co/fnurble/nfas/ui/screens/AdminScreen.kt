@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,8 +54,9 @@ import java.time.ZoneId
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit) {
+fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit, onDuplicates: () -> Unit) {
     val role by vm.role.collectAsStateWithLifecycle()
+    val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
     val archers by vm.archers.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val changing by vm.changing.collectAsStateWithLifecycle()
@@ -92,6 +94,29 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit)
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "duplicates") {
+                    Card(
+                        onClick = onDuplicates,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (duplicates > 0) MaterialTheme.colorScheme.errorContainer
+                            else MaterialTheme.colorScheme.surfaceContainerLow,
+                        ),
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Warning, contentDescription = null)
+                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                Text("Possible duplicates", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (duplicates > 0) "$duplicates to check: merge or mark as different places"
+                                    else "Nothing to check",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                        }
+                    }
+                }
                 item(key = "locations") {
                     Card(
                         onClick = onLocations,
@@ -102,7 +127,7 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit)
                             Icon(Icons.Filled.LocationOn, contentDescription = null)
                             Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                                 Text("Shoot locations", style = MaterialTheme.typography.titleMedium)
-                                Text("Rename locations and merge duplicates", style = MaterialTheme.typography.bodySmall)
+                                Text("Rename, make private or public, merge", style = MaterialTheme.typography.bodySmall)
                             }
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         }

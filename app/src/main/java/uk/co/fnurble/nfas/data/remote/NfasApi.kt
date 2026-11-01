@@ -104,8 +104,20 @@ class NfasApi(
     suspend fun adminLocations(token: String): JSONObject = request("GET", "/api/admin/locations", body = null, token = token)
 
     /** Admins and Owner: 409 name_taken if another live location has that name. */
-    suspend fun renameLocation(token: String, locationId: String, name: String): JSONObject =
-        request("PUT", "/api/admin/locations/$locationId", JSONObject().put("name", name), token)
+    suspend fun renameLocation(token: String, locationId: String, name: String, isPrivate: Boolean? = null): JSONObject =
+        request(
+            "PUT", "/api/admin/locations/$locationId",
+            JSONObject().put("name", name).apply { isPrivate?.let { put("isPrivate", it) } }, token,
+        )
+
+    /** Admins and Owner: { pairs: [ { a: {...}, b: {...}, distanceMetres, reasons: [...] } ] } */
+    suspend fun duplicateLocations(token: String): JSONObject =
+        request("GET", "/api/admin/locations/duplicates", body = null, token = token)
+
+    /** Admins and Owner: the two are different places; stop flagging them. */
+    suspend fun approveLocationPair(token: String, aId: String, bId: String) {
+        request("POST", "/api/admin/locations/duplicates/approve", JSONObject().put("aId", aId).put("bId", bId), token)
+    }
 
     /** Admins and Owner: { locationId, name, roundsMoved }; the duplicate's rounds move to [intoId]. */
     suspend fun mergeLocation(token: String, locationId: String, intoId: String): JSONObject =
@@ -122,8 +134,11 @@ class NfasApi(
     }
 
     /** 201 { locationId, name }; 409 name_taken with { existing: { locationId, name } } in [ApiException.body]. */
-    suspend fun createLocation(token: String, name: String, lat: Double, lon: Double): JSONObject =
-        request("POST", "/api/locations", JSONObject().put("name", name).put("latitude", lat).put("longitude", lon), token)
+    suspend fun createLocation(token: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false): JSONObject =
+        request(
+            "POST", "/api/locations",
+            JSONObject().put("name", name).put("latitude", lat).put("longitude", lon).put("isPrivate", isPrivate), token,
+        )
 
     /** { locations: [ { requestedId, locationId, name } ] }: current id and name for ids this phone holds. */
     suspend fun resolveLocations(token: String, ids: List<String>): JSONObject =

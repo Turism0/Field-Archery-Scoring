@@ -36,7 +36,11 @@ class AccountRepository(
         store.save(Account(result.archerId, result.username, result.token, result.expiresUtc))
         profiles.setUsername(result.username)
         // Role now if possible, so the Admin menu is there straight away; the next sync tries again anyway.
-        runCatching { store.setRole(AccountRole.fromCode(api.me(result.token).optString("role"))) }
+        runCatching {
+            val me = api.me(result.token)
+            store.setRole(AccountRole.fromCode(me.optString("role")))
+            store.setDuplicateLocations(me.optInt("duplicateLocations"))
+        }
         onSignedIn()
     }
 

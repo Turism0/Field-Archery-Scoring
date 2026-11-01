@@ -51,7 +51,9 @@ class RoundSyncer(
         val account = accounts.account.value ?: return Report(Outcome.NOT_SIGNED_IN)
         return try {
             // Role first (one small call), so the Admin menu appears or goes on the next sync.
-            accounts.setRole(AccountRole.fromCode(api.me(account.token).optString("role")))
+            val me = api.me(account.token)
+            accounts.setRole(AccountRole.fromCode(me.optString("role")))
+            accounts.setDuplicateLocations(me.optInt("duplicateLocations"))
             // Shoot locations before uploading, so finished rounds go up with theirs.
             try {
                 locations.lookUpPending()

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,6 +71,7 @@ fun HomeScreen(
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val role by vm.role.collectAsStateWithLifecycle()
+    val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
 
@@ -150,8 +152,13 @@ fun HomeScreen(
                     HomeTile(
                         icon = Icons.Filled.Settings,
                         title = "Admin",
-                        subtitle = if (role == AccountRole.OWNER) "Accounts, admins and shoot locations" else "Accounts and shoot locations",
+                        subtitle = when {
+                            duplicates > 0 -> "$duplicates possible duplicate location${if (duplicates == 1) "" else "s"} to check"
+                            role == AccountRole.OWNER -> "Accounts, admins and shoot locations"
+                            else -> "Accounts and shoot locations"
+                        },
                         onClick = onAdmin,
+                        badge = duplicates,
                     )
                 }
             }
@@ -228,6 +235,8 @@ private fun HomeTile(
     onClick: () -> Unit,
     highlighted: Boolean = false,
     enabled: Boolean = true,
+    /** Small count on the tile (e.g. items waiting for an Admin); hidden when 0. */
+    badge: Int = 0,
 ) {
     val scheme = MaterialTheme.colorScheme
     val container = if (highlighted) scheme.primaryContainer else scheme.surfaceContainer
@@ -257,6 +266,11 @@ private fun HomeTile(
             Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                 Text(title, style = MaterialTheme.typography.titleLarge)
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = content.copy(alpha = 0.75f))
+            }
+            if (badge > 0) {
+                Badge(containerColor = scheme.error, contentColor = scheme.onError) {
+                    Text("$badge", style = MaterialTheme.typography.labelMedium)
+                }
             }
             if (enabled) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }

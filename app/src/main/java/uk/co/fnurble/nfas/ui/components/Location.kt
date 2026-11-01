@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -97,6 +98,7 @@ fun LocationSheet(vm: RoundLocationViewModel, current: RoundLocation, onDismiss:
     val busy by vm.busy.collectAsStateWithLifecycle()
     val taken by vm.taken.collectAsStateWithLifecycle()
     var name by rememberSaveable { mutableStateOf("") }
+    var private by rememberSaveable { mutableStateOf(false) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) vm.captureNow()
     }
@@ -174,7 +176,7 @@ fun LocationSheet(vm: RoundLocationViewModel, current: RoundLocation, onDismiss:
                 singleLine = true,
                 enabled = !busy,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (name.trim().length >= 2) vm.name(name, onDismiss) }),
+                keyboardActions = KeyboardActions(onDone = { if (name.trim().length >= 2) vm.name(name, private, onDismiss) }),
                 modifier = Modifier.fillMaxWidth(),
             )
             taken?.let { existing ->
@@ -185,8 +187,19 @@ fun LocationSheet(vm: RoundLocationViewModel, current: RoundLocation, onDismiss:
                     }
                 }
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Private", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Only you (and admins) see it, e.g. your garden. Others shooting here won't be matched to it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = private, onCheckedChange = { private = it }, enabled = !busy)
+            }
             Button(
-                onClick = { vm.name(name, onDismiss) },
+                onClick = { vm.name(name, private, onDismiss) },
                 enabled = !busy && name.trim().length >= 2,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Save new location") }

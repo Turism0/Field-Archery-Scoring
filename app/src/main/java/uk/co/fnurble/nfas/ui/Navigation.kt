@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.screens.AccountScreen
+import uk.co.fnurble.nfas.ui.screens.AdminDuplicatesScreen
 import uk.co.fnurble.nfas.ui.screens.AdminLocationsScreen
 import uk.co.fnurble.nfas.ui.screens.AdminScreen
 import uk.co.fnurble.nfas.ui.screens.FriendRoundsScreen
@@ -52,6 +53,13 @@ fun NfasNavHost() {
                 vm = appViewModel { c, _ -> AdminViewModel(c.adminRepository, c.accountStore) },
                 onBack = { nav.popBackStack() },
                 onLocations = { nav.navigate("adminLocations") },
+                onDuplicates = { nav.navigate("adminDuplicates") },
+            )
+        }
+        composable("adminDuplicates") {
+            AdminDuplicatesScreen(
+                vm = appViewModel { c, _ -> AdminDuplicatesViewModel(c.adminRepository, c.locationRepository, c.accountStore) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable("adminLocations") {

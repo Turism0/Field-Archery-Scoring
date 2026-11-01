@@ -22,7 +22,11 @@ data class AdminLocation(
     val createdUtc: Instant?,
     val createdBy: String?,
     val rounds: Int,
+    val isPrivate: Boolean = false,
 )
+
+/** Two locations that might be the same place. [reasons]: nearby, same_name, similar_name. */
+data class DuplicatePair(val a: AdminLocation, val b: AdminLocation, val distanceMetres: Int, val reasons: List<String>)
 
 /**
  * Admin menu, straight from the server (nothing stored on the phone). Needs signal.
@@ -63,11 +67,31 @@ class AdminRepository(private val api: NfasApi, private val accounts: AccountSto
                 createdUtc = l.instantOrNull("createdUtc"),
                 createdBy = if (l.isNull("createdBy")) null else l.getString("createdBy"),
                 rounds = l.getInt("rounds"),
+                isPrivate = l.optBoolean("isPrivate"),
             )
         }
     }
 
-    suspend fun renameLocation(id: String, name: String) = call { token -> api.renameLocation(token, id, name.trim()) }
+    /** Possible duplicates, most likely first. Also updates the badge count. */
+    suspend fun duplicates(): List<DuplicatePair> = call { token ->
+        val list = api.duplicateLocations(token).getJSONArray("pairs")
+        (0 until list.length()).map { i ->
+            val p = list.getJSONObject(i)
+            val reasons = p.getJSONArray("reasons")
+            DuplicatePair(
+                a = p.getJSONObject("a").toLocation(),
+                b = p.getJSONObject("b").toLocation(),
+                distanceMetres = p.getInt("distanceMetres"),
+                reasons = (0 until reasons.length()).map { reasons.getString(it) },
+            )
+        }.also { accounts.setDuplicateLocations(it.size) }
+    }
+
+    /** The two are different places: stop flagging them. */
+    suspend fun approve(pair: DuplicatePair) = call { token -> api.approveLocationPair(token, pair.a.id, pair.b.id) }
+
+    suspend fun renameLocation(id: String, name: String, isPrivate: Boolean? = null) =
+        call { token -> api.renameLocation(token, id, name.trim(), isPrivate) }
 
     /** Returns how many rounds moved. */
     suspend fun mergeLocation(id: String, intoId: String): Int = call { token ->
@@ -90,6 +114,17 @@ class AdminRepository(private val api: NfasApi, private val accounts: AccountSto
         }
     }
 }
+
+private fun JSONObject.toLocation() = AdminLocation(
+    id = getString("locationId"),
+    name = getString("name"),
+    latitude = getDouble("latitude"),
+    longitude = getDouble("longitude"),
+    createdUtc = null,
+    createdBy = if (isNull("createdBy")) null else getString("createdBy"),
+    rounds = getInt("rounds"),
+    isPrivate = optBoolean("isPrivate"),
+)
 
 private fun JSONObject.instantOrNull(name: String): Instant? =
     if (isNull(name)) null else runCatching { Instant.parse(getString(name)) }.getOrNull()

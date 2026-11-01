@@ -39,6 +39,12 @@ class AccountStore(context: Context) {
      */
     val role: StateFlow<AccountRole> = _role.asStateFlow()
 
+    private val _duplicateLocations = MutableStateFlow(0)
+    /** Admins: possible duplicate shoot locations waiting for review (badge on the Admin tile). Not stored. */
+    val duplicateLocations: StateFlow<Int> = _duplicateLocations.asStateFlow()
+
+    fun setDuplicateLocations(count: Int) { _duplicateLocations.value = count }
+
     fun setRole(role: AccountRole) {
         prefs.edit().putString(K_ROLE, role.name).apply()
         _role.value = role
@@ -71,6 +77,7 @@ class AccountStore(context: Context) {
         _account.value = null
         _lastSync.value = null
         _role.value = AccountRole.USER
+        _duplicateLocations.value = 0
     }
 
     private fun load(): Account? = try {

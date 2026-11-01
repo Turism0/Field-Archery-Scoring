@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.7.01
+## Version 1.7.02
 
+- **1.7.02:** duplicate alerts and private locations in the app. Admins see a red count on the **Admin** tile when there are possible duplicate locations; Admin → **Possible duplicates** lists each pair (nearby / same name / similar name, distance, rounds, who named them) with **Keep 1st**, **Keep 2nd** (merge, with a confirm) or **Different places – stop flagging**. Naming a location has a **Private** switch (only you and admins see it; others shooting there aren't matched to it). Admin → Shoot locations shows a PRIVATE badge and can switch a location between private and public. Needs API 1.7.01.
 - **1.7.01:** server side of possible-duplicate alerts and private locations. `server/sql/006_location_review_private.sql` (schema v4): locations can be **private** (only the archer who named them and Admins see the name; never auto-matched for anyone else; friends see "Private location"); location names only need to be unique among public locations. Admins get a list of **possible duplicates** (within the catchment, or the same / a similar name ignoring words like Archers, Bowmen, Club, Field) and can **approve** a pair as different places so it stops being flagged. `/api/me` tells Admins how many are waiting. Test script `server/tests/Test-LocationReview.ps1`. No app changes yet.
 - **1.6.04:** Admin location tools (roadmap step 2c, completes shoot locations). Admin → **Shoot locations** lists every location with its rounds and who named it. Tap one to fix its name, or merge a duplicate into the location to keep (choices listed nearest first, with a confirm); its rounds move across. Your phone's rounds pick up the new names straight away; other phones on their next sync. Admins and the Owner only; uses the 1.5.01 API.
 - **1.6.03:** the app tells "device offline" apart from "server unavailable". Home shows a small **Device offline** notice when the phone has no working internet, or **Server unavailable** when it's online but the server doesn't answer (or Nginx Proxy Manager says it's down: 502/503/504). Home checks the server when it opens, when the phone comes back online, and every 30 seconds while it's down; the notice goes as soon as it answers. Error messages say which it is, and say "the server" (no more "NFAS server").
@@ -35,7 +36,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to the next tenth (1.7).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: duplicate alerts and private locations in the app, then a location page and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: a location page and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
@@ -45,12 +46,12 @@ Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to th
   - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).
   Pull down on Home or Score history to sync now.
 - **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
-- **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. **Shoot locations** → rename a location, or merge a duplicate into another (nearest first, confirm first). Pull down to refresh.
+- **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. **Possible duplicates** (count shown on the Admin tile) → merge, or mark as different places. **Shoot locations** → rename, make private / public, or merge a duplicate into another (nearest first, confirm first). Pull down to refresh.
 - **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.
-- **Shoot location** (signed in): a line under the scoring header and on the scorecard shows where the round is. New location → asked to name it once. Tap for **Not here?**: nearby locations (10 km) or name a new one; a name already used is offered instead of duplicated. No position → "Get position now".
+- **Shoot location** (signed in): a line under the scoring header and on the scorecard shows where the round is. New location → asked to name it once. Tap for **Not here?**: nearby locations (10 km) or name a new one (optionally **Private**: only you and admins see it); a name already used is offered instead of duplicated. No position → "Get position now".
 - **Scoring:**
   - Big Game card layout: 1st / 2nd / 3rd arrow × inner kill / kill / wound, plus miss. Tap a selected score again to clear it.
   - Target type (Standard, Predator / Prey, Fan) is a small chip on the target; the fan animal count only appears for fans. Override score and clear target are in the target's ⋮ menu.
