@@ -135,7 +135,7 @@ fun NfasNavHost() {
             val roundType = entry.arguments?.getString("roundType")
                 ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
-                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository) },
+                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository) },
                 roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },
@@ -154,6 +154,7 @@ fun NfasNavHost() {
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScoringScreen(
                 vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved) },
+                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved) },
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.
                 onFinished = { nav.navigate(scorecardRoute(roundId)) { popUpTo("home") } },
@@ -166,6 +167,7 @@ fun NfasNavHost() {
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScorecardScreen(
                 vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved) },
+                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },
             )

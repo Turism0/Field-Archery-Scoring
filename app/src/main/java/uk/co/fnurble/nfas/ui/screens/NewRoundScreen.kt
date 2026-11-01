@@ -1,5 +1,11 @@
 package uk.co.fnurble.nfas.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +58,18 @@ fun NewRoundScreen(
     onStarted: (String) -> Unit,
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
+    // Ask for location when starting (Android only shows the prompt until it's been refused twice).
+    // Either answer starts the round; without permission the round simply has no location.
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        vm.start(onStarted)
+    }
+    val context = LocalContext.current
+    fun startRound() {
+        val granted = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+            .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+        if (granted) vm.start(onStarted)
+        else askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+    }
 
     Scaffold(
         topBar = {
@@ -72,7 +90,7 @@ fun NewRoundScreen(
             )
         },
         bottomBar = {
-            BottomActionBar(text = "Start round", enabled = form?.isValid == true) { vm.start(onStarted) }
+            BottomActionBar(text = "Start round", enabled = form?.isValid == true) { startRound() }
         },
     ) { padding ->
         val f = form

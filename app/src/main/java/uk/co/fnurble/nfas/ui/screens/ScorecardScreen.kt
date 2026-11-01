@@ -45,7 +45,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.nfas.domain.Round
 import uk.co.fnurble.nfas.domain.RoundStats
 import uk.co.fnurble.nfas.domain.RoundStatus
+import uk.co.fnurble.nfas.ui.RoundLocationViewModel
 import uk.co.fnurble.nfas.ui.ScorecardViewModel
+import uk.co.fnurble.nfas.ui.components.LocationChip
+import uk.co.fnurble.nfas.ui.components.LocationSheet
+import uk.co.fnurble.nfas.ui.components.label
 import uk.co.fnurble.nfas.ui.components.RunningStats
 import uk.co.fnurble.nfas.ui.components.UkDateLong
 import java.util.Locale
@@ -59,10 +63,13 @@ import kotlin.math.roundToInt
 @Composable
 fun ScorecardScreen(
     vm: ScorecardViewModel,
+    locationVm: RoundLocationViewModel,
     onBack: () -> Unit,
     onEdit: (targetNo: Int) -> Unit,
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
+    val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
+    var showLocation by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -110,6 +117,7 @@ fun ScorecardScreen(
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     RoundHeader(r)
+                    LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     RunningStats(r.stats)
                     MoreStats(r.stats)
                     Text(
@@ -133,6 +141,11 @@ fun ScorecardScreen(
         }
     }
 
+    val current = round
+    if (showLocation && current != null) {
+        LocationSheet(locationVm, current.location, onDismiss = { showLocation = false })
+    }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -145,7 +158,7 @@ fun ScorecardScreen(
 }
 
 @Composable
-internal fun RoundHeader(r: Round) {
+internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -166,6 +179,11 @@ internal fun RoundHeader(r: Round) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
+            if (showLocation) {
+                r.location.label()?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                }
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text("${r.totalPoints}", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)

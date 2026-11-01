@@ -68,13 +68,17 @@ import uk.co.fnurble.nfas.domain.TargetScore
 import uk.co.fnurble.nfas.domain.TargetType
 import uk.co.fnurble.nfas.domain.ordinal
 import uk.co.fnurble.nfas.ui.ScoringViewModel
+import uk.co.fnurble.nfas.ui.components.LocationChip
+import uk.co.fnurble.nfas.ui.components.LocationSheet
 import uk.co.fnurble.nfas.ui.components.NumberField
+import uk.co.fnurble.nfas.ui.RoundLocationViewModel
+import uk.co.fnurble.nfas.domain.LocationStatus
 import uk.co.fnurble.nfas.ui.components.RunningStats
 import uk.co.fnurble.nfas.ui.components.UkDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScoringScreen(vm: ScoringViewModel, onBack: () -> Unit, onFinished: () -> Unit) {
+fun ScoringScreen(vm: ScoringViewModel, locationVm: RoundLocationViewModel, onBack: () -> Unit, onFinished: () -> Unit) {
     val round by vm.round.collectAsStateWithLifecycle()
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
     var showCard by rememberSaveable { mutableStateOf(false) }
@@ -82,9 +86,19 @@ fun ScoringScreen(vm: ScoringViewModel, onBack: () -> Unit, onFinished: () -> Un
     var confirmFinish by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    var showLocation by rememberSaveable { mutableStateOf(false) }
+    var askedForName by rememberSaveable { mutableStateOf(false) }
+    val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
 
     val r = round
     LaunchedEffect(r != null) { if (r != null) vm.ensureTargetSelected(r) }
+    // Nothing known nearby: ask for the location's name once (they can also tap the location line later).
+    LaunchedEffect(r?.location?.status) {
+        if (r?.location?.status == LocationStatus.NEEDS_NAME && !askedForName) {
+            askedForName = true
+            showLocation = true
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -130,6 +144,7 @@ fun ScoringScreen(vm: ScoringViewModel, onBack: () -> Unit, onFinished: () -> Un
                         progress = { if (r.targetCount == 0) 0f else r.targetsComplete.toFloat() / r.targetCount },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    LocationChip(r.location, signedIn, onClick = { showLocation = true })
                 }
             }
         },
@@ -182,6 +197,9 @@ fun ScoringScreen(vm: ScoringViewModel, onBack: () -> Unit, onFinished: () -> Un
         }
     }
 
+    if (showLocation && r != null) {
+        LocationSheet(locationVm, r.location, onDismiss = { showLocation = false })
+    }
     if (showCard && r != null) {
         ScorecardSheet(
             round = r,

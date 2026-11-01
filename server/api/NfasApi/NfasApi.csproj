@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>NfasApi</RootNamespace>
-    <Version>1.5.1</Version>
-    <InformationalVersion>1.5.01</InformationalVersion>
+    <Version>1.6.1</Version>
+    <InformationalVersion>1.6.01</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

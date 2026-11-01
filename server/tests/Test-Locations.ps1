@@ -78,7 +78,7 @@ try {
     # --- Nearby and naming ------------------------------------------------------------------------
     $r = Nearby $lat $lon -Token $A
     Expect 'nothing near an empty spot' ($r.Status -eq 200 -and @($r.Body.locations).Count -eq 0) "($($r.Status), $(@($r.Body.locations).Count))"
-    Expect 'catchment is about half a mile' ($r.Body.catchmentMetres -ge 700 -and $r.Body.catchmentMetres -le 900) "(got $($r.Body.catchmentMetres))"
+    Expect 'catchment is about a quarter mile' ($r.Body.catchmentMetres -ge 350 -and $r.Body.catchmentMetres -le 450) "(got $($r.Body.catchmentMetres))"
 
     $r = Call POST '/api/locations' @{ name = "  zz_test   Bowmen $tag "; latitude = $lat; longitude = $lon } -Token $A
     $L1 = $r.Body.locationId

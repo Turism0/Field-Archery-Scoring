@@ -3,6 +3,8 @@ package uk.co.fnurble.nfas.data.sync
 import org.json.JSONArray
 import org.json.JSONObject
 import uk.co.fnurble.nfas.data.AccountStore
+import uk.co.fnurble.nfas.data.LocationRepository
+import uk.co.fnurble.nfas.data.local.LocationState
 import uk.co.fnurble.nfas.data.local.AnimalEntity
 import uk.co.fnurble.nfas.data.local.AnimalState
 import uk.co.fnurble.nfas.data.local.RoundDao
@@ -24,7 +26,8 @@ import java.time.LocalDate
 
 /**
  * Two-way round sync for the signed-in archer:
- *  0. refresh this account's role (for the Admin menu);
+ *  0. refresh this account's role (for the Admin menu), look up shoot locations waiting for signal
+ *     and pick up renamed / merged locations;
  *  1. upload: finished rounds and deletions waiting on this phone;
  *  2. download: this archer's rounds changed on the server since the last download
  *     (a new or reset phone gets everything; a second phone picks up the other's edits).
@@ -34,6 +37,7 @@ class RoundSyncer(
     private val dao: RoundDao,
     private val api: NfasApi,
     private val accounts: AccountStore,
+    private val locations: LocationRepository,
 ) {
     enum class Outcome { DONE, NOT_SIGNED_IN, RETRY_LATER, SIGNED_OUT, FAILED }
 
@@ -48,6 +52,13 @@ class RoundSyncer(
         return try {
             // Role first (one small call), so the Admin menu appears or goes on the next sync.
             accounts.setRole(AccountRole.fromCode(api.me(account.token).optString("role")))
+            // Shoot locations before uploading, so finished rounds go up with theirs.
+            try {
+                locations.lookUpPending()
+                locations.refreshNames()
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401) throw e   // anything else: rounds still sync
+            }
             upload(account.token)
             val skipped = download(account.token)
             accounts.setLastSync(Instant.now())
@@ -128,7 +139,15 @@ class RoundSyncer(
             return
         }
         val data = json.toRoundData()
-        dao.replaceRound(data.round, data.targets, data.animals)
+        // Keep this phone's own GPS position (never on the server), and a lookup still waiting here.
+        val merged = if (local != null && local.fixLat != null) {
+            data.round.copy(
+                fixLat = local.fixLat,
+                fixLon = local.fixLon,
+                locationState = data.round.locationState ?: local.locationState,
+            )
+        } else data.round
+        dao.replaceRound(merged, data.targets, data.animals)
     }
 
     private companion object {
@@ -171,6 +190,7 @@ internal fun RoundData.toJson(): JSONObject {
         .put("totalPoints", round.totalPoints)
         .put("clientCreatedUtc", round.createdAt.toString())
         .put("clientUpdatedUtc", round.updatedAt.toString())
+        .put("locationId", round.locationId ?: JSONObject.NULL)
         .put("targets", targetArray)
 }
 
@@ -191,6 +211,9 @@ internal fun JSONObject.toRoundData(): RoundData {
         updatedAt = editedAt,
         syncState = SyncState.SYNCED,
         deleted = false,
+        locationId = optStringOrNull("locationId"),
+        locationName = optStringOrNull("locationName"),
+        locationState = if (optStringOrNull("locationId") != null) LocationState.SET else null,
     )
     val targets = mutableListOf<TargetEntity>()
     val animals = mutableListOf<AnimalEntity>()
@@ -223,3 +246,6 @@ internal fun JSONObject.toRoundData(): RoundData {
     }
     return RoundData(round, targets, animals)
 }
+
+/** Null for a missing or JSON-null field (older servers don't send newer fields). */
+private fun JSONObject.optStringOrNull(name: String): String? = if (isNull(name)) null else optString(name)

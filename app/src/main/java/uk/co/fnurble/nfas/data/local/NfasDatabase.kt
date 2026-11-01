@@ -3,6 +3,8 @@ package uk.co.fnurble.nfas.data.local
 import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -110,6 +112,33 @@ abstract class RoundDao {
         upsertAnimals(animals)
     }
 
+    // ---- Shoot locations ----
+
+    /** Position taken at the start of a round; looked up later. Doesn't count as an edit. */
+    @Query("UPDATE round SET fix_lat = :lat, fix_lon = :lon, location_state = 'PENDING_LOOKUP' WHERE id = :id AND location_id IS NULL")
+    abstract suspend fun setFix(id: String, lat: Double, lon: Double)
+
+    /** Rounds with a position still to look up. */
+    @Query("SELECT * FROM round WHERE location_state = 'PENDING_LOOKUP' AND deleted = 0 AND fix_lat IS NOT NULL")
+    abstract suspend fun pendingLocationLookups(): List<RoundEntity>
+
+    @Query("UPDATE round SET location_state = 'NEEDS_NAME' WHERE id = :id AND location_state = 'PENDING_LOOKUP'")
+    abstract suspend fun markNeedsName(id: String)
+
+    /** Sets the round's location as an edit, so a finished round goes up to the server again. */
+    @Query(
+        "UPDATE round SET location_id = :locationId, location_name = :name, location_state = 'SET', " +
+            "updated_at = :nowMillis, sync_state = 'PENDING' WHERE id = :id",
+    )
+    abstract suspend fun setLocation(id: String, locationId: String, name: String, nowMillis: Long)
+
+    @Query("SELECT DISTINCT location_id FROM round WHERE location_id IS NOT NULL")
+    abstract suspend fun locationIds(): List<String>
+
+    /** New name (renamed) or new id (merged) from the server. Not an edit: the server already knows. */
+    @Query("UPDATE round SET location_id = :newId, location_name = :name WHERE location_id = :oldId")
+    abstract suspend fun refreshLocation(oldId: String, newId: String, name: String)
+
     @Transaction
     open suspend fun createRound(round: RoundEntity, targets: List<TargetEntity>, animals: List<AnimalEntity>) {
         upsertRound(round)
@@ -126,7 +155,7 @@ data class RoundData(
 
 @Database(
     entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -136,6 +165,19 @@ abstract class NfasDatabase : RoomDatabase() {
 
     companion object {
         fun create(context: Context): NfasDatabase =
-            Room.databaseBuilder(context, NfasDatabase::class.java, "nfas.db").build()
+            Room.databaseBuilder(context, NfasDatabase::class.java, "nfas.db")
+                .addMigrations(MIGRATION_1_2)
+                .build()
+
+        /** v2: shoot location on each round (app 1.6). Existing rounds get no location. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN location_id TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN location_name TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN location_state TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN fix_lat REAL")
+                db.execSQL("ALTER TABLE round ADD COLUMN fix_lon REAL")
+            }
+        }
     }
 }

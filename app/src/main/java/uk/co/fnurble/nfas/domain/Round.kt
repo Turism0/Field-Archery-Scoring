@@ -14,6 +14,7 @@ data class Round(
     val status: RoundStatus,
     /** One entry per target, ordered by target number. */
     val targets: List<TargetScore>,
+    val location: RoundLocation = RoundLocation(),
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
     val targetsComplete: Int get() = targets.count { it.isComplete }

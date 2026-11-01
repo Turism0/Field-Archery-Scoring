@@ -59,6 +59,9 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )
+                r.locationName?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                }
                 // Finished rounds upload when signed in; in-progress ones stay on the phone until finished.
                 if (showSync && !inProgress) SyncLabel(r.syncState)
             }

@@ -5,6 +5,7 @@ import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.AccountStore
 import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendsRepository
+import uk.co.fnurble.nfas.data.LocationRepository
 import uk.co.fnurble.nfas.data.ProfileRepository
 import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.data.local.NfasDatabase
@@ -19,7 +20,8 @@ class AppContainer(app: Application) {
     val accountStore = AccountStore(app)
 
     val syncScheduler = SyncScheduler(app, accountStore)
-    val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore)
+    val locationRepository = LocationRepository(app, db.roundDao(), api, accountStore, onChanged = { syncScheduler.request() })
+    val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore, locationRepository)
 
     val profileRepository = ProfileRepository(db.profileDao())
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })

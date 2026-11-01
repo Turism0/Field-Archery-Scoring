@@ -20,6 +20,9 @@ enum class SyncState { PENDING, SYNCED, FAILED }
 
 enum class AnimalState { PENDING, MISSED, SCORED }
 
+/** Phone-side progress of a round's shoot location (null = no position). */
+enum class LocationState { PENDING_LOOKUP, NEEDS_NAME, SET }
+
 /**
  * The archer's profile. PHONE ONLY — never synced.
  * Holds personal data (real name, date of birth) that must not reach the server.
@@ -59,6 +62,17 @@ data class RoundEntity(
     @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
     /** Soft delete so the deletion can be synced to the server. */
     val deleted: Boolean = false,
+    // ---- Shoot location (database v2) ----
+    /** Server id of the shoot location, once matched or named. Synced. */
+    @ColumnInfo(name = "location_id") val locationId: String? = null,
+    @ColumnInfo(name = "location_name") val locationName: String? = null,
+    @ColumnInfo(name = "location_state") val locationState: LocationState? = null,
+    /**
+     * GPS position taken when the round started. PHONE ONLY — never sent with the round; only used to
+     * ask the server which location is nearby.
+     */
+    @ColumnInfo(name = "fix_lat") val fixLat: Double? = null,
+    @ColumnInfo(name = "fix_lon") val fixLon: Double? = null,
 )
 
 @Entity(

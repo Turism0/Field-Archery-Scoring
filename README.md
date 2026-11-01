@@ -4,8 +4,10 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.5.01
+## Version 1.6.01
 
+- **1.6.01:** shoot location catchment cut from half a mile to a quarter mile (402 m) in the API (`Locations:CatchmentMetres` in `appsettings.json`). No app changes.
+- **1.6:** shoot locations in the app (roadmap step 2b). Starting a round asks for location permission (once) and takes one GPS position in the background. Signed in with signal, the app finds the shoot location nearby (within a quarter mile from 1.6.01); if none is known it asks you to name it (first to shoot there names it). No signal: the position waits on the phone and is looked up on the next sync. A location line on the scoring screen and scorecard shows the name; tap it for **Not here?** (pick another location within 10 km, or name a new one), or to get a position now for a round that has none. Locations show on round lists, scorecards and friends' rounds; renamed or merged locations update on sync. Your own position never leaves the phone except to ask what's nearby. Phone database v2 (adds location columns; existing rounds keep working with no location).
 - **1.5.01:** shoot locations in the database and API (roadmap step 2a). `server/sql/005_shoot_locations.sql` adds the `ShootLocation` table and a location on each round. New calls: locations near a position (half-mile catchment, or a wider radius for "Not here?"), name a new location (same name as an existing one is refused), resolve ids a phone holds (follows merges); Admins list, rename and merge locations. Rounds upload and download with an optional location; friends' rounds show the location name. Test script `server/tests/Test-Locations.ps1`; `900_delete_test_accounts.sql` also removes test locations. No app changes yet.
 - **1.5:** roles in the app (roadmap step 1 done). The app learns the account's role when signing in and on every sync. Admins and the Owner get an **Admin** tile on Home ("Signed in as … · Owner/Admin" too); the Admin screen lists every account with its role, joined and last sign-in dates. The Owner switches Admin on or off per account; Admins see the list only. Everyone else sees nothing new. The server checks the role on every admin call.
 - **1.4.03:** roles in the database and API (roadmap step 1, first half). `server/sql/004_roles.sql` gives every account a role (User, Admin or Owner; only one Owner) and makes your account the Owner. `/api/me` now returns the role; new admin calls list accounts (Admins and Owner) and set Admin on or off (Owner only). Test script `server/tests/Test-Roles.ps1`. No app changes yet.
@@ -27,9 +29,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
 - **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
 
-Versioning: minor changes go 1.5.01, 1.5.02 … 1.5.99; major changes move to the next tenth (1.6).
+Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to the next tenth (1.7).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: shoot locations (DB and API done, app next), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: Admin location tools (rename, merge), then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
@@ -44,6 +46,7 @@ Versioning: minor changes go 1.5.01, 1.5.02 … 1.5.99; major changes move to th
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.
+- **Shoot location** (signed in): a line under the scoring header and on the scorecard shows where the round is. New location → asked to name it once. Tap for **Not here?**: nearby locations (10 km) or name a new one; a name already used is offered instead of duplicated. No position → "Get position now".
 - **Scoring:**
   - Big Game card layout: 1st / 2nd / 3rd arrow × inner kill / kill / wound, plus miss. Tap a selected score again to clear it.
   - Target type (Standard, Predator / Prey, Fan) is a small chip on the target; the fan animal count only appears for fans. Override score and clear target are in the target's ⋮ menu.

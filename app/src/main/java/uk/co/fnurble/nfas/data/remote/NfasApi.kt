@@ -18,7 +18,13 @@ object ApiConfig {
  * A failed API call. [message] is written to show to the archer.
  * [status] 0 means the server couldn't be reached (no signal, server down).
  */
-class ApiException(val status: Int, val code: String, override val message: String) : Exception(message) {
+class ApiException(
+    val status: Int,
+    val code: String,
+    override val message: String,
+    /** The error reply, for extra details (e.g. the existing location on name_taken). */
+    val body: JSONObject? = null,
+) : Exception(message) {
     val isNetwork: Boolean get() = status == 0
 }
 
@@ -82,6 +88,26 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
     suspend fun setRole(token: String, archerId: String, role: String) {
         request("PUT", "/api/admin/archers/$archerId/role", JSONObject().put("role", role), token)
     }
+
+    // ---- Shoot locations ----
+
+    /** { locations: [ { locationId, name, distanceMetres } ], catchmentMetres }, nearest first. Position isn't stored. */
+    suspend fun nearbyLocations(token: String, lat: Double, lon: Double, radiusMetres: Int? = null): JSONObject {
+        val query = listOfNotNull(
+            "lat=" + String.format(java.util.Locale.ROOT, "%.6f", lat),
+            "lon=" + String.format(java.util.Locale.ROOT, "%.6f", lon),
+            radiusMetres?.let { "radius=$it" },
+        ).joinToString("&")
+        return request("GET", "/api/locations/nearby?$query", body = null, token = token)
+    }
+
+    /** 201 { locationId, name }; 409 name_taken with { existing: { locationId, name } } in [ApiException.body]. */
+    suspend fun createLocation(token: String, name: String, lat: Double, lon: Double): JSONObject =
+        request("POST", "/api/locations", JSONObject().put("name", name).put("latitude", lat).put("longitude", lon), token)
+
+    /** { locations: [ { requestedId, locationId, name } ] }: current id and name for ids this phone holds. */
+    suspend fun resolveLocations(token: String, ids: List<String>): JSONObject =
+        request("POST", "/api/locations/resolve", JSONObject().put("ids", org.json.JSONArray(ids)), token)
 
     // ---- Friends ----
 
@@ -150,6 +176,7 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
                         status = status,
                         code = err?.optString("error").orEmpty().ifBlank { "http_$status" },
                         message = err?.optString("message").orEmpty().ifBlank { defaultMessage(status) },
+                        body = err,
                     )
                 }
             } catch (e: IOException) {

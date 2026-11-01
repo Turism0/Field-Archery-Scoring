@@ -27,6 +27,7 @@ import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.FriendsOverview
 import uk.co.fnurble.nfas.data.FriendsRepository
+import uk.co.fnurble.nfas.data.LocationRepository
 import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.Profile
 import uk.co.fnurble.nfas.data.ProfileRepository
@@ -40,6 +41,7 @@ import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.AnimalResult
 import uk.co.fnurble.nfas.domain.ArcherClass
 import uk.co.fnurble.nfas.domain.BowStyle
+import uk.co.fnurble.nfas.domain.NearbyLocation
 import uk.co.fnurble.nfas.domain.Round
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.TargetScore
@@ -573,6 +575,7 @@ data class NewRoundForm(
 class NewRoundViewModel(
     private val profiles: ProfileRepository,
     private val rounds: RoundRepository,
+    private val locations: LocationRepository,
 ) : ViewModel() {
     private val _form = MutableStateFlow<NewRoundForm?>(null)
     val form: StateFlow<NewRoundForm?> = _form.asStateFlow()
@@ -601,7 +604,97 @@ class NewRoundViewModel(
         if (!f.isValid) return
         viewModelScope.launch {
             val id = rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!)
+            // GPS fix in the background (if allowed); scoring starts straight away.
+            locations.captureFor(id)
             onCreated(id)
+        }
+    }
+}
+
+// ---------------- Shoot location (scoring screen and scorecard) ----------------
+
+/**
+ * The location sheet for one of this archer's rounds: "Not here?" list, naming a new location, or
+ * taking a position now for a round that has none. Nav argument "roundId".
+ */
+class RoundLocationViewModel(
+    private val locations: LocationRepository,
+    accounts: AccountRepository,
+    saved: SavedStateHandle,
+) : ViewModel() {
+    private val roundId: String = checkNotNull(saved["roundId"])
+
+    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
+    private val _nearby = MutableStateFlow<Load<List<NearbyLocation>>>(Load.Loading)
+    val nearby: StateFlow<Load<List<NearbyLocation>>> = _nearby.asStateFlow()
+
+    private val _hasFix = MutableStateFlow(true)
+    /** False when the round has no GPS position, so the sheet offers "Get position now". */
+    val hasFix: StateFlow<Boolean> = _hasFix.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** Set when the name typed is already used: offer that location instead. */
+    private val _taken = MutableStateFlow<NearbyLocation?>(null)
+    val taken: StateFlow<NearbyLocation?> = _taken.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+
+    val hasPermission: Boolean get() = locations.hasPermission()
+
+    /** Called when the sheet opens. */
+    fun load() {
+        _taken.value = null
+        viewModelScope.launch {
+            _hasFix.value = locations.hasFix(roundId)
+            if (!_hasFix.value) { _nearby.value = Load.Ready(emptyList()); return@launch }
+            _nearby.value = Load.Loading
+            _nearby.value = try {
+                Load.Ready(locations.nearby(roundId))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
+
+    fun captureNow() = act {
+        if (locations.captureNow(roundId)) load()
+        else _message.value = "Couldn't get a GPS position. Check location is on and try again outside."
+    }
+
+    fun choose(location: NearbyLocation, onDone: () -> Unit) = act {
+        locations.choose(roundId, location)
+        onDone()
+    }
+
+    fun name(name: String, onDone: () -> Unit) = act {
+        try {
+            locations.name(roundId, name)
+            onDone()
+        } catch (e: LocationRepository.NameTaken) {
+            _taken.value = e.existing
+        }
+    }
+
+    private fun act(block: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _busy.value = false
+            }
         }
     }
 }

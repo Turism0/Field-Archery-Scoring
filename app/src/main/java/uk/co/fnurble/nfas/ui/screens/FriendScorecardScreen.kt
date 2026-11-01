@@ -74,7 +74,7 @@ fun FriendScorecardScreen(vm: FriendScorecardViewModel, onBack: () -> Unit) {
                 ) {
                     item {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            RoundHeader(r)
+                            RoundHeader(r, showLocation = true)
                             RunningStats(r.stats)
                             MoreStats(r.stats)
                             Text(

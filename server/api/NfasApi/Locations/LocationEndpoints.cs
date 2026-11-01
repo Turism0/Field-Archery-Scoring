@@ -11,7 +11,7 @@ namespace NfasApi.Locations;
 /// The phone's position is only used to answer the request; it is never stored. A location's stored
 /// position is where it was first named.
 ///   GET  /api/locations/nearby?lat=&amp;lon=&amp;radius=   → { locations: [{ locationId, name, distanceMetres }] } nearest first;
-///                                                    radius in metres, default the catchment (about half a mile), max 10 km
+///                                                    radius in metres, default the catchment (about a quarter mile), max 10 km
 ///   POST /api/locations          { name, latitude, longitude } → 201 { locationId, name }; 409 name_taken with the existing one
 ///   POST /api/locations/resolve  { ids: [...] }   → { locations: [{ requestedId, locationId, name }] } current id and name
 ///                                                    for ids a phone holds (follows merges; unknown ids left out)
@@ -227,8 +227,8 @@ public static class LocationEndpoints
         }, statusCode: StatusCodes.Status409Conflict);
     }
 
-    /// <summary>Half a mile by default (805 m); "Locations:CatchmentMetres" in appsettings.json.</summary>
-    private static int Catchment(IConfiguration config) => config.GetValue("Locations:CatchmentMetres", 805);
+    /// <summary>A quarter mile by default (402 m); "Locations:CatchmentMetres" in appsettings.json.</summary>
+    private static int Catchment(IConfiguration config) => config.GetValue("Locations:CatchmentMetres", 402);
 
     /// <summary>Great-circle distance in metres (haversine).</summary>
     public static double Metres(double lat1, double lon1, double lat2, double lon2)

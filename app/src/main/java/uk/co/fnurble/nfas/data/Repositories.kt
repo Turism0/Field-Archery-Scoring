@@ -1,5 +1,8 @@
 package uk.co.fnurble.nfas.data
 
+import uk.co.fnurble.nfas.data.local.LocationState
+import uk.co.fnurble.nfas.domain.LocationStatus
+import uk.co.fnurble.nfas.domain.RoundLocation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
@@ -71,6 +74,7 @@ data class RoundSummary(
     val totalPoints: Int,
     val status: RoundStatus,
     val syncState: SyncState,
+    val locationName: String? = null,
 )
 
 class RoundRepository(
@@ -89,6 +93,7 @@ class RoundRepository(
                 totalPoints = it.totalPoints,
                 status = it.status,
                 syncState = it.syncState,
+                locationName = it.locationName,
             )
         }
     }
@@ -167,6 +172,15 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         ageGroup = ageGroup,
         bowStyle = bowStyle,
         status = status,
+        location = RoundLocation(
+            status = when (locationState) {
+                null -> LocationStatus.NONE
+                LocationState.PENDING_LOOKUP -> LocationStatus.LOOKING
+                LocationState.NEEDS_NAME -> LocationStatus.NEEDS_NAME
+                LocationState.SET -> LocationStatus.SET
+            },
+            name = locationName,
+        ),
         targets = targets.map { t ->
             TargetScore(
                 targetNo = t.targetNo,

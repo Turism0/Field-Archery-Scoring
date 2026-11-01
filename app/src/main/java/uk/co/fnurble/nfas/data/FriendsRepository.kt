@@ -34,6 +34,7 @@ data class FriendRoundSummary(
     val targetCount: Int,
     val classLine: String,
     val totalPoints: Int,
+    val locationName: String? = null,
 )
 
 /**
@@ -81,6 +82,7 @@ class FriendsRepository(private val api: NfasApi, private val accounts: AccountS
                 targetCount = r.getInt("targetCount"),
                 classLine = "${cls.displayName} ${age.displayName} $bow",
                 totalPoints = r.getInt("totalPoints"),
+                locationName = r.stringOrNull("locationName"),
             )
         }
     }
