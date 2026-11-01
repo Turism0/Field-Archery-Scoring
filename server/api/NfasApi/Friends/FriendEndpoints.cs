@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Data.SqlClient;
 using NfasApi.Auth;
 using NfasApi.Data;
+using NfasApi.Locations;
 using NfasApi.Rounds;
 
 namespace NfasApi.Friends;
@@ -172,13 +173,13 @@ public static class FriendEndpoints
         await using var conn = await db.OpenAsync(ct);
         if (!await AreFriendsAsync(conn, user.ArcherId(), archerId, ct)) return NotFriends();
 
-        var rounds = await conn.QueryAsync<FriendRoundSummary>(new CommandDefinition("""
+        var rounds = await conn.QueryAsync<FriendRoundSummary>(new CommandDefinition($"""
             SELECT r.RoundId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,
-                   r.BowStyle, r.TotalPoints, l.Name AS LocationName
+                   r.BowStyle, r.TotalPoints, {LocationEndpoints.VisibleNameSql} AS LocationName
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.ArcherId = @archerId AND r.Status = 'COMPLETED' AND r.IsDeleted = 0
             ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
-            """, new { archerId }, cancellationToken: ct));
+            """, new { archerId, viewer = user.ArcherId(), viewerIsAdmin = user.IsAdmin() }, cancellationToken: ct));
 
         return Results.Ok(new
         {
@@ -201,7 +202,7 @@ public static class FriendEndpoints
         await using var conn = await db.OpenAsync(ct);
         if (!await AreFriendsAsync(conn, user.ArcherId(), archerId, ct)) return NotFriends();
 
-        var loaded = await RoundReader.ReadAsync(conn, roundId, ct);
+        var loaded = await RoundReader.ReadAsync(conn, roundId, user.ArcherId(), user.IsAdmin(), ct);
         return loaded is { } l && l.ArcherId == archerId && l.Round.Status == "COMPLETED" && !l.Round.IsDeleted
             ? Results.Ok(l.Round)
             : Error(404, "not_found", "Round not found.");

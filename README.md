@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.6.04
+## Version 1.7.01
 
+- **1.7.01:** server side of possible-duplicate alerts and private locations. `server/sql/006_location_review_private.sql` (schema v4): locations can be **private** (only the archer who named them and Admins see the name; never auto-matched for anyone else; friends see "Private location"); location names only need to be unique among public locations. Admins get a list of **possible duplicates** (within the catchment, or the same / a similar name ignoring words like Archers, Bowmen, Club, Field) and can **approve** a pair as different places so it stops being flagged. `/api/me` tells Admins how many are waiting. Test script `server/tests/Test-LocationReview.ps1`. No app changes yet.
 - **1.6.04:** Admin location tools (roadmap step 2c, completes shoot locations). Admin → **Shoot locations** lists every location with its rounds and who named it. Tap one to fix its name, or merge a duplicate into the location to keep (choices listed nearest first, with a confirm); its rounds move across. Your phone's rounds pick up the new names straight away; other phones on their next sync. Admins and the Owner only; uses the 1.5.01 API.
 - **1.6.03:** the app tells "device offline" apart from "server unavailable". Home shows a small **Device offline** notice when the phone has no working internet, or **Server unavailable** when it's online but the server doesn't answer (or Nginx Proxy Manager says it's down: 502/503/504). Home checks the server when it opens, when the phone comes back online, and every 30 seconds while it's down; the notice goes as soon as it answers. Error messages say which it is, and say "the server" (no more "NFAS server").
 - **1.6.02:** `server/api/NfasApi/Update-Api.ps1`: one command on Odin to stop the app pool, publish, start it again (always, even if the publish fails) and check `/health` shows the new version and the database. Test scripts now say plainly when the API isn't answering. No app or API changes (API stays 1.6.01).
@@ -34,7 +35,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.6.01, 1.6.02 … 1.6.99; major changes move to the next tenth (1.7).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: duplicate alerts and private locations in the app, then a location page and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 

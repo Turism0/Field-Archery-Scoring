@@ -12,12 +12,14 @@ namespace NfasApi.Locations;
 /// position is where it was first named.
 ///   GET  /api/locations/nearby?lat=&amp;lon=&amp;radius=   → { locations: [{ locationId, name, distanceMetres }] } nearest first;
 ///                                                    radius in metres, default the catchment (about a quarter mile), max 10 km
-///   POST /api/locations          { name, latitude, longitude } → 201 { locationId, name }; 409 name_taken with the existing one
+///   POST /api/locations          { name, latitude, longitude, isPrivate? } → 201 { locationId, name }; 409 name_taken with the existing one
 ///   POST /api/locations/resolve  { ids: [...] }   → { locations: [{ requestedId, locationId, name }] } current id and name
 ///                                                    for ids a phone holds (follows merges; unknown ids left out)
 ///  Admins and Owner:
 ///   GET  /api/admin/locations                     → { locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds }] }
-///   PUT  /api/admin/locations/{id}   { name }     → { locationId, name }; 409 name_taken
+///   PUT  /api/admin/locations/{id}   { name, isPrivate? } → { locationId, name }; 409 name_taken
+///   GET  /api/admin/locations/duplicates          → { pairs: [{ a, b, distanceMetres, reasons: [nearby|same_name|similar_name] }] }
+///   POST /api/admin/locations/duplicates/approve { aId, bId } → 204: different places, stop flagging them
 ///   POST /api/admin/locations/{id}/merge { intoId } → { locationId, name, roundsMoved }: the duplicate's rounds move to intoId
 /// </summary>
 public static class LocationEndpoints
@@ -26,14 +28,26 @@ public static class LocationEndpoints
     public const int MaxName = 60;
     private const int MaxRadius = 10_000;
 
-    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude);
+    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
-    public sealed record RenameRequest(string? Name);
+    public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
+    public sealed record ApproveRequest(Guid? AId, Guid? BId);
     public sealed record MergeRequest(Guid? IntoId);
 
     private sealed record LocationRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude);
     private sealed record AdminRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude,
-        DateTime CreatedUtc, string? CreatedBy, int Rounds);
+        DateTime CreatedUtc, string? CreatedBy, int Rounds, bool IsPrivate);
+
+    /// <summary>What other archers see instead of a private location's name.</summary>
+    public const string PrivateName = "Private location";
+
+    /// <summary>
+    /// SQL for a location's name as the viewer may see it ("l" = ShootLocation, @viewer / @viewerIsAdmin bound).
+    /// Private locations show their name only to the archer who named them and to Admins.
+    /// </summary>
+    public const string VisibleNameSql =
+        "CASE WHEN l.IsPrivate = 1 AND @viewerIsAdmin = 0 AND (l.CreatedById IS NULL OR l.CreatedById <> @viewer) " +
+        "THEN N'" + PrivateName + "' ELSE l.Name END";
 
     public static void MapLocationEndpoints(this WebApplication app)
     {
@@ -46,9 +60,11 @@ public static class LocationEndpoints
         admin.MapGet("/", AdminList);
         admin.MapPut("/{locationId:guid}", Rename);
         admin.MapPost("/{locationId:guid}/merge", Merge);
+        admin.MapGet("/duplicates", Duplicates);
+        admin.MapPost("/duplicates/approve", Approve);
     }
 
-    private static async Task<IResult> Nearby(double? lat, double? lon, int? radius, Db db, IConfiguration config, CancellationToken ct)
+    private static async Task<IResult> Nearby(double? lat, double? lon, int? radius, ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {
         if (PositionProblem(lat, lon) is { } bad) return bad;
         var within = Math.Clamp(radius ?? Catchment(config), 1, MaxRadius);
@@ -61,6 +77,7 @@ public static class LocationEndpoints
             SELECT LocationId, Name, Latitude, Longitude
             FROM dbo.ShootLocation
             WHERE MergedIntoId IS NULL
+              AND (IsPrivate = 0 OR CreatedById = @me)   -- someone else's private location is never matched
               AND Latitude BETWEEN @minLat AND @maxLat
               AND Longitude BETWEEN @minLon AND @maxLon;
             """,
@@ -68,6 +85,7 @@ public static class LocationEndpoints
             {
                 minLat = (decimal)(lat.Value - dLat), maxLat = (decimal)(lat.Value + dLat),
                 minLon = (decimal)(lon!.Value - dLon), maxLon = (decimal)(lon.Value + dLon),
+                me = user.ArcherId(),
             }, cancellationToken: ct));
 
         var near = rows
@@ -88,13 +106,17 @@ public static class LocationEndpoints
         try
         {
             var id = await conn.QuerySingleAsync<Guid>(new CommandDefinition("""
-                INSERT dbo.ShootLocation (Name, Latitude, Longitude, CreatedById)
+                INSERT dbo.ShootLocation (Name, Latitude, Longitude, CreatedById, IsPrivate)
                 OUTPUT inserted.LocationId
-                VALUES (@name, @lat, @lon, @by);
+                VALUES (@name, @lat, @lon, @by, @isPrivate);
                 """,
-                new { name, lat = Round5(req.Latitude!.Value), lon = Round5(req.Longitude!.Value), by = user.ArcherId() },
+                new
+                {
+                    name, lat = Round5(req.Latitude!.Value), lon = Round5(req.Longitude!.Value), by = user.ArcherId(),
+                    isPrivate = req.IsPrivate == true,
+                },
                 cancellationToken: ct));
-            return Results.Created($"/api/locations/{id}", new { locationId = id, name });
+            return Results.Created($"/api/locations/{id}", new { locationId = id, name, isPrivate = req.IsPrivate == true });
         }
         catch (SqlException ex) when (Db.IsDuplicateKey(ex))
         {
@@ -102,7 +124,7 @@ public static class LocationEndpoints
         }
     }
 
-    private static async Task<IResult> Resolve(ResolveRequest req, Db db, CancellationToken ct)
+    private static async Task<IResult> Resolve(ResolveRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
     {
         var ids = (req.Ids ?? []).Distinct().Take(500).ToList();
         if (ids.Count == 0) return Results.Ok(new { locations = Array.Empty<object>() });
@@ -113,7 +135,11 @@ public static class LocationEndpoints
         {
             if (await CurrentAsync(conn, id, null, ct) is { } loc)
             {
-                result.Add(new { requestedId = id, loc.LocationId, loc.Name });
+                var name = await conn.ExecuteScalarAsync<string>(new CommandDefinition(
+                    $"SELECT {VisibleNameSql} FROM dbo.ShootLocation l WHERE l.LocationId = @locationId;",
+                    new { locationId = loc.LocationId, viewer = user.ArcherId(), viewerIsAdmin = user.IsAdmin() },
+                    cancellationToken: ct));
+                result.Add(new { requestedId = id, loc.LocationId, name });
             }
         }
         return Results.Ok(new { locations = result });
@@ -125,7 +151,8 @@ public static class LocationEndpoints
         await using var conn = await db.OpenAsync(ct);
         var rows = await conn.QueryAsync<AdminRow>(new CommandDefinition("""
             SELECT l.LocationId, l.Name, l.Latitude, l.Longitude, l.CreatedUtc, a.Username AS CreatedBy,
-                   (SELECT COUNT(*) FROM dbo.Round r WHERE r.LocationId = l.LocationId AND r.IsDeleted = 0) AS Rounds
+                   (SELECT COUNT(*) FROM dbo.Round r WHERE r.LocationId = l.LocationId AND r.IsDeleted = 0) AS Rounds,
+                   l.IsPrivate
             FROM dbo.ShootLocation l
             LEFT JOIN dbo.Archer a ON a.ArcherId = l.CreatedById
             WHERE l.MergedIntoId IS NULL
@@ -136,7 +163,7 @@ public static class LocationEndpoints
             locations = rows.Select(r => new
             {
                 r.LocationId, r.Name, latitude = (double)r.Latitude, longitude = (double)r.Longitude,
-                createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds,
+                createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds, r.IsPrivate,
             }),
         });
     }
@@ -151,11 +178,12 @@ public static class LocationEndpoints
         try
         {
             var changed = await conn.ExecuteAsync(new CommandDefinition("""
-                UPDATE dbo.ShootLocation SET Name = @name, RenamedUtc = SYSUTCDATETIME(), RenamedById = @by
+                UPDATE dbo.ShootLocation
+                SET Name = @name, IsPrivate = COALESCE(@isPrivate, IsPrivate), RenamedUtc = SYSUTCDATETIME(), RenamedById = @by
                 WHERE LocationId = @locationId AND MergedIntoId IS NULL;
-                """, new { locationId, name, by = user.ArcherId() }, cancellationToken: ct));
+                """, new { locationId, name, isPrivate = req.IsPrivate, by = user.ArcherId() }, cancellationToken: ct));
             return changed == 1
-                ? Results.Ok(new { locationId, name })
+                ? Results.Ok(new { locationId, name, isPrivate = req.IsPrivate })
                 : Error(404, "no_such_location", "There's no location with that id (or it was merged into another).");
         }
         catch (SqlException ex) when (Db.IsDuplicateKey(ex))
@@ -197,6 +225,51 @@ public static class LocationEndpoints
         return Results.Ok(new { locationId = intoId, name, roundsMoved = moved });
     }
 
+    /// <summary>Possible duplicates for Admins: pairs nearby or with the same / a similar name, not yet approved.</summary>
+    private static async Task<IResult> Duplicates(ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
+    {
+        if (!user.IsAdmin()) return NotAdmin();
+        await using var conn = await db.OpenAsync(ct);
+        var pairs = await DuplicateFinder.FindAsync(conn, Catchment(config), ct);
+        return Results.Ok(new
+        {
+            pairs = pairs.Select(p => new { a = Summary(p.A), b = Summary(p.B), p.DistanceMetres, p.Reasons }),
+        });
+
+        static object Summary(DuplicateFinder.Loc l) => new
+        {
+            l.LocationId, l.Name, l.IsPrivate, l.CreatedBy, l.Rounds,
+            latitude = (double)l.Latitude, longitude = (double)l.Longitude,
+        };
+    }
+
+    /// <summary>An Admin says two locations are different places: stop flagging them.</summary>
+    private static async Task<IResult> Approve(ApproveRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        if (!user.IsAdmin()) return NotAdmin();
+        if (req.AId is not { } a || req.BId is not { } b || a == b)
+        {
+            return Error(400, "invalid_pair", "Choose two different locations.");
+        }
+        await using var conn = await db.OpenAsync(ct);
+        var live = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT COUNT(*) FROM dbo.ShootLocation WHERE LocationId IN (@a, @b) AND MergedIntoId IS NULL;",
+            new { a, b }, cancellationToken: ct));
+        if (live != 2) return Error(404, "no_such_location", "Both locations must exist and not be merged.");
+
+        await conn.ExecuteAsync(new CommandDefinition("""
+            DECLARE @low UNIQUEIDENTIFIER = CASE WHEN @a < @b THEN @a ELSE @b END;
+            DECLARE @high UNIQUEIDENTIFIER = CASE WHEN @a < @b THEN @b ELSE @a END;
+            IF NOT EXISTS (SELECT 1 FROM dbo.LocationPairApproval WHERE LocationLowId = @low AND LocationHighId = @high)
+                INSERT dbo.LocationPairApproval (LocationLowId, LocationHighId, ApprovedById) VALUES (@low, @high, @by);
+            """, new { a, b, by = user.ArcherId() }, cancellationToken: ct));
+        return Results.NoContent();
+    }
+
+    /// <summary>For /api/me: how many possible duplicates are waiting for an Admin.</summary>
+    public static async Task<int> DuplicateCountAsync(SqlConnection conn, IConfiguration config, CancellationToken ct) =>
+        (await DuplicateFinder.FindAsync(conn, Catchment(config), ct)).Count;
+
     /// <summary>The live location an id now stands for (following merges), or null if unknown.</summary>
     public static async Task<(Guid LocationId, string Name)?> CurrentAsync(
         SqlConnection conn, Guid id, System.Data.IDbTransaction? tx, CancellationToken ct)
@@ -217,7 +290,7 @@ public static class LocationEndpoints
     private static async Task<IResult> NameTaken(SqlConnection conn, string name, CancellationToken ct)
     {
         var existing = await conn.QuerySingleOrDefaultAsync<(Guid LocationId, string Name)>(new CommandDefinition(
-            "SELECT LocationId, Name FROM dbo.ShootLocation WHERE Name = @name AND MergedIntoId IS NULL;",
+            "SELECT LocationId, Name FROM dbo.ShootLocation WHERE Name = @name AND MergedIntoId IS NULL AND IsPrivate = 0;",
             new { name }, cancellationToken: ct));
         return Results.Json(new
         {

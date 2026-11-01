@@ -13,7 +13,7 @@ namespace NfasApi.Auth;
 ///   POST /api/auth/register  { username, password, deviceName }  → 201 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/login     { username, password, deviceName }  → 200 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/logout    (Bearer token)                      → 204, revokes this phone's token
-///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role }
+///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role, duplicateLocations }
 /// Errors are JSON: { error: "code", message: "text for the user" }.
 /// </summary>
 public static partial class AuthEndpoints
@@ -158,13 +158,17 @@ public static partial class AuthEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> Me(ClaimsPrincipal user, Db db, CancellationToken ct)
+    private static async Task<IResult> Me(ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {
         await using var conn = await db.OpenAsync(ct);
         var me = await conn.QuerySingleAsync<MeResponse>(new CommandDefinition(
             "SELECT ArcherId, Username, CreatedUtc, Role FROM dbo.Archer WHERE ArcherId = @archerId;",
             new { archerId = user.ArcherId() }, cancellationToken: ct));
-        return Results.Ok(me);
+        // Admins: how many possible duplicate locations are waiting (for the badge on the Admin tile).
+        var duplicateLocations = me.Role is Roles.Admin or Roles.Owner
+            ? await NfasApi.Locations.LocationEndpoints.DuplicateCountAsync(conn, config, ct)
+            : 0;
+        return Results.Ok(new { me.ArcherId, me.Username, me.CreatedUtc, me.Role, duplicateLocations });
     }
 
     private static IResult? UsernameProblem(string username) =>

@@ -123,7 +123,7 @@ public static class RoundEndpoints
     private static async Task<IResult> Get(Guid roundId, ClaimsPrincipal user, Db db, CancellationToken ct)
     {
         await using var conn = await db.OpenAsync(ct);
-        var round = await RoundReader.ReadAsync(conn, roundId, ct);
+        var round = await RoundReader.ReadAsync(conn, roundId, user.ArcherId(), user.IsAdmin(), ct);
         return round is not null && round.ArcherId == user.ArcherId()
             ? Results.Ok(round.Round)
             : Results.Json(new { error = "not_found", message = "Round not found." }, statusCode: StatusCodes.Status404NotFound);
@@ -162,7 +162,7 @@ public static class RoundEndpoints
 
         var more = ids.Count > take;
         if (more) ids.RemoveAt(ids.Count - 1);
-        var rounds = await RoundReader.ReadManyAsync(conn, ids, ct);
+        var rounds = await RoundReader.ReadManyAsync(conn, ids, user.ArcherId(), user.IsAdmin(), ct);
         return Results.Ok(new { rounds, more });
     }
 
@@ -181,19 +181,20 @@ public static class RoundReader
 {
     public sealed record Loaded(Guid ArcherId, StoredRoundDto Round);
 
-    public static async Task<Loaded?> ReadAsync(Microsoft.Data.SqlClient.SqlConnection conn, Guid roundId, CancellationToken ct)
+    public static async Task<Loaded?> ReadAsync(
+        Microsoft.Data.SqlClient.SqlConnection conn, Guid roundId, Guid viewer, bool viewerIsAdmin, CancellationToken ct)
     {
-        using var multi = await conn.QueryMultipleAsync(new CommandDefinition("""
+        using var multi = await conn.QueryMultipleAsync(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
                    r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
-                   r.LocationId, l.Name AS LocationName
+                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.RoundId = @roundId;
             SELECT TargetNo, TargetType, OverridePoints, Points
             FROM dbo.TargetScore WHERE RoundId = @roundId ORDER BY TargetNo;
             SELECT TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
             FROM dbo.AnimalScore WHERE RoundId = @roundId ORDER BY TargetNo, AnimalIndex;
-            """, new { roundId }, cancellationToken: ct));
+            """, new { roundId, viewer, viewerIsAdmin }, cancellationToken: ct));
 
         var r = await multi.ReadSingleOrDefaultAsync<RoundRow>();
         if (r is null) return null;
@@ -212,20 +213,20 @@ public static class RoundReader
 
     /// <summary>Loads several rounds in three queries, returned in the order of <paramref name="ids"/>.</summary>
     public static async Task<List<StoredRoundDto>> ReadManyAsync(
-        Microsoft.Data.SqlClient.SqlConnection conn, IReadOnlyList<Guid> ids, CancellationToken ct)
+        Microsoft.Data.SqlClient.SqlConnection conn, IReadOnlyList<Guid> ids, Guid viewer, bool viewerIsAdmin, CancellationToken ct)
     {
         if (ids.Count == 0) return [];
-        using var multi = await conn.QueryMultipleAsync(new CommandDefinition("""
+        using var multi = await conn.QueryMultipleAsync(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
                    r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
-                   r.LocationId, l.Name AS LocationName
+                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.RoundId IN @ids;
             SELECT RoundId, TargetNo, TargetType, OverridePoints, Points
             FROM dbo.TargetScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo;
             SELECT RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
             FROM dbo.AnimalScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo, AnimalIndex;
-            """, new { ids }, cancellationToken: ct));
+            """, new { ids, viewer, viewerIsAdmin }, cancellationToken: ct));
 
         var rounds = (await multi.ReadAsync<RoundRow>()).ToDictionary(r => r.RoundId);
         var targets = (await multi.ReadAsync<TargetRowWithRound>()).ToLookup(t => t.RoundId);

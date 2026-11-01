@@ -7,7 +7,7 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 ## Updating the API on Odin
 
-If the release adds a database script (e.g. `sql/005_shoot_locations.sql`), run it in SSMS on Mimir **first**.
+If the release adds a database script (e.g. `sql/006_location_review_private.sql`), run it in SSMS on Mimir **first**.
 
 After a new version, copy the changed files into `C:\zScripts\NfasApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
 
@@ -36,7 +36,7 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | POST | `/api/auth/register` | `{ username, password, deviceName }` | 201 `{ archerId, username, token, expiresUtc }`; 409 `username_taken` |
 | POST | `/api/auth/login` | `{ username, password, deviceName }` | 200 as above; 401 `invalid_credentials`; 423 `locked_out` |
 | POST | `/api/auth/logout` | `Authorization: Bearer <token>` | 204, revokes this phone's token |
-| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role }`; role is `USER`, `ADMIN` or `OWNER` |
+| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users) |
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
@@ -51,10 +51,12 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | GET | `/api/admin/archers` | Bearer token, Admin or Owner | `{ archers: [{ archerId, username, role, createdUtc, lastLoginUtc }] }`, Owner first, then Admins; 403 `not_admin` |
 | PUT | `/api/admin/archers/{archerId}/role` | Bearer token, Owner only; `{ role: "ADMIN" \| "USER" }` | `{ archerId, username, role }`; 403 `not_owner` / `not_admin`; 400 `invalid_role`; 404 `no_such_archer`; 409 `cannot_change_owner` |
 | GET | `/api/locations/nearby?lat=&lon=&radius=` | Bearer token | `{ locations: [{ locationId, name, distanceMetres }], catchmentMetres }`, nearest first. Radius in metres: default the catchment (402 m, a quarter mile, `Locations:CatchmentMetres`), max 10 km. The position isn't stored. |
-| POST | `/api/locations` | Bearer token; `{ name, latitude, longitude }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
+| POST | `/api/locations` | Bearer token; `{ name, latitude, longitude, isPrivate? }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
 | POST | `/api/locations/resolve` | Bearer token; `{ ids: [...] }` | `{ locations: [{ requestedId, locationId, name }] }`: current id and name for each known id (merged ones point at the location kept) |
-| GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds }] }`; 403 `not_admin` |
-| PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
+| GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds, isPrivate }] }`; 403 `not_admin` |
+| GET | `/api/admin/locations/duplicates` | Admin or Owner | `{ pairs: [{ a, b, distanceMetres, reasons }] }`: live locations within the catchment (`nearby`) or with the same / a similar name (`same_name`, `similar_name`; ignores case, punctuation and words like Archers, Bowmen, Club, Field), not yet approved. Most likely first. |
+| POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
+| PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
 | POST | `/api/admin/locations/{locationId}/merge` | Admin or Owner; `{ intoId }` | `{ locationId, name, roundsMoved }`: the duplicate's rounds move to `intoId`; 400 `same_location`; 404 if either is missing or already merged |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
@@ -110,6 +112,14 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing private locations and duplicate alerts (1.7.01)
+
+```powershell
+.\Test-LocationReview.ps1 -Username <your username>
+```
+
+Asks for your password. Two test accounts and test locations in the North Sea: a private location is only matched and named for its creator (friends see "Private location"), the same name can be reused for another private location, look-alike pairs are flagged (nearby, same name, "Bowmen of X" v "X Archers"), approving a pair stops it being flagged, `/api/me` counts them for Admins, and an Admin can make a location public. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing shoot locations (step 2a)
 
