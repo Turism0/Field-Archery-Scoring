@@ -114,10 +114,11 @@ app.MapRoundEndpoints();
 app.MapFriendEndpoints();
 app.MapAdminEndpoints();
 app.MapLocationEndpoints();
+app.MapLocationPageEndpoints();
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "1.7.01";
+    public const string Version = "1.7.03";
 }

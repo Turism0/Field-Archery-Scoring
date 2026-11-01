@@ -54,6 +54,8 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | POST | `/api/locations` | Bearer token; `{ name, latitude, longitude, isPrivate? }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
 | POST | `/api/locations/resolve` | Bearer token; `{ ids: [...] }` | `{ locations: [{ requestedId, locationId, name }] }`: current id and name for each known id (merged ones point at the location kept) |
 | GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds, isPrivate }] }`; 403 `not_admin` |
+| GET | `/api/locations/map` | Bearer token | `{ locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }`: public live locations plus your own private ones (Admins: all); finished rounds by you / by everyone |
+| GET | `/api/locations/{locationId}/page` | Bearer token | `{ location, myRounds, friends: [{ archerId, username, rounds, bestTotal, averagePerAnimal, roundsList }], bowStyles: [{ bowStyle, archers, rounds, bestTotal, averageTotal, averagePerAnimal }] }`. Finished rounds only. Private: creator and Admins only (404 otherwise), no friends / bowStyles. Friends' rounds open with `/api/friends/{id}/rounds/{roundId}`. |
 | GET | `/api/admin/locations/duplicates` | Admin or Owner | `{ pairs: [{ a, b, distanceMetres, reasons }] }`: live locations within the catchment (`nearby`) or with the same / a similar name (`same_name`, `similar_name`; ignores case, punctuation and words like Archers, Bowmen, Club, Field), not yet approved. Most likely first. |
 | POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
 | PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
@@ -112,6 +114,14 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing the location map and page (1.7.03)
+
+```powershell
+.\Test-LocationPage.ps1
+```
+
+Three test accounts (A and B friends, C not) and test locations in the North Sea: map counts (yours / everyone's, finished only, private hidden from others), the page's own rounds, friends section (friends only, average per animal), all-archer stats per bow style (non-friends included, no names), opening a friend's round, and private pages. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing private locations and duplicate alerts (1.7.01)
 
