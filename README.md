@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.4
+## Version 1.4.01
 
+- **1.4.01:** agreed plan for the next features recorded in `docs/DESIGN.md` (roles and Admin menu, shoot locations, round types with Woodsman). No app or API changes.
 - **1.4:** Friends in the app: add friends by username, accept / decline / cancel requests, friends list with rounds, best and average per animal; tap a friend for their finished rounds and open any scorecard read-only. Remove a friend from their page. Completes the online features.
 - **1.3.01:** friends in the API: request by username, accept / decline / cancel / unfriend, friends list with a summary per friend (rounds, best, average per animal), and read-only access to friends' finished rounds. Test script `server/tests/Test-Friends.ps1`. No app changes yet.
 - **1.3:** new home screen with tiles for **Score a round**, **Score history** and **Friends** (coming next), plus sign-in / last-synced status and pull-to-sync. Score a round lists unfinished rounds to continue, or starts a new round via a **round type** choice (NFAS Big Game for now; more types can be added in `domain/RoundType.kt`). Score history shows finished rounds only.
@@ -24,7 +25,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.4.01, 1.4.02 … 1.4.99; major changes move to the next tenth (1.5).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends
+## Status: iteration 2 (online) done: accounts, two-way sync, friends. Next: roles and Admin menu, shoot locations, round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 

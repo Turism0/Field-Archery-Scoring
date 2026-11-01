@@ -21,8 +21,18 @@
    7. Friends: request / accept, view friends' finished rounds read-only
       - 7a. API: `/api/friends` (list with summaries, requests, accept, remove, friends' finished rounds) ← 1.3.01
       - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard ← 1.4
-3. History and stats
-4. Group scoring (one phone scoring several archers)
+3. **Next (agreed order, each step tested before the next):**
+   0. Housekeeping: app version number to match (1.4.x); test Friends.
+   1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only.
+   2. **Shoot locations:**
+      - 2a. Database + API: `ShootLocation` (name, latitude, longitude); nearest-location lookup within half a mile (~800 m); add a location; Admin rename and merge.
+      - 2b. App: GPS fix when a new round starts. With signal: look it up; known club → name filled in; new → ask for a name once (whoever shoots there first names it). No signal: keep the fix with the round, look it up when there's signal, ask for a name only if it's new. Location shown on rounds, scorecards, history and friends' scorecards.
+      - 2c. Admin: rename locations, merge duplicates (two offline phones can create the same new club).
+      - Privacy: the phone's raw position stays on the phone until matched; the server stores only which location a round was at (club coordinates are fine to store).
+   3. **Round types:**
+      - 3a. Groundwork: `RoundType` table and a type on every round (server and phone), per-type rules in the API, Big Game-only database checks relaxed; uploads without a type count as Big Game.
+      - 3b. **Woodsman:** single animal per target; shoot until you kill, up to 3 arrows; wound 5 on any arrow; kill 30 / 20 / 10 on the 1st / 2nd / 3rd arrow; miss 0 (e.g. wound + kill 25; miss, wound, kill 15; three wounds 15; max 30). Needs each arrow recorded, so a per-arrow field. Own scoring screen, scorecard and stats; type shown in history and to friends; friends' summaries per type.
+4. Later: group scoring (one phone scoring several archers); more history and stats
 
 ## Architecture
 
