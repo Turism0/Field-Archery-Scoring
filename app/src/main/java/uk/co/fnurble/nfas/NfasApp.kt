@@ -3,6 +3,7 @@ package uk.co.fnurble.nfas
 import android.app.Application
 import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.AccountStore
+import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendsRepository
 import uk.co.fnurble.nfas.data.ProfileRepository
 import uk.co.fnurble.nfas.data.RoundRepository
@@ -23,6 +24,7 @@ class AppContainer(app: Application) {
     val profileRepository = ProfileRepository(db.profileDao())
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })
     val friendsRepository = FriendsRepository(api, accountStore)
+    val adminRepository = AdminRepository(api, accountStore)
     val accountRepository = AccountRepository(api, accountStore, profileRepository, onSignedIn = { syncScheduler.request() })
 }
 

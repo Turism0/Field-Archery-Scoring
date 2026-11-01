@@ -12,6 +12,7 @@ import uk.co.fnurble.nfas.data.local.SyncState
 import uk.co.fnurble.nfas.data.local.TargetEntity
 import uk.co.fnurble.nfas.data.remote.ApiException
 import uk.co.fnurble.nfas.data.remote.NfasApi
+import uk.co.fnurble.nfas.domain.AccountRole
 import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.ArcherClass
 import uk.co.fnurble.nfas.domain.BowStyle
@@ -23,6 +24,7 @@ import java.time.LocalDate
 
 /**
  * Two-way round sync for the signed-in archer:
+ *  0. refresh this account's role (for the Admin menu);
  *  1. upload: finished rounds and deletions waiting on this phone;
  *  2. download: this archer's rounds changed on the server since the last download
  *     (a new or reset phone gets everything; a second phone picks up the other's edits).
@@ -44,6 +46,8 @@ class RoundSyncer(
     suspend fun syncAll(): Report {
         val account = accounts.account.value ?: return Report(Outcome.NOT_SIGNED_IN)
         return try {
+            // Role first (one small call), so the Admin menu appears or goes on the next sync.
+            accounts.setRole(AccountRole.fromCode(api.me(account.token).optString("role")))
             upload(account.token)
             val skipped = download(account.token)
             accounts.setLastSync(Instant.now())

@@ -9,6 +9,7 @@ import androidx.navigation.navArgument
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.screens.AccountScreen
+import uk.co.fnurble.nfas.ui.screens.AdminScreen
 import uk.co.fnurble.nfas.ui.screens.FriendRoundsScreen
 import uk.co.fnurble.nfas.ui.screens.FriendScorecardScreen
 import uk.co.fnurble.nfas.ui.screens.FriendsScreen
@@ -41,6 +42,14 @@ fun NfasNavHost() {
                 onScoreRound = { nav.navigate("scoreRound") },
                 onHistory = { nav.navigate("history") },
                 onFriends = { nav.navigate("friends") },
+                onAdmin = { nav.navigate("admin") },
+            )
+        }
+        // Admin menu: Admins and the Owner only (the tile is hidden for everyone else; the server checks too).
+        composable("admin") {
+            AdminScreen(
+                vm = appViewModel { c, _ -> AdminViewModel(c.adminRepository, c.accountStore) },
+                onBack = { nav.popBackStack() },
             )
         }
         // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).

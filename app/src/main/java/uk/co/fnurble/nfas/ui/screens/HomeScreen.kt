@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,12 +42,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import uk.co.fnurble.nfas.domain.AccountRole
 import uk.co.fnurble.nfas.ui.HomeViewModel
 import uk.co.fnurble.nfas.ui.components.syncStatusText
 
 /**
- * Home: account / sync status and three tiles – Score a round, Score history, Friends.
- * Pull down to sync now.
+ * Home: account / sync status and three tiles – Score a round, Score history, Friends – plus an
+ * Admin tile for Admins and the Owner. Pull down to sync now.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +58,7 @@ fun HomeScreen(
     onScoreRound: () -> Unit,
     onHistory: () -> Unit,
     onFriends: () -> Unit,
+    onAdmin: () -> Unit,
 ) {
     val summary by vm.summary.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
@@ -63,6 +66,7 @@ fun HomeScreen(
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val role by vm.role.collectAsStateWithLifecycle()
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbar = remember { SnackbarHostState() }
 
@@ -95,7 +99,7 @@ fun HomeScreen(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AccountStrip(signedIn, username, syncStatusText(lastSync), onProfile)
+                AccountStrip(signedIn, username, role, syncStatusText(lastSync), onProfile)
 
                 val s = summary
                 HomeTile(
@@ -127,6 +131,14 @@ fun HomeScreen(
                     subtitle = if (signedIn) "Friends' scorecards and stats, requests" else "Sign in to see friends' scorecards",
                     onClick = onFriends,
                 )
+                if (signedIn && role.isAdmin) {
+                    HomeTile(
+                        icon = Icons.Filled.Settings,
+                        title = "Admin",
+                        subtitle = if (role == AccountRole.OWNER) "Accounts and admins" else "Accounts",
+                        onClick = onAdmin,
+                    )
+                }
             }
         }
     }
@@ -134,7 +146,7 @@ fun HomeScreen(
 
 /** "Signed in as X · Last synced 21:45 · pull down to sync", or a prompt to sign in. */
 @Composable
-private fun AccountStrip(signedIn: Boolean, username: String?, syncText: String, onProfile: () -> Unit) {
+private fun AccountStrip(signedIn: Boolean, username: String?, role: AccountRole, syncText: String, onProfile: () -> Unit) {
     Surface(
         onClick = onProfile,
         shape = MaterialTheme.shapes.medium,
@@ -143,7 +155,10 @@ private fun AccountStrip(signedIn: Boolean, username: String?, syncText: String,
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             if (signedIn) {
-                Text("Signed in as $username", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Signed in as $username" + if (role.isAdmin) " · ${role.displayName}" else "",
+                    style = MaterialTheme.typography.titleSmall,
+                )
                 Text(syncText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 Text("Not signed in", style = MaterialTheme.typography.titleSmall)

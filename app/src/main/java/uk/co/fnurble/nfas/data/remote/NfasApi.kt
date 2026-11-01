@@ -70,6 +70,19 @@ class NfasApi(private val baseUrl: String = ApiConfig.BASE_URL) {
         return request("GET", "/api/rounds?$query", body = null, token = token)
     }
 
+    /** { archerId, username, createdUtc, role } for the signed-in account. */
+    suspend fun me(token: String): JSONObject = request("GET", "/api/me", body = null, token = token)
+
+    // ---- Admin (the server checks the role on every call) ----
+
+    /** Admins and Owner: { archers: [ { archerId, username, role, createdUtc, lastLoginUtc } ] } */
+    suspend fun adminArchers(token: String): JSONObject = request("GET", "/api/admin/archers", body = null, token = token)
+
+    /** Owner only: role "ADMIN" or "USER". */
+    suspend fun setRole(token: String, archerId: String, role: String) {
+        request("PUT", "/api/admin/archers/$archerId/role", JSONObject().put("role", role), token)
+    }
+
     // ---- Friends ----
 
     /** { friends: [...], incoming: [...], outgoing: [...] } */

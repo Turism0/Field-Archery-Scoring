@@ -21,6 +21,8 @@ import uk.co.fnurble.nfas.AppContainer
 import uk.co.fnurble.nfas.NfasApp
 import uk.co.fnurble.nfas.data.Account
 import uk.co.fnurble.nfas.data.AccountStore
+import uk.co.fnurble.nfas.data.AdminArcher
+import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.FriendsOverview
@@ -32,6 +34,7 @@ import uk.co.fnurble.nfas.data.RoundRepository
 import uk.co.fnurble.nfas.data.RoundSummary
 import uk.co.fnurble.nfas.data.remote.ApiException
 import uk.co.fnurble.nfas.data.sync.RoundSyncer
+import uk.co.fnurble.nfas.domain.AccountRole
 import uk.co.fnurble.nfas.domain.AccountRules
 import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.AnimalResult
@@ -132,6 +135,9 @@ class HomeViewModel(
             best = finished.maxOfOrNull { it.totalPoints },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Admins and the Owner get the Admin tile. */
+    val role: StateFlow<AccountRole> = accountStore.role
 }
 
 /** Score history: finished rounds only, newest first. */
@@ -156,6 +162,76 @@ class ScoreRoundViewModel(profiles: ProfileRepository, roundRepo: RoundRepositor
     val profileReady: StateFlow<Boolean> = profiles.profile.map { p ->
         p.archerClass != null && p.mainBowStyle != null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+}
+
+// ---------------- Admin ----------------
+
+/**
+ * Admin menu (Admins and the Owner): every account with its role. Only the Owner can switch Admin
+ * on or off; the server enforces that too.
+ */
+class AdminViewModel(private val admin: AdminRepository, accountStore: AccountStore) : ViewModel() {
+    val role: StateFlow<AccountRole> = accountStore.role
+
+    private val _archers = MutableStateFlow<Load<List<AdminArcher>>>(Load.Loading)
+    val archers: StateFlow<Load<List<AdminArcher>>> = _archers.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    /** Account currently being changed, so only its switch shows as busy. */
+    private val _changing = MutableStateFlow<String?>(null)
+    val changing: StateFlow<String?> = _changing.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+
+    init { load() }
+
+    fun load(showSpinner: Boolean = false) {
+        viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            _archers.value = try {
+                Load.Ready(admin.archers())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (_archers.value is Load.Ready) {
+                    _message.value = e.friendlyMessage()
+                    _archers.value
+                } else {
+                    Load.Failed(e.friendlyMessage())
+                }
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    /** Owner only: switch Admin on or off for [archer]. */
+    fun setAdmin(archer: AdminArcher, makeAdmin: Boolean) {
+        if (_changing.value != null) return
+        _changing.value = archer.archerId
+        viewModelScope.launch {
+            try {
+                admin.setAdmin(archer.archerId, makeAdmin)
+                _archers.update { current ->
+                    if (current is Load.Ready) {
+                        Load.Ready(current.value.map {
+                            if (it.archerId == archer.archerId) it.copy(role = if (makeAdmin) AccountRole.ADMIN else AccountRole.USER) else it
+                        })
+                    } else current
+                }
+                _message.value = if (makeAdmin) "${archer.username} is now an admin." else "${archer.username} is no longer an admin."
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _changing.value = null
+            }
+        }
+    }
 }
 
 // ---------------- Friends ----------------

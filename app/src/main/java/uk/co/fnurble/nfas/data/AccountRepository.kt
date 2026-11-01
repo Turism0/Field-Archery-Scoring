@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import uk.co.fnurble.nfas.data.remote.AuthResult
 import uk.co.fnurble.nfas.data.remote.NfasApi
 import uk.co.fnurble.nfas.data.remote.UsernameCheck
+import uk.co.fnurble.nfas.domain.AccountRole
 
 /** Signing in and out. Optional: the app works fully offline without an account. */
 class AccountRepository(
@@ -34,6 +35,8 @@ class AccountRepository(
     private suspend fun signedIn(result: AuthResult) {
         store.save(Account(result.archerId, result.username, result.token, result.expiresUtc))
         profiles.setUsername(result.username)
+        // Role now if possible, so the Admin menu is there straight away; the next sync tries again anyway.
+        runCatching { store.setRole(AccountRole.fromCode(api.me(result.token).optString("role"))) }
         onSignedIn()
     }
 

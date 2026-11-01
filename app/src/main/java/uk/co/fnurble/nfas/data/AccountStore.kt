@@ -7,6 +7,7 @@ import android.util.Base64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import uk.co.fnurble.nfas.domain.AccountRole
 import java.security.KeyStore
 import java.time.Instant
 import javax.crypto.Cipher
@@ -30,6 +31,18 @@ class AccountStore(context: Context) {
     private val _lastSync = MutableStateFlow(prefs.getLong(K_LAST_SYNC, 0L).takeIf { it > 0 }?.let(Instant::ofEpochMilli))
     /** When a sync last completed (upload and download), shown on the home screen. */
     val lastSync: StateFlow<Instant?> = _lastSync.asStateFlow()
+
+    private val _role = MutableStateFlow(AccountRole.fromCode(prefs.getString(K_ROLE, null)))
+    /**
+     * This account's role, refreshed from the server on sign-in and every sync. Only decides what the
+     * app shows (the Admin menu); the server checks the role itself on every admin call.
+     */
+    val role: StateFlow<AccountRole> = _role.asStateFlow()
+
+    fun setRole(role: AccountRole) {
+        prefs.edit().putString(K_ROLE, role.name).apply()
+        _role.value = role
+    }
 
     fun setLastSync(time: Instant) {
         prefs.edit().putLong(K_LAST_SYNC, time.toEpochMilli()).apply()
@@ -57,6 +70,7 @@ class AccountStore(context: Context) {
         prefs.edit().clear().apply()
         _account.value = null
         _lastSync.value = null
+        _role.value = AccountRole.USER
     }
 
     private fun load(): Account? = try {
@@ -114,5 +128,6 @@ class AccountStore(context: Context) {
         const val K_EXPIRES = "expires_utc"
         const val K_PULL_CURSOR = "pull_cursor"
         const val K_LAST_SYNC = "last_sync"
+        const val K_ROLE = "role"
     }
 }
