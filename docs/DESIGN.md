@@ -23,7 +23,7 @@
       - 7b. App: Friends tile → friends screen, friend's rounds, read-only scorecard ← 1.4
 3. **Next (agreed order, each step tested before the next):**
    0. Housekeeping: app version number to match (1.4.x); test Friends.
-   1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only. *DB + API done in 1.4.03; app next.* The role is read from the database on every request, so changes apply at once.
+   1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only. *Done: DB + API 1.4.03, app 1.5.* The role is read from the database on every request, so changes apply at once.
    2. **Shoot locations:**
       - 2a. Database + API: `ShootLocation` (name, latitude, longitude); nearest-location lookup within half a mile (~800 m); add a location; Admin rename and merge.
       - 2b. App: GPS fix when a new round starts. With signal: look it up; known club → name filled in; new → ask for a name once (whoever shoots there first names it). No signal: keep the fix with the round, look it up when there's signal, ask for a name only if it's new. Location shown on rounds, scorecards, history and friends' scorecards.
@@ -84,12 +84,14 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
       │              └─ roundType ─▶ newRound/{type} ─start─▶ round/{id}                       │
       ├─ history ──(finished round)──▶ card/{id} ──edit / tap target──▶ round/{id}?target=n ◀──┘
       ├─ friends ─▶ friend/{archerId}/{username} ─▶ friendCard/{archerId}/{username}/{roundId}  (read-only)
+      ├─ admin  (Admins and Owner only: accounts and roles)
       └─ profile ─▶ account
 ```
 
 - Home has tiles for Score a round, Score history and Friends; Score history shows finished rounds only.
+- The Admin tile shows only when the stored role (`AccountStore.role`, refreshed from `/api/me` on sign-in and every sync) is Admin or Owner. The Admin screen (`data/AdminRepository.kt`) is fetched from the API each time; if the server says the account is no longer an admin, the stored role drops and the screen closes.
 - Friends data (`data/FriendsRepository.kt`) is fetched from the API each time a friends screen opens or is pulled down; nothing about friends is stored on the phone. A friend's scorecard reuses the scorecard layout with `readOnly` target rows (predator/prey and fans still expand) and no edit button or menu.
-- Round types come from `domain/RoundType.kt` (one entry, NFAS Big Game). A second type will need a `round_type` column on the phone and server (Room migration + schema version 2).
+- Round types come from `domain/RoundType.kt` (one entry, NFAS Big Game). A second type will need a `round_type` column on the phone and server (Room migration + schema version 3).
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
