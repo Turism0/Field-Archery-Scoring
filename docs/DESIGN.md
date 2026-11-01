@@ -25,8 +25,8 @@
    0. Housekeeping: app version number to match (1.4.x); test Friends.
    1. **Roles and Admin menu:** account role Owner (Pete) / Admin / User; API checks every admin action; only the Owner can grant or remove Admin; Admin menu in the app visible to Admins and the Owner only. *Done: DB + API 1.4.03, app 1.5.* The role is read from the database on every request, so changes apply at once.
    2. **Shoot locations:**
-      - 2a. Database + API: `ShootLocation` (name, latitude, longitude); nearest-location lookup within half a mile (~800 m); add a location; Admin rename and merge.
-      - 2b. App: GPS fix when a new round starts. With signal: look it up; known club → name filled in; new → ask for a name once (whoever shoots there first names it). No signal: keep the fix with the round, look it up when there's signal, ask for a name only if it's new. Location shown on rounds, scorecards, history and friends' scorecards.
+      - 2a. Database + API: `ShootLocation` (name, latitude, longitude); nearest-location lookup within half a mile (~800 m); add a location; Admin rename and merge. *Done in 1.5.01.* Same name as a live location (any case) is refused and the existing one offered. Rounds keep only the location id; a merged id is followed to the location kept.
+      - 2b. App: GPS fix when a new round starts. With signal: look it up; known club → name filled in; new → ask for a name once (whoever shoots there first names it). No signal: keep the fix with the round, look it up when there's signal, ask for a name only if it's new. **"Not here?"** lets the archer pick another location within 10 km or name a new one (agreed 1 Nov 2026). Location shown on rounds, scorecards, history and friends' scorecards.
       - 2c. Admin: rename locations, merge duplicates (two offline phones can create the same new club).
       - Privacy: the phone's raw position stays on the phone until matched; the server stores only which location a round was at (club coordinates are fine to store).
    3. **Round types:**
@@ -95,7 +95,7 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
-## Server data model (SQL Server 2025 on Mimir) — schema version 1
+## Server data model (SQL Server 2025 on Mimir) — schema version 3
 
 Scripts in `server/sql/`, run in order in SSMS:
 
@@ -103,13 +103,16 @@ Scripts in `server/sql/`, run in order in SSMS:
 |---|---|---|
 | `001_create_database_and_login.sql` | sysadmin | Creates database `NfasScoring` and login/user `nfas_api` (db_datareader + db_datawriter only, no schema changes). Set a strong password first; it never goes in Git. |
 | `002_create_tables.sql` | sysadmin | Creates the tables below and records schema version 1 |
+| `004_roles.sql` | admin | Schema v2: `Archer.Role` (USER / ADMIN / OWNER, one Owner), set your account as Owner |
+| `005_shoot_locations.sql` | admin | Schema v3: `ShootLocation` table and `Round.LocationId` |
 | `003_test_as_api_login.sql` | `nfas_api` | Inserts test data inside a transaction, checks constraints, cascades and the friend view, then rolls back; also checks the login can't change the schema |
 
 | Table | Key | Holds |
 |---|---|---|
 | `Archer` | `ArcherId` (server GUID) | `Username` (unique, case-insensitive, 3–30 of A–Z 0–9 _ . -), `PasswordHash`, created / last login, failed-login count and lockout, disabled flag, `Role` (USER / ADMIN / OWNER, only one OWNER; schema v2, `004_roles.sql`) with who changed it and when |
 | `AuthToken` | `TokenId` | One per signed-in phone: SHA-256 `TokenHash`, device name, created / last used / expires / revoked |
-| `Round` | `RoundId` (phone GUID) | `ArcherId`, shoot date, target count, class (L/G), age group, bow style, status, total, deleted flag, phone created/updated times, server updated time, rowversion |
+| `Round` | `RoundId` (phone GUID) | `ArcherId`, shoot date, target count, class (L/G), age group, bow style, status, total, deleted flag, phone created/updated times, server updated time, rowversion, `LocationId` (v3, optional) |
+| `ShootLocation` | `LocationId` (server GUID) | Name (2–60, unique among live locations, case-insensitive), latitude/longitude where first named (5 dp), who named / renamed / merged it and when, `MergedIntoId` (a merged duplicate points at the location kept) |
 | `TargetScore` | `RoundId` + `TargetNo` | Target type, override, points |
 | `AnimalScore` | `RoundId` + `TargetNo` + `AnimalIndex` | State, arrow, hit, points (checks enforce valid combinations, inner kill on 1st arrow only) |
 | `Friendship` | `ArcherLowId` + `ArcherHighId` | One row per pair: who asked, PENDING / ACCEPTED, dates. Declining or removing deletes the row |

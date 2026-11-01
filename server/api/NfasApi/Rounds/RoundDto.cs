@@ -12,7 +12,10 @@ public sealed record RoundDto(
     int TotalPoints,
     DateTime ClientCreatedUtc,
     DateTime ClientUpdatedUtc,
-    IReadOnlyList<TargetDto> Targets);
+    IReadOnlyList<TargetDto> Targets,
+    // Shoot location (schema v3). Optional: older apps don't send it, and rounds without signal or
+    // GPS have none. An unknown id is stored as no location rather than refusing the round.
+    Guid? LocationId = null);
 
 public sealed record TargetDto(
     int TargetNo,
@@ -42,4 +45,6 @@ public sealed record StoredRoundDto(
     DateTime ClientCreatedUtc,
     DateTime ClientUpdatedUtc,
     DateTime ServerUpdatedUtc,
-    IReadOnlyList<TargetDto> Targets);
+    IReadOnlyList<TargetDto> Targets,
+    Guid? LocationId,
+    string? LocationName);

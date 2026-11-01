@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Dapper;
 using NfasApi.Auth;
 using NfasApi.Data;
+using NfasApi.Locations;
 
 namespace NfasApi.Rounds;
 
@@ -58,9 +59,16 @@ public static class RoundEndpoints
             return Results.Ok(new { roundId, result = "unchanged", serverUpdatedUtc = existing.ServerUpdatedUtc });
         }
 
+        // Store the location the id stands for now (it may have been merged); unknown → none.
+        Guid? locationId = round.LocationId is { } lid
+            && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc
+            ? loc.LocationId
+            : null;
+
         var p = new
         {
             roundId,
+            locationId,
             archerId,
             shootDate = round.ShootDate.ToDateTime(TimeOnly.MinValue),
             round.TargetCount,
@@ -75,15 +83,16 @@ public static class RoundEndpoints
         var sql = existing is null
             ? """
               INSERT dbo.Round (RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status,
-                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc)
+                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc, LocationId)
               VALUES (@roundId, @archerId, @shootDate, @TargetCount, @ArcherClass, @AgeGroup, @BowStyle, @Status,
-                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME());
+                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME(), @locationId);
               """
             : """
               UPDATE dbo.Round
               SET ShootDate = @shootDate, TargetCount = @TargetCount, ArcherClass = @ArcherClass, AgeGroup = @AgeGroup,
                   BowStyle = @BowStyle, Status = @Status, TotalPoints = @TotalPoints, IsDeleted = 0,
-                  ClientCreatedUtc = @clientCreatedUtc, ClientUpdatedUtc = @clientUpdatedUtc, ServerUpdatedUtc = SYSUTCDATETIME()
+                  ClientCreatedUtc = @clientCreatedUtc, ClientUpdatedUtc = @clientUpdatedUtc, ServerUpdatedUtc = SYSUTCDATETIME(),
+                  LocationId = @locationId
               WHERE RoundId = @roundId;
               DELETE dbo.TargetScore WHERE RoundId = @roundId;   -- animals go with them (cascade)
               """;
@@ -175,9 +184,11 @@ public static class RoundReader
     public static async Task<Loaded?> ReadAsync(Microsoft.Data.SqlClient.SqlConnection conn, Guid roundId, CancellationToken ct)
     {
         using var multi = await conn.QueryMultipleAsync(new CommandDefinition("""
-            SELECT RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status, TotalPoints,
-                   IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc
-            FROM dbo.Round WHERE RoundId = @roundId;
+            SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
+                   r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
+                   r.LocationId, l.Name AS LocationName
+            FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
+            WHERE r.RoundId = @roundId;
             SELECT TargetNo, TargetType, OverridePoints, Points
             FROM dbo.TargetScore WHERE RoundId = @roundId ORDER BY TargetNo;
             SELECT TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
@@ -194,7 +205,8 @@ public static class RoundReader
             r.Status, r.TotalPoints, r.IsDeleted, Utc(r.ClientCreatedUtc), Utc(r.ClientUpdatedUtc), Utc(r.ServerUpdatedUtc),
             targets.Select(t => new TargetDto(t.TargetNo, t.TargetType, t.OverridePoints, t.Points,
                 animals[t.TargetNo].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList()))
-                .ToList());
+                .ToList(),
+            r.LocationId, r.LocationName);
         return new Loaded(r.ArcherId, dto);
     }
 
@@ -204,9 +216,11 @@ public static class RoundReader
     {
         if (ids.Count == 0) return [];
         using var multi = await conn.QueryMultipleAsync(new CommandDefinition("""
-            SELECT RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status, TotalPoints,
-                   IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc
-            FROM dbo.Round WHERE RoundId IN @ids;
+            SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
+                   r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
+                   r.LocationId, l.Name AS LocationName
+            FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
+            WHERE r.RoundId IN @ids;
             SELECT RoundId, TargetNo, TargetType, OverridePoints, Points
             FROM dbo.TargetScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo;
             SELECT RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
@@ -225,7 +239,8 @@ public static class RoundReader
                 r.Status, r.TotalPoints, r.IsDeleted, Utc(r.ClientCreatedUtc), Utc(r.ClientUpdatedUtc), Utc(r.ServerUpdatedUtc),
                 targets[id].Select(t => new TargetDto(t.TargetNo, t.TargetType, t.OverridePoints, t.Points,
                     animals[(id, t.TargetNo)].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList()))
-                    .ToList());
+                    .ToList(),
+                r.LocationId, r.LocationName);
         }).ToList();
     }
 
@@ -237,7 +252,8 @@ public static class RoundReader
 
     private sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
         string AgeGroup, string BowStyle, string Status, int TotalPoints, bool IsDeleted,
-        DateTime ClientCreatedUtc, DateTime ClientUpdatedUtc, DateTime ServerUpdatedUtc);
+        DateTime ClientCreatedUtc, DateTime ClientUpdatedUtc, DateTime ServerUpdatedUtc,
+        Guid? LocationId, string? LocationName);
 
     private sealed record TargetRow(short TargetNo, string TargetType, short? OverridePoints, short Points);
 

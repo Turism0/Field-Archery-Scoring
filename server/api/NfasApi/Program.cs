@@ -13,6 +13,7 @@ using NfasApi.Admin;
 using NfasApi.Auth;
 using NfasApi.Data;
 using NfasApi.Friends;
+using NfasApi.Locations;
 using NfasApi.Rounds;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -112,10 +113,11 @@ app.MapAuthEndpoints();
 app.MapRoundEndpoints();
 app.MapFriendEndpoints();
 app.MapAdminEndpoints();
+app.MapLocationEndpoints();
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "1.4.03";
+    public const string Version = "1.5.01";
 }

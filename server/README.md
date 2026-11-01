@@ -7,7 +7,7 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 ## Updating the API on Odin
 
-If the release adds a database script (e.g. `sql/004_roles.sql`), run it in SSMS on Mimir **first**.
+If the release adds a database script (e.g. `sql/005_shoot_locations.sql`), run it in SSMS on Mimir **first**.
 
 After a new version (copy the changed files into `C:\zScripts\NfasApi`, or `git pull`), in **Windows PowerShell 5.1 as Administrator**:
 
@@ -38,12 +38,18 @@ Start-WebAppPool NfasApi
 | POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
 | POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
 | DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
-| GET | `/api/friends/{archerId}/rounds` | Bearer token | `{ rounds: [{ roundId, shootDate, targetCount, archerClass, ageGroup, bowStyle, totalPoints }] }`: their finished rounds, newest first; 404 `not_friends` |
+| GET | `/api/friends/{archerId}/rounds` | Bearer token | `{ rounds: [{ roundId, shootDate, targetCount, archerClass, ageGroup, bowStyle, totalPoints, locationName }] }`: their finished rounds, newest first; 404 `not_friends` |
 | GET | `/api/friends/{archerId}/rounds/{roundId}` | Bearer token | One finished round with targets and animals (read-only) |
 | GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
 
 | GET | `/api/admin/archers` | Bearer token, Admin or Owner | `{ archers: [{ archerId, username, role, createdUtc, lastLoginUtc }] }`, Owner first, then Admins; 403 `not_admin` |
 | PUT | `/api/admin/archers/{archerId}/role` | Bearer token, Owner only; `{ role: "ADMIN" \| "USER" }` | `{ archerId, username, role }`; 403 `not_owner` / `not_admin`; 400 `invalid_role`; 404 `no_such_archer`; 409 `cannot_change_owner` |
+| GET | `/api/locations/nearby?lat=&lon=&radius=` | Bearer token | `{ locations: [{ locationId, name, distanceMetres }], catchmentMetres }`, nearest first. Radius in metres: default the catchment (805 m, `Locations:CatchmentMetres`), max 10 km. The position isn't stored. |
+| POST | `/api/locations` | Bearer token; `{ name, latitude, longitude }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
+| POST | `/api/locations/resolve` | Bearer token; `{ ids: [...] }` | `{ locations: [{ requestedId, locationId, name }] }`: current id and name for each known id (merged ones point at the location kept) |
+| GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds }] }`; 403 `not_admin` |
+| PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
+| POST | `/api/admin/locations/{locationId}/merge` | Admin or Owner; `{ intoId }` | `{ locationId, name, roundsMoved }`: the duplicate's rounds move to `intoId`; 400 `same_location`; 404 if either is missing or already merged |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
 Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); passwords 8–128 characters;
@@ -61,6 +67,7 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
 ```
 
 - Every score is checked against the Big Game rules (allowed hit per arrow and its points, predator/prey shared arrows, fan size, overrides, target and round totals). Anything wrong is refused with a list of problems.
+- Optional `"locationId"`: the shoot location. An id that was merged is stored as the location kept; an unknown id is stored as no location (the round is still saved). Downloads include `locationId` and `locationName`.
 - Same round id again is safe: the copy with the later `clientUpdatedUtc` wins, an equal or older copy is ignored (`unchanged`).
 - A round id belonging to another archer is reported as not found.
 
@@ -97,6 +104,15 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing shoot locations (step 2a)
+
+```powershell
+.\Test-Locations.ps1 -Username <your username>                                  # through NPM
+.\Test-Locations.ps1 -Username <your username> -BaseUrl http://localhost:8085   # on Odin
+```
+
+Asks for your password (for the admin tests). Uses a test account and test locations in the North Sea: nearby lookup and catchment, naming (tidying, duplicates, bad input), rounds carrying a location, Users refused admin calls, admin list / rename / merge, resolving merged ids. Every line should start with OK; tidy up with `900_delete_test_accounts.sql` (removes test locations too).
 
 ## Testing roles (step 1)
 

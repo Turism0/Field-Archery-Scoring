@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager. minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.5
+## Version 1.5.01
 
+- **1.5.01:** shoot locations in the database and API (roadmap step 2a). `server/sql/005_shoot_locations.sql` adds the `ShootLocation` table and a location on each round. New calls: locations near a position (half-mile catchment, or a wider radius for "Not here?"), name a new location (same name as an existing one is refused), resolve ids a phone holds (follows merges); Admins list, rename and merge locations. Rounds upload and download with an optional location; friends' rounds show the location name. Test script `server/tests/Test-Locations.ps1`; `900_delete_test_accounts.sql` also removes test locations. No app changes yet.
 - **1.5:** roles in the app (roadmap step 1 done). The app learns the account's role when signing in and on every sync. Admins and the Owner get an **Admin** tile on Home ("Signed in as … · Owner/Admin" too); the Admin screen lists every account with its role, joined and last sign-in dates. The Owner switches Admin on or off per account; Admins see the list only. Everyone else sees nothing new. The server checks the role on every admin call.
 - **1.4.03:** roles in the database and API (roadmap step 1, first half). `server/sql/004_roles.sql` gives every account a role (User, Admin or Owner; only one Owner) and makes your account the Owner. `/api/me` now returns the role; new admin calls list accounts (Admins and Owner) and set Admin on or off (Owner only). Test script `server/tests/Test-Roles.ps1`. No app changes yet.
 - **1.4.02:** the app's version number now matches (1.4.02, shown in Android Settings → Apps → NFAS Big Game). New `server/tests/Test-FriendView.ps1`: a throwaway test friend sends you a request so you can check the Friends screens on the phone. No API changes.
@@ -28,7 +29,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.5.01, 1.5.02 … 1.5.99; major changes move to the next tenth (1.6).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: shoot locations, round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu. Next: shoot locations (DB and API done, app next), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
