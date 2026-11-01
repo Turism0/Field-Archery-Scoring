@@ -1,0 +1,130 @@
+package uk.co.fnurble.nfas.data
+
+import org.json.JSONArray
+import org.json.JSONObject
+import uk.co.fnurble.nfas.data.remote.ApiException
+import uk.co.fnurble.nfas.data.remote.NfasApi
+import uk.co.fnurble.nfas.domain.AgeGroup
+import uk.co.fnurble.nfas.domain.ArcherClass
+import uk.co.fnurble.nfas.domain.BowStyle
+import java.time.LocalDate
+
+/** A shoot location on the map. [myRounds] = your finished rounds there; [rounds] = everyone's. */
+data class MapLocation(
+    val id: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double,
+    val isPrivate: Boolean,
+    val myRounds: Int,
+    val rounds: Int,
+)
+
+data class LocationFriend(
+    val archerId: String,
+    val username: String,
+    val rounds: Int,
+    val bestTotal: Int?,
+    val averagePerAnimal: Double?,
+    val roundsList: List<FriendRoundSummary>,
+)
+
+/** Everyone's finished rounds at a location for one bow style (no names). */
+data class BowStyleStats(
+    val bowStyle: String,
+    val archers: Int,
+    val rounds: Int,
+    val bestTotal: Int?,
+    val averageTotal: Double?,
+    val averagePerAnimal: Double?,
+)
+
+data class LocationPage(
+    val location: MapLocation,
+    val myRounds: List<FriendRoundSummary>,
+    val friends: List<LocationFriend>,
+    val bowStyles: List<BowStyleStats>,
+)
+
+/** Map and location pages, straight from the server (nothing stored on the phone). Needs signal. */
+class LocationPageRepository(private val api: NfasApi, private val accounts: AccountStore) {
+
+    suspend fun map(): List<MapLocation> = call { token ->
+        api.locationMap(token).getJSONArray("locations").objects().map { it.toMapLocation() }
+    }
+
+    suspend fun page(locationId: String): LocationPage = call { token ->
+        val json = api.locationPage(token, locationId)
+        val location = json.getJSONObject("location")
+        LocationPage(
+            location = MapLocation(
+                id = location.getString("locationId"),
+                name = location.getString("name"),
+                latitude = location.getDouble("latitude"),
+                longitude = location.getDouble("longitude"),
+                isPrivate = location.optBoolean("isPrivate"),
+                myRounds = 0,
+                rounds = 0,
+            ),
+            myRounds = json.getJSONArray("myRounds").objects().map { it.toRoundSummary() },
+            friends = json.getJSONArray("friends").objects().map { f ->
+                LocationFriend(
+                    archerId = f.getString("archerId"),
+                    username = f.getString("username"),
+                    rounds = f.getInt("rounds"),
+                    bestTotal = f.intOrNull("bestTotal"),
+                    averagePerAnimal = f.doubleOrNull("averagePerAnimal"),
+                    roundsList = f.getJSONArray("roundsList").objects().map { it.toRoundSummary() },
+                )
+            },
+            bowStyles = json.getJSONArray("bowStyles").objects().map { b ->
+                BowStyleStats(
+                    bowStyle = b.getString("bowStyle"),
+                    archers = b.getInt("archers"),
+                    rounds = b.getInt("rounds"),
+                    bestTotal = b.intOrNull("bestTotal"),
+                    averageTotal = b.doubleOrNull("averageTotal"),
+                    averagePerAnimal = b.doubleOrNull("averagePerAnimal"),
+                )
+            },
+        )
+    }
+
+    private suspend fun <T> call(block: suspend (String) -> T): T {
+        val token = accounts.account.value?.token
+            ?: throw ApiException(401, "not_signed_in", "Sign in (Profile) to see shoot locations.")
+        try {
+            return block(token)
+        } catch (e: ApiException) {
+            if (e.status == 401) accounts.clear()
+            throw e
+        }
+    }
+}
+
+private fun JSONObject.toMapLocation() = MapLocation(
+    id = getString("locationId"),
+    name = getString("name"),
+    latitude = getDouble("latitude"),
+    longitude = getDouble("longitude"),
+    isPrivate = optBoolean("isPrivate"),
+    myRounds = optInt("myRounds"),
+    rounds = optInt("rounds"),
+)
+
+private fun JSONObject.toRoundSummary(): FriendRoundSummary {
+    val cls = if (getString("archerClass") == "L") ArcherClass.LADIES else ArcherClass.GENTS
+    val age = AgeGroup.valueOf(getString("ageGroup"))
+    val bow = BowStyle.fromCode(getString("bowStyle"))?.code ?: getString("bowStyle")
+    return FriendRoundSummary(
+        roundId = getString("roundId"),
+        shootDate = LocalDate.parse(getString("shootDate")),
+        targetCount = getInt("targetCount"),
+        classLine = "${cls.displayName} ${age.displayName} $bow",
+        totalPoints = getInt("totalPoints"),
+    )
+}
+
+private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+private fun JSONObject.intOrNull(name: String): Int? = if (isNull(name)) null else getInt(name)
+private fun JSONObject.doubleOrNull(name: String): Double? = if (isNull(name)) null else getDouble(name)

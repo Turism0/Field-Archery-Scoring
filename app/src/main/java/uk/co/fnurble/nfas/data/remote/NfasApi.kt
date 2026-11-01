@@ -100,6 +100,13 @@ class NfasApi(
 
     // ---- Shoot locations ----
 
+    /** { locations: [ { locationId, name, latitude, longitude, isPrivate, myRounds, rounds } ] } for the map. */
+    suspend fun locationMap(token: String): JSONObject = request("GET", "/api/locations/map", body = null, token = token)
+
+    /** { location, myRounds, friends: [ { archerId, username, rounds, bestTotal, averagePerAnimal, roundsList } ], bowStyles } */
+    suspend fun locationPage(token: String, locationId: String): JSONObject =
+        request("GET", "/api/locations/$locationId/page", body = null, token = token)
+
     /** Admins and Owner: { locations: [ { locationId, name, latitude, longitude, createdUtc, createdBy, rounds } ] } */
     suspend fun adminLocations(token: String): JSONObject = request("GET", "/api/admin/locations", body = null, token = token)
 

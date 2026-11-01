@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fnurble.nfas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.7.02"
+        versionCode = 16
+        versionName = "1.8"
     }
 
     buildTypes {
@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime.ktx)
+    // OpenStreetMap map of shoot locations (no API key needed)
+    implementation(libs.osmdroid.android)
 
     debugImplementation(libs.androidx.ui.tooling)
 

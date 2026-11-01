@@ -29,7 +29,10 @@ import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.FriendsOverview
 import uk.co.fnurble.nfas.data.FriendsRepository
+import uk.co.fnurble.nfas.data.LocationPage
+import uk.co.fnurble.nfas.data.LocationPageRepository
 import uk.co.fnurble.nfas.data.LocationRepository
+import uk.co.fnurble.nfas.data.MapLocation
 import uk.co.fnurble.nfas.data.NetworkStatus
 import uk.co.fnurble.nfas.data.ServerState
 import uk.co.fnurble.nfas.data.AccountRepository
@@ -386,6 +389,56 @@ class AdminDuplicatesViewModel(
                 _message.value = e.friendlyMessage()
             } finally {
                 _busy.value = false
+            }
+        }
+    }
+}
+
+// ---------------- Shoot location map and page ----------------
+
+/** Map of shoot locations: public ones plus your own private ones; ones you've shot at are highlighted. */
+class LocationMapViewModel(private val repo: LocationPageRepository, accounts: AccountRepository) : ViewModel() {
+    val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
+
+    private val _locations = MutableStateFlow<Load<List<MapLocation>>>(Load.Loading)
+    val locations: StateFlow<Load<List<MapLocation>>> = _locations.asStateFlow()
+
+    fun load() {
+        viewModelScope.launch {
+            if (_locations.value !is Load.Ready) _locations.value = Load.Loading
+            _locations.value = try {
+                Load.Ready(repo.map())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
+}
+
+/** One location: your rounds there, friends' rounds and stats there, all-archer stats per bow style. Nav arg "locationId". */
+class LocationPageViewModel(private val repo: LocationPageRepository, saved: SavedStateHandle) : ViewModel() {
+    private val locationId: String = checkNotNull(saved["locationId"])
+
+    private val _page = MutableStateFlow<Load<LocationPage>>(Load.Loading)
+    val page: StateFlow<Load<LocationPage>> = _page.asStateFlow()
+
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    init { load() }
+
+    fun load(showSpinner: Boolean = false) {
+        viewModelScope.launch {
+            if (showSpinner) _refreshing.value = true
+            _page.value = try {
+                Load.Ready(repo.page(locationId))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            } finally {
+                _refreshing.value = false
             }
         }
     }

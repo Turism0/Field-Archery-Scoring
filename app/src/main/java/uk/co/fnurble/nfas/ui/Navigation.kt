@@ -17,6 +17,8 @@ import uk.co.fnurble.nfas.ui.screens.FriendScorecardScreen
 import uk.co.fnurble.nfas.ui.screens.FriendsScreen
 import uk.co.fnurble.nfas.ui.screens.HistoryScreen
 import uk.co.fnurble.nfas.ui.screens.HomeScreen
+import uk.co.fnurble.nfas.ui.screens.LocationMapScreen
+import uk.co.fnurble.nfas.ui.screens.LocationPageScreen
 import uk.co.fnurble.nfas.ui.screens.NewRoundScreen
 import uk.co.fnurble.nfas.ui.screens.ProfileScreen
 import uk.co.fnurble.nfas.ui.screens.RoundTypeScreen
@@ -45,6 +47,27 @@ fun NfasNavHost() {
                 onHistory = { nav.navigate("history") },
                 onFriends = { nav.navigate("friends") },
                 onAdmin = { nav.navigate("admin") },
+                onMap = { nav.navigate("map") },
+            )
+        }
+        // Map of shoot locations → a location's page → your scorecard / a friend's scorecard.
+        composable("map") {
+            LocationMapScreen(
+                vm = appViewModel { c, _ -> LocationMapViewModel(c.locationPageRepository, c.accountRepository) },
+                onBack = { nav.popBackStack() },
+                onProfile = { nav.navigate("profile") },
+                onOpenLocation = { loc -> nav.navigate("location/${loc.id}") },
+            )
+        }
+        composable(
+            "location/{locationId}",
+            arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
+        ) {
+            LocationPageScreen(
+                vm = appViewModel { c, saved -> LocationPageViewModel(c.locationPageRepository, saved) },
+                onBack = { nav.popBackStack() },
+                onOpenMyRound = { id -> nav.navigate(scorecardRoute(id)) },
+                onOpenFriendRound = { f, r -> nav.navigate("friendCard/${f.archerId}/${f.username}/${r.roundId}") },
             )
         }
         // Admin menu: Admins and the Owner only (the tile is hidden for everyone else; the server checks too).

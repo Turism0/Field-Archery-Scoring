@@ -5,6 +5,7 @@ import uk.co.fnurble.nfas.data.AccountRepository
 import uk.co.fnurble.nfas.data.AccountStore
 import uk.co.fnurble.nfas.data.AdminRepository
 import uk.co.fnurble.nfas.data.FriendsRepository
+import uk.co.fnurble.nfas.data.LocationPageRepository
 import uk.co.fnurble.nfas.data.LocationRepository
 import uk.co.fnurble.nfas.data.NetworkStatus
 import uk.co.fnurble.nfas.data.ProfileRepository
@@ -30,6 +31,7 @@ class AppContainer(app: Application) {
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })
     val friendsRepository = FriendsRepository(api, accountStore)
     val adminRepository = AdminRepository(api, accountStore)
+    val locationPageRepository = LocationPageRepository(api, accountStore)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
     suspend fun checkServer() {
         runCatching { api.health() }
@@ -45,6 +47,11 @@ class NfasApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        // OpenStreetMap tiles: identify the app (OSM's tile policy) and cache tiles in the app's own storage.
+        org.osmdroid.config.Configuration.getInstance().apply {
+            load(this@NfasApp, getSharedPreferences("osmdroid", MODE_PRIVATE))
+            userAgentValue = packageName
+        }
         // Send anything left waiting from last time (e.g. rounds finished with no signal).
         container.syncScheduler.request()
     }

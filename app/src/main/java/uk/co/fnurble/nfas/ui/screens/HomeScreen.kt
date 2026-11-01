@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
@@ -63,6 +64,7 @@ fun HomeScreen(
     onHistory: () -> Unit,
     onFriends: () -> Unit,
     onAdmin: () -> Unit,
+    onMap: () -> Unit,
 ) {
     val summary by vm.summary.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
@@ -147,6 +149,12 @@ fun HomeScreen(
                     title = "Friends",
                     subtitle = if (signedIn) "Friends' scorecards and stats, requests" else "Sign in to see friends' scorecards",
                     onClick = onFriends,
+                )
+                HomeTile(
+                    icon = Icons.Filled.LocationOn,
+                    title = "Shoot locations",
+                    subtitle = if (signedIn) "Map of locations, your scorecards and stats at each" else "Sign in to see the map of shoot locations",
+                    onClick = onMap,
                 )
                 if (signedIn && role.isAdmin) {
                     HomeTile(
