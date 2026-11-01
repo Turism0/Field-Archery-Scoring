@@ -1,6 +1,7 @@
 package uk.co.fnurble.nfas.ui.screens
 
 import android.graphics.drawable.Drawable
+import android.view.MotionEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -165,10 +166,19 @@ private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocati
                             onOpenLocation(loc)
                         } else {
                             m.showInfoWindow()
+                            // osmdroid shares one pop-up between all pins and its own touch handler just closes it,
+                            // so point the pop-up at this location each time it opens: a tap on it opens the page.
+                            m.infoWindow?.view?.setOnTouchListener { v, event ->
+                                if (event.action == MotionEvent.ACTION_UP) {
+                                    v.performClick()
+                                    m.closeInfoWindow()
+                                    onOpenLocation(loc)
+                                }
+                                true
+                            }
                         }
                         true
                     }
-                    infoWindow.view.setOnClickListener { closeInfoWindow(); onOpenLocation(loc) }
                 }
                 map.overlays.add(marker)
             }
