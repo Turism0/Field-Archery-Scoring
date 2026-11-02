@@ -23,6 +23,8 @@ data class MapLocation(
 data class LocationFriend(
     val archerId: String,
     val username: String,
+    /** BIG_GAME or WOODSMAN: a friend who's shot both has a row for each. */
+    val roundType: String = "BIG_GAME",
     val rounds: Int,
     val bestTotal: Int?,
     val averagePerAnimal: Double?,
@@ -31,6 +33,7 @@ data class LocationFriend(
 
 /** Everyone's finished rounds at a location for one bow style (no names). */
 data class BowStyleStats(
+    val roundType: String = "BIG_GAME",
     val bowStyle: String,
     val archers: Int,
     val rounds: Int,
@@ -79,6 +82,7 @@ class LocationPageRepository(private val api: NfasApi, private val accounts: Acc
                 LocationFriend(
                     archerId = f.getString("archerId"),
                     username = f.getString("username"),
+                    roundType = f.optString("roundType", "BIG_GAME"),
                     rounds = f.getInt("rounds"),
                     bestTotal = f.intOrNull("bestTotal"),
                     averagePerAnimal = f.doubleOrNull("averagePerAnimal"),
@@ -87,6 +91,7 @@ class LocationPageRepository(private val api: NfasApi, private val accounts: Acc
             },
             bowStyles = json.getJSONArray("bowStyles").objects().map { b ->
                 BowStyleStats(
+                    roundType = b.optString("roundType", "BIG_GAME"),
                     bowStyle = b.getString("bowStyle"),
                     archers = b.getInt("archers"),
                     rounds = b.getInt("rounds"),
@@ -128,7 +133,8 @@ private fun JSONObject.toRoundSummary(): FriendRoundSummary {
         roundId = getString("roundId"),
         shootDate = LocalDate.parse(getString("shootDate")),
         targetCount = getInt("targetCount"),
-        classLine = "${cls.displayName} ${age.displayName} $bow",
+        classLine = (if (optString("roundType") == "WOODSMAN") "Woodsman · " else "") +
+            "${cls.displayName} ${age.displayName} $bow",
         totalPoints = getInt("totalPoints"),
     )
 }

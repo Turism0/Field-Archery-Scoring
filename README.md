@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.9.04
+## Version 1.9.05
 
+- **1.9.05:** **Woodsman** rounds in the app (roadmap step 3). Choose Woodsman when starting a round. Each target: record each arrow in order (Kill, Wound or Miss, showing what it scores on that arrow) until a kill or three arrows; undo the last arrow; override and clear in the target's ⋮ menu. Scorecards show the arrows (e.g. "Wound, Kill (2nd)"); stats per target out of 30 (kills, wounds and misses count arrows; which arrow killed; first-arrow kill rate). Rounds are labelled "Woodsman ·" in lists, headers and friends' rounds; friends' summaries show Woodsman rounds and best separately; location pages split all-archer stats and friends by round type. Phone database v3 (round type, Woodsman arrows; existing rounds are Big Game). Needs API 1.9.01.
 - **1.9.04:** `Test-Woodsman.ps1` fix: a loop variable `$b` overwrote the test account `$B` (PowerShell names ignore case), so the friend and location checks ran signed out. No app or API changes.
 - **1.9.03:** `Test-Woodsman.ps1` shows the HTTP status and server message when the friends and location checks fail. No app or API changes.
 - **1.9.02:** test script fix: `Test-Woodsman.ps1` built the round total in a way PowerShell left empty, so every Woodsman upload was refused before the rules were checked. No app or API changes.
@@ -45,9 +46,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 - **1.2.01:** server database scripts for the online features (`server/sql/`). No app changes.
 - **1.2:** single-user offline scoring, Material 3 UI, running stats, end-of-round scorecard with edit.
 
-Versioning: minor changes go 1.8.01, 1.8.02 … 1.8.99; major changes move to the next tenth (1.9).
+Versioning: minor changes go 1.9.01, 1.9.02 … 1.9.99; major changes move to the next tenth (2.0). Numbers only ever go up: when a feature is split into server then app releases, the app release takes the next number after the server ones.
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: Woodsman in the app and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: group scoring; more history and stats and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
@@ -59,7 +60,8 @@ Versioning: minor changes go 1.8.01, 1.8.02 … 1.8.99; major changes move to th
 - **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
 - **Shoot locations** (signed in, needs signal): map of locations (shot-at pins highlighted); **New location** button, then tap the map to add one. Tap a pin, then its name, for the **location page**: your scorecards there, friends' rounds and stats there, all-archer stats by bow style.
 - **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. **Possible duplicates** (count shown on the Admin tile) → merge, or mark as different places. **Shoot locations** → rename, make private / public, or merge a duplicate into another (nearest first, confirm first). Pull down to refresh.
-- **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
+- **Round type:** NFAS Big Game or **Woodsman**. Add new types in `domain/RoundType.kt`.
+- **Woodsman scoring:** the three arrows so far, then Kill / Wound / Miss buttons for the next arrow (with points for that arrow) until a kill or three arrows; Undo last arrow; override / clear in ⋮.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.

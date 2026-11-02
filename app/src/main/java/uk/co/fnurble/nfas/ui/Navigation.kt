@@ -202,7 +202,7 @@ fun NfasNavHost() {
             val roundType = entry.arguments?.getString("roundType")
                 ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
-                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository) },
+                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType) },
                 roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },

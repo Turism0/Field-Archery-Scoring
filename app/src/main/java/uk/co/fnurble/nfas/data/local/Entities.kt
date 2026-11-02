@@ -73,6 +73,8 @@ data class RoundEntity(
      */
     @ColumnInfo(name = "fix_lat") val fixLat: Double? = null,
     @ColumnInfo(name = "fix_lon") val fixLon: Double? = null,
+    /** Round type (database v3): null = Big Game (every round from before v3), or a RoundType name. */
+    @ColumnInfo(name = "round_type") val roundType: String? = null,
 )
 
 @Entity(
@@ -96,6 +98,8 @@ data class TargetEntity(
     val points: Int,
     @ColumnInfo(name = "updated_at") val updatedAt: Instant,
     @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
+    /** Woodsman targets (database v3): arrows in order, W / K / M. Null for Big Game. */
+    val arrows: String? = null,
 )
 
 @Entity(

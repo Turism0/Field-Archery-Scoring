@@ -66,6 +66,8 @@ import uk.co.fnurble.nfas.domain.Hit
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.TargetScore
 import uk.co.fnurble.nfas.domain.TargetType
+import uk.co.fnurble.nfas.domain.WoodsmanScoring
+import uk.co.fnurble.nfas.domain.WoodsmanArrow
 import uk.co.fnurble.nfas.domain.ordinal
 import uk.co.fnurble.nfas.ui.ScoringViewModel
 import uk.co.fnurble.nfas.ui.components.LocationChip
@@ -121,7 +123,7 @@ fun ScoringScreen(
                             )
                             if (r != null) {
                                 Text(
-                                    "${r.classLine} · ${r.shootDate.format(UkDate)}",
+                                    "${r.typeAndClass} · ${r.shootDate.format(UkDate)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -188,7 +190,14 @@ fun ScoringScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             RunningStats(r.stats, compact = true)
-            TargetEditor(
+            if (target.isWoodsman) WoodsmanEditor(
+                target = target,
+                onArrow = { vm.addArrow(it) },
+                onUndo = { vm.undoArrow() },
+                onOverride = { showOverride = true },
+                onRemoveOverride = { vm.setOverride(null) },
+                onClear = { vm.clearTarget() },
+            ) else TargetEditor(
                 target = target,
                 onType = { type, fan -> vm.setType(type, fan) },
                 onResult = { i, res -> vm.toggleResult(i, res) },
@@ -248,6 +257,109 @@ fun ScoringScreen(
 }
 
 /** Prev / Next. Next stays disabled until the current target has a score. */
+/**
+ * Woodsman: one animal, record each arrow in order until a kill or 3 arrows. Shows the arrows so far,
+ * the score, and buttons for the next arrow with what it would score.
+ */
+@Composable
+private fun WoodsmanEditor(
+    target: TargetScore,
+    onArrow: (WoodsmanArrow) -> Unit,
+    onUndo: () -> Unit,
+    onOverride: () -> Unit,
+    onRemoveOverride: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    var menuOpen by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Target ${target.targetNo}", style = MaterialTheme.typography.titleLarge)
+                Text("Woodsman · shoot until you kill it", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+            }
+            Text("${target.totalPoints} / ${WoodsmanScoring.MAX_PER_TARGET}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Box {
+                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Target options") }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(text = { Text("Override score") }, onClick = { menuOpen = false; onOverride() })
+                    DropdownMenuItem(text = { Text("Clear target") }, onClick = { menuOpen = false; onClear() })
+                }
+            }
+        }
+
+        if (target.isOverridden) {
+            Card(colors = CardDefaults.cardColors(containerColor = scheme.tertiaryContainer)) {
+                Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Overridden to ${target.overridePoints} (calculated ${target.calculatedPoints})", Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onOverride) { Text("Edit") }
+                    TextButton(onClick = onRemoveOverride) { Text("Remove") }
+                }
+            }
+            return@Column
+        }
+
+        // The three arrows so far.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (1..WoodsmanScoring.MAX_ARROWS).forEach { n ->
+                val arrow = target.arrows.getOrNull(n - 1)
+                val unused = arrow == null && WoodsmanScoring.isFinished(target.arrows)
+                Surface(
+                    modifier = Modifier.weight(1f).height(64.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = when (arrow) {
+                        WoodsmanArrow.KILL -> scheme.primary
+                        WoodsmanArrow.WOUND -> scheme.secondaryContainer
+                        WoodsmanArrow.MISS -> scheme.errorContainer
+                        null -> scheme.surfaceContainerHigh
+                    },
+                    contentColor = when (arrow) {
+                        WoodsmanArrow.KILL -> scheme.onPrimary
+                        WoodsmanArrow.WOUND -> scheme.onSecondaryContainer
+                        WoodsmanArrow.MISS -> scheme.onErrorContainer
+                        null -> scheme.onSurfaceVariant
+                    },
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text("${ordinal(n)} arrow", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            when {
+                                arrow != null -> arrow.displayName
+                                unused -> "–"
+                                else -> ""
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+        }
+
+        val finished = WoodsmanScoring.isFinished(target.arrows)
+        if (!finished) {
+            val next = target.arrows.size + 1
+            Text("${ordinal(next)} arrow", style = MaterialTheme.typography.titleMedium, color = scheme.primary)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScoreTile(WoodsmanScoring.killPoints(next), "Kill", selected = false, modifier = Modifier.weight(1f)) { onArrow(WoodsmanArrow.KILL) }
+                ScoreTile(WoodsmanScoring.WOUND, "Wound", selected = false, modifier = Modifier.weight(1f)) { onArrow(WoodsmanArrow.WOUND) }
+            }
+            MissTile(selected = false) { onArrow(WoodsmanArrow.MISS) }
+        } else {
+            Text(
+                if (target.arrows.last() == WoodsmanArrow.KILL) "Killed with the ${ordinal(target.arrows.size)} arrow."
+                else "All three arrows shot.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = scheme.onSurfaceVariant,
+            )
+        }
+        if (target.arrows.isNotEmpty()) {
+            TextButton(onClick = onUndo) { Text("Undo last arrow") }
+        }
+    }
+}
+
 @Composable
 private fun TargetNavBar(
     targetNo: Int,
@@ -374,7 +486,8 @@ private fun TargetHeader(
                 trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = "Change target type", Modifier.size(18.dp)) },
             )
             DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
-                TargetType.entries.forEach { t ->
+                // Big Game target types only (Woodsman targets belong to Woodsman rounds).
+                TargetType.entries.filter { it != TargetType.WOODSMAN }.forEach { t ->
                     DropdownMenuItem(
                         text = { Text(t.displayName) },
                         leadingIcon = { if (t == target.type) Icon(Icons.Filled.Check, contentDescription = null) },

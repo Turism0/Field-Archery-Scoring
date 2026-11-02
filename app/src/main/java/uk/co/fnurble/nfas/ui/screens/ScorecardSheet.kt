@@ -58,7 +58,7 @@ fun ScorecardSheet(
         Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column {
                 Text("Scorecard", style = MaterialTheme.typography.headlineSmall)
-                Text(round.classLine, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(round.typeAndClass, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             RunningStats(round.stats)
         }
@@ -123,6 +123,7 @@ internal fun ScorecardTargetRow(
                 Text(
                     when {
                         locked -> "Target ${t.targetNo}"
+                        t.isWoodsman && !t.isOverridden && t.arrows.isNotEmpty() -> t.arrows.describe()
                         !t.isComplete -> "Not scored"
                         t.isOverridden -> "Overridden"
                         t.type == TargetType.STANDARD -> t.animals.first().describe()

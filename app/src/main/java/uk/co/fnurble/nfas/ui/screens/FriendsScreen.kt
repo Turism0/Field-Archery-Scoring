@@ -221,11 +221,18 @@ private fun FriendCard(f: FriendSummary, onClick: () -> Unit) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(f.username, style = MaterialTheme.typography.titleLarge)
                 Text(
-                    if (f.rounds == 0) "No finished rounds yet"
+                    if (f.rounds == 0 && f.woodsmanRounds == 0) "No finished rounds yet"
                     else buildString {
-                        append("${f.rounds} round${if (f.rounds == 1) "" else "s"}")
-                        f.bestTotal?.let { append(" · best $it") }
-                        f.averagePerAnimal?.let { append(" · avg ${String.format(Locale.UK, "%.1f", it)} per animal") }
+                        if (f.rounds > 0) {
+                            append("${f.rounds} round${if (f.rounds == 1) "" else "s"}")
+                            f.bestTotal?.let { append(" · best $it") }
+                            f.averagePerAnimal?.let { append(" · avg ${String.format(Locale.UK, "%.1f", it)} per animal") }
+                        }
+                        if (f.woodsmanRounds > 0) {
+                            if (isNotEmpty()) append("\n")
+                            append("Woodsman: ${f.woodsmanRounds} round${if (f.woodsmanRounds == 1) "" else "s"}")
+                            f.woodsmanBest?.let { append(" · best $it") }
+                        }
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

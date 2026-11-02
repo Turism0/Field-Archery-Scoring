@@ -15,13 +15,14 @@ data class Round(
     /** One entry per target, ordered by target number. */
     val targets: List<TargetScore>,
     val location: RoundLocation = RoundLocation(),
+    val type: RoundType = RoundType.BIG_GAME,
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
     val targetsComplete: Int get() = targets.count { it.isComplete }
     val isFullyScored: Boolean get() = targets.size == targetCount && targets.all { it.isComplete }
 
     fun target(targetNo: Int): TargetScore =
-        targets.firstOrNull { it.targetNo == targetNo } ?: TargetScore(targetNo)
+        targets.firstOrNull { it.targetNo == targetNo } ?: newTarget(type, targetNo)
 
     /** The next target that still needs a score, or null when every target is scored. */
     val firstUnscoredTargetNo: Int? get() = (1..targetCount).firstOrNull { !target(it).isComplete }
@@ -38,6 +39,9 @@ data class Round(
     /** e.g. "Gents Adult LB". */
     val classLine: String get() = "${archerClass.displayName} ${ageGroup.displayName} ${bowStyle.code}"
 
+    /** "Woodsman · Gents Adult LB"; Big Game rounds just show the class. */
+    val typeAndClass: String get() = (if (type == RoundType.WOODSMAN) "${type.displayName} · " else "") + classLine
+
     val stats: RoundStats get() = RoundStats.of(this)
 }
 
@@ -50,7 +54,9 @@ data class RoundStats(
     val totalPoints: Int,
     val targetsScored: Int,
     val targetCount: Int,
-    /** Average points per animal on fully scored targets (max 24), or null before the first is scored. */
+    /** Highest score for one animal: 24 Big Game, 30 Woodsman. */
+    val maxPerAnimal: Int = BigGameScoring.MAX_PER_ANIMAL,
+    /** Average points per animal on fully scored targets (max 24, Woodsman 30), or null before the first is scored. */
     val averagePerAnimal: Double?,
     val innerKills: Int,
     val kills: Int,
@@ -72,6 +78,7 @@ data class RoundStats(
 ) {
     companion object {
         fun of(round: Round): RoundStats {
+            if (round.type == RoundType.WOODSMAN) return woodsman(round)
             val results = round.targets.filterNot { it.isOverridden }.flatMap { it.animals }
             val scored = results.filterIsInstance<AnimalResult.Scored>()
             val complete = round.targets.filter { it.isComplete }
@@ -99,6 +106,46 @@ data class RoundStats(
             )
         }
     }
+}
+
+/**
+ * Woodsman stats: one animal per target. Kills / wounds / misses count arrows; byArrow is which arrow killed;
+ * rates are per target over finished, not-overridden targets (first-arrow kill, killed at all, scored nothing).
+ */
+private fun woodsman(round: Round): RoundStats {
+    val recordedTargets = round.targets.filterNot { it.isOverridden }
+    val arrows = recordedTargets.flatMap { it.arrows }
+    val complete = round.targets.filter { it.isComplete }
+    val recorded = complete.filterNot { it.isOverridden }
+    fun rate(predicate: (TargetScore) -> Boolean): Double? =
+        if (recorded.isEmpty()) null else recorded.count(predicate).toDouble() / recorded.size
+    return RoundStats(
+        totalPoints = round.totalPoints,
+        targetsScored = complete.size,
+        targetCount = round.targetCount,
+        maxPerAnimal = WoodsmanScoring.MAX_PER_TARGET,
+        averagePerAnimal = if (complete.isEmpty()) null else complete.sumOf { it.totalPoints }.toDouble() / complete.size,
+        innerKills = 0,
+        kills = arrows.count { it == WoodsmanArrow.KILL },
+        wounds = arrows.count { it == WoodsmanArrow.WOUND },
+        misses = arrows.count { it == WoodsmanArrow.MISS },
+        byArrow = (1..WoodsmanScoring.MAX_ARROWS).associateWith { n ->
+            recordedTargets.count { it.arrows.getOrNull(n - 1) == WoodsmanArrow.KILL }
+        },
+        overrides = round.targets.count { it.isOverridden },
+        animalsScored = complete.size,
+        shareOfMax = if (complete.isEmpty()) null
+        else complete.sumOf { it.totalPoints }.toDouble() / (complete.size * WoodsmanScoring.MAX_PER_TARGET),
+        firstArrowRate = rate { it.arrows.firstOrNull() == WoodsmanArrow.KILL },
+        killRate = rate { it.arrows.lastOrNull() == WoodsmanArrow.KILL },
+        missRate = rate { it.calculatedPoints == 0 },
+    )
+}
+
+/** A new, unscored target for a round of this type. */
+fun newTarget(type: RoundType, targetNo: Int): TargetScore = when (type) {
+    RoundType.BIG_GAME -> TargetScore(targetNo)
+    RoundType.WOODSMAN -> TargetScore(targetNo, TargetType.WOODSMAN, animals = emptyList())
 }
 
 private fun List<AnimalResult>.rate(predicate: (AnimalResult) -> Boolean): Double? =

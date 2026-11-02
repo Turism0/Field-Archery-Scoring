@@ -45,6 +45,7 @@ import uk.co.fnurble.nfas.data.BowStyleStats
 import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.LocationFriend
 import uk.co.fnurble.nfas.domain.BowStyle
+import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.ui.Load
 import uk.co.fnurble.nfas.ui.LocationPageViewModel
 import uk.co.fnurble.nfas.ui.components.UkDateLong
@@ -121,16 +122,26 @@ fun LocationPageScreen(
                             if (data.friends.isEmpty()) {
                                 item(key = "friendsNone") { Muted("None of your friends have finished a round here yet.") }
                             }
-                            items(data.friends, key = { "f-" + it.archerId }) { f -> FriendCard(f) { r -> onOpenFriendRound(f, r) } }
+                            items(data.friends, key = { "f-" + it.archerId + it.roundType }) { f -> FriendCard(f) { r -> onOpenFriendRound(f, r) } }
 
                             // ---- Everyone ----
                             item(key = "allHeader") { Header("All archers, by bow style") }
                             if (data.bowStyles.isEmpty()) {
                                 item(key = "allNone") { Muted("No finished rounds here yet.") }
                             } else {
-                                item(key = "allTable") { BowStyleTable(data.bowStyles) }
+                                data.bowStyles.groupBy { it.roundType }.forEach { (type, rows) ->
+                                    item(key = "allTable-$type") {
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            if (data.bowStyles.any { it.roundType != type }) {
+                                                Text(typeName(type), style = MaterialTheme.typography.labelLarge)
+                                            }
+                                            BowStyleTable(rows)
+                                        }
+                                    }
+                                }
                                 item(key = "allNote") {
-                                    Muted("Everyone's finished rounds here. Average per animal is out of 24 (predator/prey counts as 2, a fan as its animals).")
+                                    Muted("Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, " +
+                                        "a fan as its animals); Woodsman is per target, out of 30.")
                                 }
                             }
                         }
@@ -176,7 +187,7 @@ private fun RoundRow(r: FriendRoundSummary, onClick: () -> Unit) {
 /** Friend's summary here; tap to show their rounds, tap a round for their scorecard. */
 @Composable
 private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> Unit) {
-    var expanded by rememberSaveable(f.archerId) { mutableStateOf(false) }
+    var expanded by rememberSaveable(f.archerId + f.roundType) { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -187,10 +198,15 @@ private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> U
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(f.username, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        f.username + if (f.roundType == "WOODSMAN") " · Woodsman" else "",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Text(
                         summary(f.rounds, f.bestTotal) +
-                            (f.averagePerAnimal?.let { " · avg ${String.format(Locale.UK, "%.1f", it)} per animal" } ?: ""),
+                            (f.averagePerAnimal?.let {
+                                " · avg ${String.format(Locale.UK, "%.1f", it)} per ${if (f.roundType == "WOODSMAN") "target" else "animal"}"
+                            } ?: ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -256,3 +272,5 @@ private fun RowScope.Cell(text: String, weight: Float = 1f, header: Boolean = fa
         maxLines = 2,
     )
 }
+
+private fun typeName(type: String): String = RoundType.entries.firstOrNull { it.name == type }?.displayName ?: type

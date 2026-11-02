@@ -16,8 +16,10 @@ data class FriendSummary(
     val rounds: Int,
     val bestTotal: Int?,
     val lastShootDate: LocalDate?,
-    /** Out of 24; predator/prey = 2 animals, fan = n. */
+    /** Out of 24; predator/prey = 2 animals, fan = n. Rounds / best / average are Big Game. */
     val averagePerAnimal: Double?,
+    val woodsmanRounds: Int = 0,
+    val woodsmanBest: Int? = null,
 )
 
 data class FriendRequest(val archerId: String, val username: String)
@@ -54,6 +56,8 @@ class FriendsRepository(private val api: NfasApi, private val accounts: AccountS
                     bestTotal = f.intOrNull("bestTotal"),
                     lastShootDate = f.stringOrNull("lastShootDate")?.let { LocalDate.parse(it.take(10)) },
                     averagePerAnimal = if (f.isNull("averagePerAnimal")) null else f.getDouble("averagePerAnimal"),
+                    woodsmanRounds = f.optInt("woodsmanRounds"),
+                    woodsmanBest = f.intOrNull("woodsmanBest"),
                 )
             },
             incoming = json.getJSONArray("incoming").objects().map { FriendRequest(it.getString("archerId"), it.getString("username")) },
@@ -80,7 +84,8 @@ class FriendsRepository(private val api: NfasApi, private val accounts: AccountS
                 roundId = r.getString("roundId"),
                 shootDate = LocalDate.parse(r.getString("shootDate")),
                 targetCount = r.getInt("targetCount"),
-                classLine = "${cls.displayName} ${age.displayName} $bow",
+                classLine = (if (r.optString("roundType") == "WOODSMAN") "Woodsman · " else "") +
+                    "${cls.displayName} ${age.displayName} $bow",
                 totalPoints = r.getInt("totalPoints"),
                 locationName = r.stringOrNull("locationName"),
             )

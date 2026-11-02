@@ -178,7 +178,7 @@ internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
             }
             Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleLarge)
             Text(
-                "${r.classLine} · ${r.targetCount} targets",
+                "${r.typeAndClass} · ${r.targetCount} targets",
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
@@ -207,7 +207,8 @@ internal fun MoreStats(s: RoundStats) {
                 PercentStat("Misses", s.missRate)
             }
             Text(
-                "${s.animalsScored} animals scored · maximum ${s.animalsScored * 24} points",
+                "${s.animalsScored} ${if (s.maxPerAnimal == 24) "animals" else "targets"} scored · " +
+                    "maximum ${s.animalsScored * s.maxPerAnimal} points",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.CenterHorizontally),

@@ -52,8 +52,10 @@ import uk.co.fnurble.nfas.domain.BowStyle
 import uk.co.fnurble.nfas.domain.NearbyLocation
 import uk.co.fnurble.nfas.domain.Round
 import uk.co.fnurble.nfas.domain.RoundStatus
+import uk.co.fnurble.nfas.domain.RoundType
 import uk.co.fnurble.nfas.domain.TargetScore
 import uk.co.fnurble.nfas.domain.TargetType
+import uk.co.fnurble.nfas.domain.WoodsmanArrow
 import uk.co.fnurble.nfas.domain.resolveAgeGroup
 import java.time.Instant
 import java.time.LocalDate
@@ -844,6 +846,7 @@ class NewRoundViewModel(
     private val profiles: ProfileRepository,
     private val rounds: RoundRepository,
     private val locations: LocationRepository,
+    private val type: RoundType = RoundType.BIG_GAME,
 ) : ViewModel() {
     private val _form = MutableStateFlow<NewRoundForm?>(null)
     val form: StateFlow<NewRoundForm?> = _form.asStateFlow()
@@ -871,7 +874,7 @@ class NewRoundViewModel(
         val f = _form.value ?: return
         if (!f.isValid) return
         viewModelScope.launch {
-            val id = rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!)
+            val id = rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type)
             // GPS fix in the background (if allowed); scoring starts straight away.
             locations.captureFor(id)
             onCreated(id)
@@ -1081,6 +1084,12 @@ class ScoringViewModel(
     }
 
     fun setOverride(points: Int?) = edit { it.withOverride(points) }
+
+    /** Woodsman: the next arrow (wound, kill or miss). */
+    fun addArrow(arrow: WoodsmanArrow) = edit { it.withArrow(arrow) }
+
+    /** Woodsman: takes back the last arrow. */
+    fun undoArrow() = edit { it.withoutLastArrow() }
 
     fun clearTarget() = edit { it.cleared() }
 

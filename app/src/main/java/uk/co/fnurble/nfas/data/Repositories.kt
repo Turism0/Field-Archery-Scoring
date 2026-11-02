@@ -1,5 +1,9 @@
 package uk.co.fnurble.nfas.data
 
+import uk.co.fnurble.nfas.domain.RoundType
+import uk.co.fnurble.nfas.domain.TargetType
+import uk.co.fnurble.nfas.domain.WoodsmanScoring
+import uk.co.fnurble.nfas.domain.newTarget
 import uk.co.fnurble.nfas.data.local.LocationState
 import uk.co.fnurble.nfas.domain.LocationStatus
 import uk.co.fnurble.nfas.domain.RoundLocation
@@ -89,7 +93,8 @@ class RoundRepository(
                 id = it.id,
                 shootDate = it.shootDate,
                 targetCount = it.targetCount,
-                classLine = "${it.archerClass.displayName} ${it.ageGroup.displayName} ${it.bowStyle.code}",
+                classLine = (if (it.type() == RoundType.WOODSMAN) "Woodsman · " else "") +
+                    "${it.archerClass.displayName} ${it.ageGroup.displayName} ${it.bowStyle.code}",
                 totalPoints = it.totalPoints,
                 status = it.status,
                 syncState = it.syncState,
@@ -114,11 +119,12 @@ class RoundRepository(
         archerClass: ArcherClass,
         ageGroup: AgeGroup,
         bowStyle: BowStyle,
+        type: RoundType = RoundType.BIG_GAME,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val now = Instant.now(clock)
         val id = UUID.randomUUID().toString()
-        val targets = (1..targetCount).map { TargetScore(it) }
+        val targets = (1..targetCount).map { newTarget(type, it) }
         dao.createRound(
             round = RoundEntity(
                 id = id,
@@ -130,6 +136,7 @@ class RoundRepository(
                 status = RoundStatus.IN_PROGRESS,
                 createdAt = now,
                 updatedAt = now,
+                roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -157,7 +164,7 @@ class RoundRepository(
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val r = dao.getRound(roundId) ?: return
         val now = Instant.now(clock)
-        val added = (r.targetCount + 1..targetCount).map { TargetScore(it) }
+        val added = (r.targetCount + 1..targetCount).map { newTarget(r.type(), it) }
         dao.updateDetails(
             round = r.copy(
                 shootDate = shootDate,
@@ -192,6 +199,9 @@ class RoundRepository(
 
 // ---- Mapping ----
 
+/** The round's type; rounds from before database v3 (null) are Big Game. */
+fun RoundEntity.type(): RoundType = RoundType.entries.firstOrNull { it.name == roundType } ?: RoundType.BIG_GAME
+
 /** A round as phone database rows → the domain model (also used for friends' rounds from the server). */
 fun RoundData.toDomain(): Round = round.toDomain(targets, animals)
 
@@ -205,6 +215,7 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         ageGroup = ageGroup,
         bowStyle = bowStyle,
         status = status,
+        type = type(),
         location = RoundLocation(
             status = when (locationState) {
                 null -> LocationStatus.NONE
@@ -220,6 +231,7 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
                 type = t.type,
                 animals = byTarget[t.targetNo].orEmpty().sortedBy { it.animalIndex }.map { it.toResult() },
                 overridePoints = t.overridePoints,
+                arrows = WoodsmanScoring.decode(t.arrows),
             )
         },
     )
@@ -238,6 +250,7 @@ private fun TargetScore.toEntity(roundId: String, now: Instant) = TargetEntity(
     overridePoints = overridePoints,
     points = totalPoints,
     updatedAt = now,
+    arrows = if (type == TargetType.WOODSMAN) WoodsmanScoring.encode(arrows) else null,
 )
 
 private fun TargetScore.toAnimalEntities(roundId: String) = animals.mapIndexed { i, a ->

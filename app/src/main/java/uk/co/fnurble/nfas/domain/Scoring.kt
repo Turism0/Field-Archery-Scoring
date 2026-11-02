@@ -43,6 +43,50 @@ object BigGameScoring {
     }
 }
 
+/** One Woodsman arrow, recorded in order. Stored as its letter (W / K / M). */
+enum class WoodsmanArrow(val letter: Char, val displayName: String) {
+    WOUND('W', "Wound"),
+    KILL('K', "Kill"),
+    MISS('M', "Miss");
+
+    companion object {
+        fun fromLetter(c: Char): WoodsmanArrow? = entries.firstOrNull { it.letter == c }
+    }
+}
+
+/**
+ * NFAS Woodsman: one animal, shoot until you kill it, up to 3 arrows.
+ *  Wound 5 on any arrow; kill 30 / 20 / 10 on arrow 1 / 2 / 3 (and shooting stops); miss 0.
+ *  e.g. kill 1st = 30; wound then kill = 25; miss, wound, kill = 15; three wounds = 15.
+ */
+object WoodsmanScoring {
+    const val MAX_ARROWS = 3
+    const val MAX_PER_TARGET = 30
+    const val WOUND = 5
+
+    fun killPoints(arrowNo: Int): Int = MAX_PER_TARGET - (arrowNo - 1) * 10
+
+    fun points(arrows: List<WoodsmanArrow>): Int = arrows.mapIndexed { i, a ->
+        when (a) {
+            WoodsmanArrow.WOUND -> WOUND
+            WoodsmanArrow.KILL -> killPoints(i + 1)
+            WoodsmanArrow.MISS -> 0
+        }
+    }.sum()
+
+    /** Up to 3 arrows, nothing after a kill. */
+    fun isValid(arrows: List<WoodsmanArrow>): Boolean =
+        arrows.size <= MAX_ARROWS && arrows.dropLast(1).none { it == WoodsmanArrow.KILL }
+
+    /** Finished: killed, or all 3 arrows shot. */
+    fun isFinished(arrows: List<WoodsmanArrow>): Boolean =
+        arrows.lastOrNull() == WoodsmanArrow.KILL || arrows.size == MAX_ARROWS
+
+    fun encode(arrows: List<WoodsmanArrow>): String = arrows.joinToString("") { it.letter.toString() }
+
+    fun decode(s: String?): List<WoodsmanArrow> = s.orEmpty().mapNotNull { WoodsmanArrow.fromLetter(it) }
+}
+
 /** The result for one animal on a target. */
 sealed interface AnimalResult {
     val points: Int
@@ -78,6 +122,9 @@ enum class TargetType(val displayName: String, val shortName: String) {
 
     /** Several animals on one peg, each with up to 3 arrows, normal scoring. Max 24 x animals. */
     FAN("Fan", "Fan"),
+
+    /** Woodsman rounds: one animal, arrows recorded in order (see [WoodsmanScoring]). Max 30. */
+    WOODSMAN("Woodsman", "Wds"),
 }
 
 /** The score for one target (peg) on the course. */
@@ -87,6 +134,8 @@ data class TargetScore(
     val animals: List<AnimalResult> = List(animalCountFor(type)) { AnimalResult.Pending },
     /** A manual score for non-standard scoring. When set, it replaces the calculated score. */
     val overridePoints: Int? = null,
+    /** Woodsman targets: arrows in order. Empty for Big Game. */
+    val arrows: List<WoodsmanArrow> = emptyList(),
 ) {
     init {
         require(targetNo >= 1) { "Target number must be 1 or more" }
@@ -94,22 +143,29 @@ data class TargetScore(
             TargetType.STANDARD -> require(animals.size == 1) { "Standard target has 1 animal" }
             TargetType.PREDATOR_PREY -> require(animals.size == 2) { "Predator/prey target has 2 animals" }
             TargetType.FAN -> require(animals.size in MIN_FAN..MAX_FAN) { "Fan has $MIN_FAN to $MAX_FAN animals" }
+            TargetType.WOODSMAN -> {
+                require(animals.isEmpty()) { "Woodsman targets record arrows, not animals" }
+                require(WoodsmanScoring.isValid(arrows)) { "Up to 3 arrows, nothing after a kill" }
+            }
         }
+        require(type == TargetType.WOODSMAN || arrows.isEmpty()) { "Only Woodsman targets record arrows" }
         require(overridePoints == null || overridePoints >= 0) { "Override cannot be negative" }
         validateArrowLimits(type, animals)
     }
 
-    val calculatedPoints: Int get() = animals.sumOf { it.points }
+    val isWoodsman: Boolean get() = type == TargetType.WOODSMAN
+
+    val calculatedPoints: Int get() = if (isWoodsman) WoodsmanScoring.points(arrows) else animals.sumOf { it.points }
     val totalPoints: Int get() = overridePoints ?: calculatedPoints
     val isOverridden: Boolean get() = overridePoints != null
-    val maxPoints: Int get() = animals.size * BigGameScoring.MAX_PER_ANIMAL
+    val maxPoints: Int get() = if (isWoodsman) WoodsmanScoring.MAX_PER_TARGET else animals.size * BigGameScoring.MAX_PER_ANIMAL
 
     /** How many arrows can be shot at the given animal, given the other results. */
     fun arrowsAvailable(animalIndex: Int): Int = arrowsAvailable(type, animals, animalIndex)
 
     /** Fully scored: overridden, or every animal resolved (prey with no arrows left counts as resolved). */
     val isComplete: Boolean
-        get() = isOverridden || animals.indices.all { i ->
+        get() = isOverridden || (isWoodsman && WoodsmanScoring.isFinished(arrows)) || !isWoodsman && animals.indices.all { i ->
             val a = animals[i]
             a !is AnimalResult.Pending || (isPredatorResolved() && arrowsAvailable(i) == 0)
         }
@@ -121,7 +177,15 @@ data class TargetScore(
         TargetType.STANDARD -> "Animal"
         TargetType.PREDATOR_PREY -> if (index == 0) "Predator" else "Prey"
         TargetType.FAN -> "Animal ${index + 1}"
+        TargetType.WOODSMAN -> "Animal"
     }
+
+    /** Woodsman: records the next arrow (ignored once the target is finished). */
+    fun withArrow(arrow: WoodsmanArrow): TargetScore =
+        if (!isWoodsman || WoodsmanScoring.isFinished(arrows)) this else copy(arrows = arrows + arrow)
+
+    /** Woodsman: takes back the last arrow. */
+    fun withoutLastArrow(): TargetScore = if (arrows.isEmpty()) this else copy(arrows = arrows.dropLast(1))
 
     /**
      * Sets one animal's result. For predator/prey, if the predator changes so the prey's
@@ -148,7 +212,7 @@ data class TargetScore(
 
     fun withOverride(points: Int?): TargetScore = copy(overridePoints = points)
 
-    fun cleared(): TargetScore = copy(animals = List(animals.size) { AnimalResult.Pending }, overridePoints = null)
+    fun cleared(): TargetScore = copy(animals = List(animals.size) { AnimalResult.Pending }, overridePoints = null, arrows = emptyList())
 
     companion object {
         const val MIN_FAN = 2
@@ -158,6 +222,7 @@ data class TargetScore(
             TargetType.STANDARD -> 1
             TargetType.PREDATOR_PREY -> 2
             TargetType.FAN -> MIN_FAN
+            TargetType.WOODSMAN -> 0
         }
 
         fun arrowsAvailable(type: TargetType, animals: List<AnimalResult>, index: Int): Int {
@@ -199,6 +264,11 @@ fun AnimalResult.describe(): String = when (this) {
     AnimalResult.Missed -> "Miss"
     is AnimalResult.Scored -> "${hit.displayName}, ${ordinal(arrowNo)} arrow"
 }
+
+/** e.g. "Wound, Kill (2nd)", "Miss, Miss, Miss", "Not scored". */
+fun List<WoodsmanArrow>.describe(): String =
+    if (isEmpty()) "Not scored"
+    else mapIndexed { i, a -> if (a == WoodsmanArrow.KILL) "Kill (${ordinal(i + 1)})" else a.displayName }.joinToString(", ")
 
 fun ordinal(n: Int): String = when (n) {
     1 -> "1st"

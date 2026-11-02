@@ -176,7 +176,7 @@ data class RoundData(
 
 @Database(
     entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -187,8 +187,16 @@ abstract class NfasDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): NfasDatabase =
             Room.databaseBuilder(context, NfasDatabase::class.java, "nfas.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
+
+        /** v3: round types (app 1.9). Existing rounds are Big Game (null type); Woodsman targets keep their arrows. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN round_type TEXT")
+                db.execSQL("ALTER TABLE target ADD COLUMN arrows TEXT")
+            }
+        }
 
         /** v2: shoot location on each round (app 1.6). Existing rounds get no location. */
         val MIGRATION_1_2 = object : Migration(1, 2) {

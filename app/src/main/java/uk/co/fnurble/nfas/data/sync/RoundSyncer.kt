@@ -179,7 +179,8 @@ internal fun RoundData.toJson(): JSONObject {
                 .put("type", t.type.name)
                 .put("overridePoints", t.overridePoints ?: JSONObject.NULL)
                 .put("points", t.points)
-                .put("animals", animalArray),
+                .put("animals", animalArray)
+                .apply { if (t.type == TargetType.WOODSMAN) put("arrows", t.arrows.orEmpty()) },
         )
     }
     return JSONObject()
@@ -193,6 +194,7 @@ internal fun RoundData.toJson(): JSONObject {
         .put("clientCreatedUtc", round.createdAt.toString())
         .put("clientUpdatedUtc", round.updatedAt.toString())
         .put("locationId", round.locationId ?: JSONObject.NULL)
+        .put("roundType", round.roundType ?: "BIG_GAME")
         .put("targets", targetArray)
 }
 
@@ -216,6 +218,8 @@ internal fun JSONObject.toRoundData(): RoundData {
         locationId = optStringOrNull("locationId"),
         locationName = optStringOrNull("locationName"),
         locationState = if (optStringOrNull("locationId") != null) LocationState.SET else null,
+        // Big Game is stored as null on the phone (as before round types).
+        roundType = optStringOrNull("roundType")?.takeIf { it != "BIG_GAME" },
     )
     val targets = mutableListOf<TargetEntity>()
     val animals = mutableListOf<AnimalEntity>()
@@ -231,6 +235,7 @@ internal fun JSONObject.toRoundData(): RoundData {
             points = t.getInt("points"),
             updatedAt = editedAt,
             syncState = SyncState.SYNCED,
+            arrows = t.optStringOrNull("arrows"),
         )
         val animalArray = t.getJSONArray("animals")
         for (j in 0 until animalArray.length()) {
