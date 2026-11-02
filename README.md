@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.8.02
+## Version 1.8.03
 
+- **1.8.03:** more ways to set a round's location. The location sheet now also has a **Known locations** drop-down (every public location and your private ones, by name), shown even when the round has no GPS position. On **Choose on map**, tap the map itself where the shoot is to name a **new location** there (with the Private switch); a name already used offers the existing location instead.
 - **1.8.02:** change a round's location by picking it on the map. The location sheet (tap the location line on the scoring screen or scorecard) has **Choose on map**: the map opens in pick mode, tap a pin then its pop-up to use that location. Works for rounds with no GPS position too. A finished round uploads again with its new location.
 - **1.8.01:** map fix: tapping the pop-up over a pin now opens the location page too (as well as tapping the pin again).
 - **1.8:** shoot location **map** and **location page**. New Home tile **Shoot locations** opens an OpenStreetMap map (osmdroid, no API key) of every public location plus your private ones: pins you've shot at are in the app's colour, others grey, with a small legend. Tap a pin for its name and round counts, tap again for the location page: your scorecards there (tap to open), friends who've shot there with rounds / best / average per animal (tap a friend for their rounds, tap a round for their scorecard), and all archers' stats per bow style (archers, rounds, best, average, per animal; no names). Private locations show only your own rounds. Needs API 1.7.03. New dependency `org.osmdroid:osmdroid-android` (Gradle sync needed).
@@ -56,7 +57,7 @@ Versioning: minor changes go 1.8.01, 1.8.02 … 1.8.99; major changes move to th
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.
 - **Account** (optional, needs signal): enter a username → if it exists, "That username already exists" and enter the password; if not, choose a password (typed twice) to create the account. No email; no password reset yet. Scoring works without an account.
 - **New round:** date, number of targets (quick picks 18 / 20 / 36 / 40), class and age group filled in from the profile, bow style defaulting to the main style. Changes only affect that round.
-- **Shoot location** (signed in): a line under the scoring header and on the scorecard shows where the round is. New location → asked to name it once. Tap for **Not here?**: nearby locations (10 km) or name a new one (optionally **Private**: only you and admins see it); a name already used is offered instead of duplicated. No position → "Get position now". **Choose on map** picks any known location from the map.
+- **Shoot location** (signed in): a line under the scoring header and on the scorecard shows where the round is. New location → asked to name it once. Tap for **Not here?**: nearby locations (10 km) or name a new one (optionally **Private**: only you and admins see it); a name already used is offered instead of duplicated. No position → "Get position now". **Known locations** drop-down, or **Choose on map**: pick a pin, or tap the map to name a new location there.
 - **Scoring:**
   - Big Game card layout: 1st / 2nd / 3rd arrow × inner kill / kill / wound, plus miss. Tap a selected score again to clear it.
   - Target type (Standard, Predator / Prey, Fan) is a small chip on the target; the fan animal count only appears for fans. Override score and clear target are in the target's ⋮ menu.

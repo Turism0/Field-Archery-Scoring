@@ -402,6 +402,37 @@ class LocationMapViewModel(
     accounts: AccountRepository,
     private val locationsRepo: LocationRepository? = null,
 ) : ViewModel() {
+    private val _taken = MutableStateFlow<NearbyLocation?>(null)
+    /** Pick mode: the name typed for a new location is already used; offer that one instead. */
+    val taken: StateFlow<NearbyLocation?> = _taken.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun messageShown() { _message.value = null }
+    fun clearTaken() { _taken.value = null }
+
+    /** Pick mode: a new location at a point tapped on the map, given to [roundId]. */
+    fun createAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean, onDone: () -> Unit) {
+        val repo = locationsRepo ?: return
+        viewModelScope.launch {
+            try {
+                repo.nameAt(roundId, name, lat, lon, isPrivate)
+                onDone()
+            } catch (e: LocationRepository.NameTaken) {
+                _taken.value = e.existing
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            }
+        }
+    }
+
+    /** Pick mode: use the existing location offered after a name clash. */
+    fun chooseExisting(roundId: String, location: NearbyLocation, onDone: () -> Unit) {
+        val repo = locationsRepo ?: return
+        viewModelScope.launch { repo.choose(roundId, location); onDone() }
+    }
+
     /** Pick mode: sets [roundId]'s location to [location] (counts as an edit, so it re-uploads), then [onDone]. */
     fun choose(roundId: String, location: MapLocation, onDone: () -> Unit) {
         val repo = locationsRepo ?: return
@@ -842,8 +873,16 @@ class RoundLocationViewModel(
     private val locations: LocationRepository,
     accounts: AccountRepository,
     saved: SavedStateHandle,
+    private val pages: LocationPageRepository? = null,
 ) : ViewModel() {
     private val roundId: String = checkNotNull(saved["roundId"])
+
+    private val _known = MutableStateFlow<List<MapLocation>>(emptyList())
+    /** Every location you can use (public ones and your own private ones), by name, for the drop-down. */
+    val known: StateFlow<List<MapLocation>> = _known.asStateFlow()
+
+    fun chooseKnown(location: MapLocation, onDone: () -> Unit) =
+        choose(NearbyLocation(location.id, location.name, -1), onDone)
 
     val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
@@ -872,6 +911,11 @@ class RoundLocationViewModel(
     /** Called when the sheet opens. */
     fun load() {
         _taken.value = null
+        pages?.let { repo ->
+            viewModelScope.launch {
+                runCatching { repo.map() }.onSuccess { list -> _known.value = list.sortedBy { it.name.lowercase() } }
+            }
+        }
         viewModelScope.launch {
             _hasFix.value = locations.hasFix(roundId)
             if (!_hasFix.value) { _nearby.value = Load.Ready(emptyList()); return@launch }

@@ -30,6 +30,20 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.infowindow.InfoWindow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -65,9 +79,24 @@ fun LocationMapScreen(
     onOpenLocation: (MapLocation) -> Unit,
     /** Choosing a location for a round: tapping a pin's pop-up picks it instead of opening its page. */
     pickMode: Boolean = false,
+    /** Pick mode: the round being given a location (tap the map to name a new one there). */
+    roundId: String? = null,
+    /** Pick mode: called after a new location has been named and given to the round. */
+    onPicked: () -> Unit = {},
 ) {
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val locations by vm.locations.collectAsStateWithLifecycle()
+    val taken by vm.taken.collectAsStateWithLifecycle()
+    val message by vm.message.collectAsStateWithLifecycle()
+    var newAt by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    val snackbar = remember { SnackbarHostState() }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbar.showSnackbar(it)
+            vm.messageShown()
+        }
+    }
 
     LaunchedEffect(signedIn) { if (signedIn) vm.load() }
 
@@ -80,6 +109,7 @@ fun LocationMapScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
@@ -103,17 +133,95 @@ fun LocationMapScreen(
                         }
                     }
                     is Load.Ready -> {
-                        LocationMap(l.value, onOpenLocation, pickMode)
+                        LocationMap(
+                            l.value, onOpenLocation, pickMode,
+                            onMapTap = if (pickMode && roundId != null) { lat, lon -> newAt = lat to lon } else null,
+                        )
                         Legend(Modifier.align(Alignment.BottomStart).padding(12.dp), shot = l.value.count { it.myRounds > 0 }, total = l.value.size)
+                        if (pickMode) {
+                            Surface(
+                                Modifier.align(Alignment.TopCenter).padding(12.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shadowElevation = 2.dp,
+                            ) {
+                                Text(
+                                    "Tap a pin, then its name, to use it. Or tap the map where the shoot is to name a new location.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
+
+    val point = newAt
+    if (point != null && roundId != null) {
+        NewLocationDialog(
+            taken = taken?.name,
+            onDismiss = { newAt = null; vm.clearTaken() },
+            onSave = { name, private -> vm.createAt(roundId, name, point.first, point.second, private) { newAt = null; onPicked() } },
+            onUseExisting = { taken?.let { t -> vm.chooseExisting(roundId, t) { newAt = null; vm.clearTaken(); onPicked() } } },
+        )
+    }
+}
+
+/** Name a new location at the point tapped on the map. */
+@Composable
+private fun NewLocationDialog(
+    taken: String?,
+    onDismiss: () -> Unit,
+    onSave: (name: String, private: Boolean) -> Unit,
+    onUseExisting: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var private by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New shoot location") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Name the location at the point you tapped. It's used for this round.",
+                    style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(60) },
+                    label = { Text("Club or ground name") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Private", style = MaterialTheme.typography.bodyLarge)
+                        Text("Only you and admins see it", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = private, onCheckedChange = { private = it })
+                }
+                if (taken != null) {
+                    Text("There's already a location called \"$taken\".", color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = onUseExisting) { Text("Use $taken") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name, private) }, enabled = name.trim().length >= 2) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
-private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocation) -> Unit, pickMode: Boolean) {
+private fun LocationMap(
+    locations: List<MapLocation>,
+    onOpenLocation: (MapLocation) -> Unit,
+    pickMode: Boolean,
+    onMapTap: ((lat: Double, lon: Double) -> Unit)? = null,
+) {
+    val currentOnMapTap by rememberUpdatedState(onMapTap)
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shotColour = MaterialTheme.colorScheme.primary.toArgb()
@@ -127,6 +235,17 @@ private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocati
             minZoomLevel = 4.0
             controller.setZoom(6.0)
             controller.setCenter(GeoPoint(54.0, -2.5))   // Great Britain until the pins are placed
+            // Taps on the map itself (pins get theirs first): close any pop-up; in pick mode, name a new location there.
+            overlays.add(0, MapEventsOverlay(object : MapEventsReceiver {
+                override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                    InfoWindow.closeAllInfoWindowsOn(this@apply)
+                    val tap = currentOnMapTap ?: return false
+                    tap(p.latitude, p.longitude)
+                    return true
+                }
+
+                override fun longPressHelper(p: GeoPoint): Boolean = false
+            }))
         }
     }
 

@@ -129,7 +129,11 @@ class LocationRepository(
     suspend fun name(roundId: String, name: String, isPrivate: Boolean = false) {
         val round = dao.getRound(roundId) ?: return
         val lat = round.fixLat ?: throw ApiException(400, "no_position", "This round has no GPS position.")
-        val lon = round.fixLon!!
+        nameAt(roundId, name, lat, round.fixLon!!, isPrivate)
+    }
+
+    /** Names a new location at a point picked on the map, and gives it to the round. Same [NameTaken] rule. */
+    suspend fun nameAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false) {
         val json = try {
             call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
         } catch (e: ApiException) {

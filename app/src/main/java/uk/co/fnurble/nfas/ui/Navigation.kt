@@ -72,6 +72,8 @@ fun NfasNavHost() {
                 onProfile = { nav.navigate("profile") },
                 onOpenLocation = { loc -> vm.choose(roundId, loc) { nav.popBackStack() } },
                 pickMode = true,
+                roundId = roundId,
+                onPicked = { nav.popBackStack() },
             )
         }
         composable(
@@ -208,7 +210,7 @@ fun NfasNavHost() {
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScoringScreen(
                 vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved) },
-                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved) },
+                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.
                 onFinished = { nav.navigate(scorecardRoute(roundId)) { popUpTo("home") } },
@@ -222,7 +224,7 @@ fun NfasNavHost() {
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScorecardScreen(
                 vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved) },
-                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved) },
+                locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },

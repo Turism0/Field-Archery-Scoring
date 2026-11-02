@@ -27,6 +27,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -38,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import uk.co.fnurble.nfas.data.MapLocation
 import uk.co.fnurble.nfas.domain.LocationStatus
 import uk.co.fnurble.nfas.domain.RoundLocation
 import uk.co.fnurble.nfas.ui.Load
@@ -104,6 +110,7 @@ fun LocationSheet(
     val hasFix by vm.hasFix.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val taken by vm.taken.collectAsStateWithLifecycle()
+    val known by vm.known.collectAsStateWithLifecycle()
     var name by rememberSaveable { mutableStateOf("") }
     var private by rememberSaveable { mutableStateOf(false) }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -131,6 +138,9 @@ fun LocationSheet(
             ) {
                 Icon(Icons.Filled.LocationOn, contentDescription = null, Modifier.size(18.dp))
                 Text("Choose on map", Modifier.padding(start = 8.dp))
+            }
+            if (known.isNotEmpty()) {
+                KnownLocationsDropdown(known, enabled = !busy) { vm.chooseKnown(it, onDismiss) }
             }
 
             if (!hasFix) {
@@ -223,6 +233,33 @@ fun LocationSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+/** Drop-down of every location you can use (public ones and your own private ones), by name. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun KnownLocationsDropdown(known: List<MapLocation>, enabled: Boolean, onPick: (MapLocation) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { if (enabled) open = it }) {
+        OutlinedTextField(
+            value = "",
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            placeholder = { Text("Pick a known location") },
+            label = { Text("Known locations") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            modifier = Modifier.fillMaxWidth().menuAnchor(MenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            known.forEach { loc ->
+                DropdownMenuItem(
+                    text = { Text(loc.name + if (loc.isPrivate) " (private)" else "") },
+                    onClick = { open = false; onPick(loc) },
+                )
+            }
         }
     }
 }
