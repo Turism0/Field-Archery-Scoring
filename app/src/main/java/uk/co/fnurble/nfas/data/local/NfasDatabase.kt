@@ -112,6 +112,27 @@ abstract class RoundDao {
         upsertAnimals(animals)
     }
 
+    // ---- Editing round details ----
+
+    @Query("DELETE FROM animal WHERE round_id = :roundId AND target_no > :count")
+    abstract suspend fun deleteAnimalsAbove(roundId: String, count: Int)
+
+    @Query("DELETE FROM target WHERE round_id = :roundId AND target_no > :count")
+    abstract suspend fun deleteTargetsAbove(roundId: String, count: Int)
+
+    /**
+     * New date / class / age group / bow style / number of targets for a round: targets above the new count
+     * go, new ones are added unscored, and the stored total is worked out again.
+     */
+    @Transaction
+    open suspend fun updateDetails(round: RoundEntity, addedTargets: List<TargetEntity>, addedAnimals: List<AnimalEntity>) {
+        deleteAnimalsAbove(round.id, round.targetCount)
+        deleteTargetsAbove(round.id, round.targetCount)
+        addedTargets.forEach { upsertTarget(it) }
+        upsertAnimals(addedAnimals)
+        upsertRound(round.copy(totalPoints = sumPoints(round.id)))
+    }
+
     // ---- Shoot locations ----
 
     /** Position taken at the start of a round; looked up later. Doesn't count as an edit. */

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -975,6 +976,57 @@ class RoundLocationViewModel(
             } finally {
                 _busy.value = false
             }
+        }
+    }
+}
+
+// ---------------- Edit round details ----------------
+
+data class EditRoundForm(
+    val shootDate: LocalDate,
+    val targetCountText: String,
+    val archerClass: ArcherClass,
+    val ageGroup: AgeGroup,
+    val bowStyle: BowStyle,
+    /** As the round is now, to warn about removing scored targets. */
+    val original: Round,
+) {
+    val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
+
+    /** Scored targets that a lower target count would remove. */
+    val scoredRemoved: List<Int>
+        get() = targetCount?.let { n -> original.targets.filter { it.targetNo > n && it.isComplete }.map { it.targetNo } }.orEmpty()
+
+    /** More targets on a finished round reopens it. */
+    val reopens: Boolean get() = (targetCount ?: 0) > original.targetCount && original.status == RoundStatus.COMPLETED
+
+    val changed: Boolean
+        get() = shootDate != original.shootDate || targetCount != original.targetCount || archerClass != original.archerClass ||
+            ageGroup != original.ageGroup || bowStyle != original.bowStyle
+}
+
+/** Edit a round's details: date, number of targets, class, age group, bow style. Nav arg "roundId". */
+class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateHandle) : ViewModel() {
+    private val roundId: String = checkNotNull(saved["roundId"])
+
+    private val _form = MutableStateFlow<EditRoundForm?>(null)
+    val form: StateFlow<EditRoundForm?> = _form.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val r = rounds.round(roundId).first { it != null }!!
+            _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle, r)
+        }
+    }
+
+    fun update(change: (EditRoundForm) -> EditRoundForm) = _form.update { it?.let(change) }
+
+    fun save(onDone: () -> Unit) {
+        val f = _form.value ?: return
+        val count = f.targetCount ?: return
+        viewModelScope.launch {
+            rounds.updateDetails(roundId, f.shootDate, count, f.archerClass, f.ageGroup, f.bowStyle)
+            onDone()
         }
     }
 }

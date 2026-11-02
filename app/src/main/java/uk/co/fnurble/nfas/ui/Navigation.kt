@@ -12,6 +12,7 @@ import uk.co.fnurble.nfas.ui.screens.AccountScreen
 import uk.co.fnurble.nfas.ui.screens.AdminDuplicatesScreen
 import uk.co.fnurble.nfas.ui.screens.AdminLocationsScreen
 import uk.co.fnurble.nfas.ui.screens.AdminScreen
+import uk.co.fnurble.nfas.ui.screens.EditRoundScreen
 import uk.co.fnurble.nfas.ui.screens.FriendRoundsScreen
 import uk.co.fnurble.nfas.ui.screens.FriendScorecardScreen
 import uk.co.fnurble.nfas.ui.screens.FriendsScreen
@@ -57,6 +58,16 @@ fun NfasNavHost() {
                 onBack = { nav.popBackStack() },
                 onProfile = { nav.navigate("profile") },
                 onOpenLocation = { loc -> nav.navigate("location/${loc.id}") },
+            )
+        }
+        // Edit a round's details (date, targets, class, age group, bow style).
+        composable(
+            "editRound/{roundId}",
+            arguments = listOf(navArgument("roundId") { type = NavType.StringType }),
+        ) {
+            EditRoundScreen(
+                vm = appViewModel { c, saved -> EditRoundViewModel(c.roundRepository, saved) },
+                onBack = { nav.popBackStack() },
             )
         }
         // Choose a round's location on the map (from the location sheet).
@@ -215,6 +226,7 @@ fun NfasNavHost() {
                 // Finishing shows the scorecard; back from there goes home.
                 onFinished = { nav.navigate(scorecardRoute(roundId)) { popUpTo("home") } },
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },
+                onEditDetails = { nav.navigate("editRound/$roundId") },
             )
         }
         composable(
@@ -228,6 +240,7 @@ fun NfasNavHost() {
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },
+                onEditDetails = { nav.navigate("editRound/$roundId") },
             )
         }
     }

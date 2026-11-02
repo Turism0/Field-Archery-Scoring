@@ -142,6 +142,39 @@ class RoundRepository(
         onChanged()
     }
 
+    /**
+     * Edits a round's details (what was chosen when it was created). Fewer targets removes the ones above the
+     * new count; more targets adds unscored ones and reopens a finished round so they can be scored.
+     */
+    suspend fun updateDetails(
+        roundId: String,
+        shootDate: LocalDate,
+        targetCount: Int,
+        archerClass: ArcherClass,
+        ageGroup: AgeGroup,
+        bowStyle: BowStyle,
+    ) {
+        require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
+        val r = dao.getRound(roundId) ?: return
+        val now = Instant.now(clock)
+        val added = (r.targetCount + 1..targetCount).map { TargetScore(it) }
+        dao.updateDetails(
+            round = r.copy(
+                shootDate = shootDate,
+                targetCount = targetCount,
+                archerClass = archerClass,
+                ageGroup = ageGroup,
+                bowStyle = bowStyle,
+                status = if (added.isNotEmpty()) RoundStatus.IN_PROGRESS else r.status,
+                updatedAt = now,
+                syncState = SyncState.PENDING,
+            ),
+            addedTargets = added.map { it.toEntity(roundId, now) },
+            addedAnimals = added.flatMap { it.toAnimalEntities(roundId) },
+        )
+        onChanged()
+    }
+
     suspend fun setStatus(roundId: String, status: RoundStatus) = touch(roundId) { it.copy(status = status) }
 
     suspend fun delete(roundId: String) = touch(roundId) { it.copy(deleted = true) }

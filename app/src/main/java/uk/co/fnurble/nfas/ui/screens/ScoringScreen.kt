@@ -84,6 +84,7 @@ fun ScoringScreen(
     onBack: () -> Unit,
     onFinished: () -> Unit,
     onPickLocation: () -> Unit,
+    onEditDetails: () -> Unit,
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
@@ -98,6 +99,8 @@ fun ScoringScreen(
 
     val r = round
     LaunchedEffect(r != null) { if (r != null) vm.ensureTargetSelected(r) }
+    // Round details changed (e.g. fewer targets): make sure the open target still exists.
+    LaunchedEffect(r?.targetCount) { if (r != null) vm.ensureTargetSelected(r) }
     // Nothing known nearby: ask for the location's name once (they can also tap the location line later).
     LaunchedEffect(r?.location?.status) {
         if (r?.location?.status == LocationStatus.NEEDS_NAME && !askedForName) {
@@ -140,6 +143,7 @@ fun ScoringScreen(
                                 } else {
                                     DropdownMenuItem(text = { Text("Finish round") }, onClick = { menuOpen = false; confirmFinish = true })
                                 }
+                                DropdownMenuItem(text = { Text("Round details") }, onClick = { menuOpen = false; onEditDetails() })
                                 DropdownMenuItem(text = { Text("Delete round") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }

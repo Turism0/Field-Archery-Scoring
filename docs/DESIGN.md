@@ -86,6 +86,7 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
       ├─ history ──(finished round)──▶ card/{id} ──edit / tap target──▶ round/{id}?target=n ◀──┘
       ├─ friends ─▶ friend/{archerId}/{username} ─▶ friendCard/{archerId}/{username}/{roundId}  (read-only)
       │   (round/{id} or card/{id} → location sheet → pickLocation/{roundId}: the map in pick mode)
+      │   (round/{id} or card/{id} ⋮ → editRound/{roundId}: date, targets, class, age group, bow style)
       ├─ map ─▶ location/{locationId} ─┬▶ card/{roundId}  (yours)
       │                                 └▶ friendCard/…    (a friend's, read-only)
       ├─ admin ─┬▶ adminDuplicates  (possible duplicate locations: merge / approve)

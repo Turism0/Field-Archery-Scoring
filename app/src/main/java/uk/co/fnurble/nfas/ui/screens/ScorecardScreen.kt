@@ -67,6 +67,7 @@ fun ScorecardScreen(
     onBack: () -> Unit,
     onEdit: (targetNo: Int) -> Unit,
     onPickLocation: () -> Unit,
+    onEditDetails: () -> Unit,
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -92,6 +93,7 @@ fun ScorecardScreen(
                                     onClick = { menuOpen = false; vm.reopen() },
                                 )
                             }
+                            DropdownMenuItem(text = { Text("Edit round details") }, onClick = { menuOpen = false; onEditDetails() })
                             DropdownMenuItem(text = { Text("Delete round") }, onClick = { menuOpen = false; confirmDelete = true })
                         }
                     }
