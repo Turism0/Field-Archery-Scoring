@@ -33,7 +33,20 @@
    3. **Round types:** *Done: DB + API 1.9.01, app 1.9.05.* Phone database v3: `round.round_type` (null = Big Game), `target.arrows` (W/K/M); target type WOODSMAN has no animal rows. Woodsman stats are per target (out of 30).
       - 3a. Groundwork: `RoundType` table and a type on every round (server and phone), per-type rules in the API, Big Game-only database checks relaxed; uploads without a type count as Big Game.
       - 3b. **Woodsman:** single animal per target; shoot until you kill, up to 3 arrows; wound 5 on any arrow; kill 30 / 20 / 10 on the 1st / 2nd / 3rd arrow; miss 0 (e.g. wound + kill 25; miss, wound, kill 15; three wounds 15; max 30). Needs each arrow recorded, so a per-arrow field. Own scoring screen, scorecard and stats; type shown in history and to friends; friends' summaries per type.
-4. Later: group scoring (one phone scoring several archers); more history and stats
+4. **Group scoring** (agreed 2 Nov 2026). *Server done in 1.9.06 (to be tested); app next.* A group shoots the same round type, number of targets, date and location; each archer keeps their own class, age group and bow style. Members: **joined** archers (own phone, account), **friends** added by the scorer (account, not joined) and **guests** (name only).
+   - **Scoring methods** (chosen by the host when the group starts):
+      1. **Single scorer, others viewing.** One phone enters every score; joined archers watch the live table on their own phones. With no one joined this is plain one-phone group scoring.
+      2. **Double scoring.** Two scorers enter every archer's score; a score is saved only when both entries match. If they differ, both phones show both entries and both re-enter until they match.
+      3. **Three or more scorers.** Nobody scores their own card; every card is scored by two different people; cards are shared out as evenly as possible (each scorer has the same number of cards, or one more). Saved only when the two entries match, as in 2. Needs at least 3 scorers. Assignment: each card in turn goes to the two least-loaded scorers who aren't that archer (ties by join order), so with everyone scoring, each scorer gets exactly two cards.
+      4. **Self scoring.** Each archer scores their own round on their own phone, no checking; live table for everyone.
+   - **Order of play (methods 1–3):** per target, go through the group one archer at a time ("Now: Dave") so the archer calls their score and the scorer(s) for that card enter it; when it's saved (and matched) move to the next archer; after the whole group, the next target. Phones not scoring the current archer show who is being scored and by whom.
+   - **Whose rounds:** joined archers' rounds go **straight into their history** (joining counts as agreeing; they can edit or delete later). **Friends** added without joining get a **request** to accept (Friends screen badge); decline deletes it. **Guests**: group scorecard only, never in anyone's history or the all-archer stats; kept on the scoring phone and, for a live group, on the server with the group; both deleted 30 days after.
+   - **Joining:** the host's phone shows a **6-character code** and a **QR code** holding it; others type it or scan it. Needs an account; being friends isn't needed (you're standing together). The group shows usernames only. The code stops working when the host closes the group or after 24 hours.
+   - **Signal – both ways.** With signal, phones exchange entries through the server (live table refreshed every few seconds). With no signal, phones link **directly** (Google Nearby Connections: Bluetooth / Wi-Fi, the host's phone is the hub) so matching still works target by target; everything reaches the server when there's signal. The host's phone makes the group id and code itself, so a group can start with no signal; the server records it later.
+   - **Server (1.9.06):** schema v6 – `ScoreGroup` (id made by the host phone, code, host, method, round type, targets, date, location, closed / expiry), `ScoreGroupMember` (account or guest name, joined or added, join order, round), `ScoreGroupScorer` (card → scorer, two per card for methods 2–3), `ScoreEntry` (target, card, scorer, entry, time) for matching through the server; `Round.GroupId`, `Round.ScoredById` and an offered state for friends' requests; in-progress uploads allowed for group rounds only. Endpoints: create / join / close group, entries in and out (since a time), live table, offers list / accept / decline.
+   - **App releases:** 2.0 = one phone scores the group (friends' requests, guests); 2.1 = live groups through the server (join by code and QR, all four methods, live table); 2.2 = phone to phone with no signal.
+   - **Libraries:** `com.google.zxing:core` to draw the QR (no permissions); Google code scanner (`play-services-code-scanner`, no camera permission, needs Google Play services); Nearby Connections (`play-services-nearby`, needs nearby-devices / Bluetooth permissions) for 2.2. Build files diffed against Pete's before adding.
+5. **History and stats** (after group scoring): trends over time, personal bests, filtered history, season summary.
 
 ## Architecture
 
@@ -101,7 +114,7 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
-## Server data model (SQL Server 2025 on Mimir) — schema version 5
+## Server data model (SQL Server 2025 on Mimir) — schema version 6
 
 Scripts in `server/sql/`, run in order in SSMS:
 
@@ -126,12 +139,17 @@ Scripts in `server/sql/`, run in order in SSMS:
 | `Friendship` | `ArcherLowId` + `ArcherHighId` | One row per pair: who asked, PENDING / ACCEPTED, dates. Declining or removing deletes the row |
 | `vFriend` (view) | | Accepted friends in both directions |
 | `SchemaVersion` | `Version` | Applied schema scripts |
+| `ScoreGroup` (v6) | `GroupId` (made by the host's phone) | Code, host, method, round type, targets, date, location, OPEN / STARTED / CLOSED. Deleted after 30 days |
+| `ScoreGroupMember` (v6) | `GroupId` + `MemberId` | HOST / JOINED / FRIEND (archer) or GUEST (name), class, age group, bow style, order, round id |
+| `ScoreGroupScorer` (v6) | `GroupId` + card + scorer | Who scores each card (one or two scorers) |
+| `ScoreEntry` (v6) | `GroupId` + target + card + scorer | Each scorer's entry (the target as JSON, points, when entered); matched by the API |
+| `RoundOffer` (v6) | `RoundId` | A finished round scored for a friend (as JSON, with a summary), waiting for them to accept; then it's written to `Round` with `ScoredById` |
 
 Decisions:
 
 - **Shared tables keyed by `ArcherId`, not one table per user.** Friends' scorecards are a simple join, schema changes happen once, and the API restricts every query to the signed-in archer and their accepted friends.
 - Deleting a round or archer cascades to scores and tokens. Friendships don't cascade (SQL Server allows only one cascade path to `Archer`), so the API removes them first.
-- Conflict handling: last write wins on `ClientUpdatedUtc` per round (only one phone edits a round until group scoring arrives).
+- Conflict handling: last write wins on `ClientUpdatedUtc` per round (only one phone edits a round; in groups each archer's phone uploads their own round, built from the matched entries).
 - Friends see **finished rounds only** (`Status = 'COMPLETED'`, not deleted), read-only. Every friends query checks `vFriend` (accepted, either direction); anything else is "not found".
 - Sending a request to someone who has already asked you accepts it. Declining, cancelling and unfriending all delete the row.
 - Friend summaries (rounds, best, latest, average per animal) are worked out by the API from finished rounds; the average divides total points by all animals on those rounds, so it can differ slightly from the app's (which skips unscored targets).

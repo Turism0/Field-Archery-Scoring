@@ -17,11 +17,13 @@ public sealed record RoundDto(
     // GPS have none. An unknown id is stored as no location rather than refusing the round.
     Guid? LocationId = null,
     // BIG_GAME (default, and what older apps mean) or WOODSMAN (schema v5).
-    string? RoundType = null);
+    string? RoundType = null,
+    // The scoring group the round was shot in (schema v6), if any.
+    Guid? GroupId = null);
 
 public sealed record TargetDto(
     int TargetNo,
-    string Type,                 // STANDARD / PREDATOR_PREY / FAN
+    string Type,                 // STANDARD / PREDATOR_PREY / FAN / WOODSMAN
     int? OverridePoints,
     int Points,
     IReadOnlyList<AnimalDto> Animals,

@@ -36,7 +36,7 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | POST | `/api/auth/register` | `{ username, password, deviceName }` | 201 `{ archerId, username, token, expiresUtc }`; 409 `username_taken` |
 | POST | `/api/auth/login` | `{ username, password, deviceName }` | 200 as above; 401 `invalid_credentials`; 423 `locked_out` |
 | POST | `/api/auth/logout` | `Authorization: Bearer <token>` | 204, revokes this phone's token |
-| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users) |
+| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users); `roundOffers` is the number of rounds friends have scored for you, waiting to be accepted |
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
@@ -48,6 +48,18 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | GET | `/api/friends/{archerId}/rounds/{roundId}` | Bearer token | One finished round with targets and animals (read-only) |
 | GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
 
+| PUT | `/api/groups/{groupId}` | Host; `{ code, method, roundType, targetCount, shootDate, locationId, status, members, order?, scorers? }` | The group (as GET). The host's phone makes the id and the 6-character code (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`). `method`: `SINGLE` (one scorer, others watching), `DOUBLE` (two scorers, saved when both match), `MULTI` (3+ scorers, nobody scores their own card, two per card, shared evenly), `SELF`. `status`: `OPEN` → `STARTED` → `CLOSED`. `members`: the host (`HOST`), friends added by name (`FRIEND`, must be friends) and guests (`GUEST`, `guestName`), each `{ memberId, kind, archerId?, guestName?, archerClass, ageGroup, bowStyle, roundId? }`; archers who joined stay. `scorers`: `[{ cardMemberId, scorerMemberId }]`; left out when starting = the usual ones. 409 `code_taken` / `group_started` / `group_closed`; 400 `invalid_group` / `invalid_scorers` with `problems` |
+| POST | `/api/groups/join` | `{ code, groupId?, memberId, archerClass, ageGroup, bowStyle, roundId? }` | The group. Joining again updates your details; a friend the host added becomes a joined member. 404 `no_such_group` if no open group has the code (codes last 24 hours or until closed) |
+| GET | `/api/groups` | Bearer token | `{ groups: [...] }`: groups you're in, last 30 days, newest first |
+| GET | `/api/groups/{groupId}?since=` | Members only | `{ group fields, me, members: [{ memberId, kind, archerId, name, …, scorers }], entries, cells: [{ targetNo, cardMemberId, state, points }], totals: [{ memberId, points, targetsDone }], serverTimeUtc }`. `entries` changed after `since` (pass the last `serverTimeUtc`); `state` `WAITING` / `MATCHED` / `MISMATCH` |
+| PUT | `/api/groups/{groupId}/entries` | Scorers; `{ entries: [{ targetNo, cardMemberId, scorerMemberId, target, enteredUtc }] }` | `{ results: [{ targetNo, cardMemberId, state, points }] }`. `target` is one target as in a round upload, checked against the rules. A newer entry from the same scorer replaces the older one. Your own entries (the host may pass on others'). |
+| DELETE | `/api/groups/{groupId}/members/{memberId}` | Host, or the archer themselves | 204; 409 `is_host` |
+| PUT | `/api/offers/{roundId}` | `{ forArcherId, groupId?, round }` | `{ roundId, result: "offered" }`: a finished round you scored for a friend, waiting for them. Send again to correct it. 404 `not_a_friend`; 409 `round_exists` once accepted |
+| GET | `/api/offers` | Bearer token | `{ received: [...], sent: [...] }` summaries (who, date, type, class, bow, total, location) |
+| GET | `/api/offers/{roundId}` | The friend or the scorer | `{ offer, round }` |
+| POST | `/api/offers/{roundId}/accept` | The friend | `{ roundId, result: "accepted", serverUpdatedUtc }`: now the friend's round (downloads to their phones on the next sync) |
+| POST | `/api/offers/{roundId}/decline` | The friend | 204, deleted |
+| DELETE | `/api/offers/{roundId}` | The scorer | 204, withdrawn |
 | GET | `/api/admin/archers` | Bearer token, Admin or Owner | `{ archers: [{ archerId, username, role, createdUtc, lastLoginUtc }] }`, Owner first, then Admins; 403 `not_admin` |
 | PUT | `/api/admin/archers/{archerId}/role` | Bearer token, Owner only; `{ role: "ADMIN" \| "USER" }` | `{ archerId, username, role }`; 403 `not_owner` / `not_admin`; 400 `invalid_role`; 404 `no_such_archer`; 409 `cannot_change_owner` |
 | GET | `/api/locations/nearby?lat=&lon=&radius=` | Bearer token | `{ locations: [{ locationId, name, distanceMetres }], catchmentMetres }`, nearest first. Radius in metres: default the catchment (402 m, a quarter mile, `Locations:CatchmentMetres`), max 10 km. The position isn't stored. |
@@ -81,6 +93,9 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
 - Optional `"locationId"`: the shoot location. An id that was merged is stored as the location kept; an unknown id is stored as no location (the round is still saved). Downloads include `locationId` and `locationName`.
 - Same round id again is safe: the copy with the later `clientUpdatedUtc` wins, an equal or older copy is ignored (`unchanged`).
 - A round id belonging to another archer is reported as not found.
+- Optional `"groupId"`: the scoring group it was shot in (kept if you're in that group). Group rounds can be uploaded while in progress so the group sees scores as they go.
+
+**Groups are temporary.** A group, with its members (guests' names too), scorers and entries, is deleted 30 days after it was made (whenever a new group starts). Members' own rounds and accepted rounds are kept as normal; rounds waiting to be accepted are kept until answered.
 
 `ForwardedHeaders:KnownProxies` in `appsettings.json` is the address Nginx Proxy Manager connects to Odin
 from (set to Heimdall, `192.168.0.6`). If it's wrong the API still works, but every phone shares one
@@ -115,6 +130,16 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing group scoring (1.9.06)
+
+```powershell
+.\Test-Groups.ps1
+.\Test-Offers.ps1
+```
+
+`Test-Groups.ps1`: five test accounts. Join by code (wrong code, case, joining twice, code clash, closed group), who can see a group, the four methods – single scorer (everyone scored by the host, others can't), double scoring (waiting, matched, mismatch then re-entry, non-scorers refused), three or more scorers (needs three phones, nobody scores their own card, two per card, shared evenly, re-shared when someone joins or leaves) and self scoring – live totals, `since=`, leaving and removing, closing, and uploading a round with the group id.
+`Test-Offers.ps1`: three test accounts. A round scored for a friend waits as a request (badge count, not in their rounds), can be corrected, accepted (then it's theirs and downloads), declined or withdrawn; not to non-friends, yourself or for unfinished rounds. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing Woodsman rounds (1.9.01)
 

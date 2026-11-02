@@ -77,6 +77,16 @@ public static class RoundValidator
         return problems;
     }
 
+    /// <summary>Checks one target on its own (a group score entry) against the rules for the round type.</summary>
+    public static List<string> ValidateEntry(string roundType, TargetDto t)
+    {
+        var problems = new List<string>();
+        if (roundType == Woodsman) ValidateWoodsmanTarget(t, problems);
+        else if (t.Type == Woodsman) problems.Add($"Target {t.TargetNo}: a Big Game round can't use a Woodsman target.");
+        else ValidateTarget(t, problems);
+        return problems;
+    }
+
     private static void ValidateWoodsmanTarget(TargetDto t, List<string> problems)
     {
         var where = $"Target {t.TargetNo}";

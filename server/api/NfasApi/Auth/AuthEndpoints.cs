@@ -13,7 +13,7 @@ namespace NfasApi.Auth;
 ///   POST /api/auth/register  { username, password, deviceName }  → 201 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/login     { username, password, deviceName }  → 200 { archerId, username, token, expiresUtc }
 ///   POST /api/auth/logout    (Bearer token)                      → 204, revokes this phone's token
-///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role, duplicateLocations }
+///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role, duplicateLocations, roundOffers }
 /// Errors are JSON: { error: "code", message: "text for the user" }.
 /// </summary>
 public static partial class AuthEndpoints
@@ -168,7 +168,9 @@ public static partial class AuthEndpoints
         var duplicateLocations = me.Role is Roles.Admin or Roles.Owner
             ? await NfasApi.Locations.LocationEndpoints.DuplicateCountAsync(conn, config, ct)
             : 0;
-        return Results.Ok(new { me.ArcherId, me.Username, me.CreatedUtc, me.Role, duplicateLocations });
+        // Rounds friends have scored for you, waiting to be accepted (badge on the Friends tile).
+        var roundOffers = await NfasApi.Offers.OfferEndpoints.CountForAsync(conn, me.ArcherId, ct);
+        return Results.Ok(new { me.ArcherId, me.Username, me.CreatedUtc, me.Role, duplicateLocations, roundOffers });
     }
 
     private static IResult? UsernameProblem(string username) =>

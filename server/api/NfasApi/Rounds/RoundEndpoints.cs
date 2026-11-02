@@ -59,71 +59,23 @@ public static class RoundEndpoints
             return Results.Ok(new { roundId, result = "unchanged", serverUpdatedUtc = existing.ServerUpdatedUtc });
         }
 
-        // Store the location the id stands for now (it may have been merged); unknown → none.
-        Guid? locationId = round.LocationId is { } lid
-            && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc
-            ? loc.LocationId
+        // A group id is kept if the archer is in that group (or the group has already been deleted: they're temporary).
+        Guid? groupId = round.GroupId is { } gid
+            && await conn.ExecuteScalarAsync<int>(new CommandDefinition("""
+                SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM dbo.ScoreGroup WHERE GroupId = @gid)
+                              OR EXISTS (SELECT 1 FROM dbo.ScoreGroupMember WHERE GroupId = @gid AND ArcherId = @archerId)
+                            THEN 1 ELSE 0 END;
+                """, new { gid, archerId }, tx, cancellationToken: ct)) == 1
+            ? gid
             : null;
 
-        var p = new
-        {
-            roundId,
-            locationId,
-            archerId,
-            shootDate = round.ShootDate.ToDateTime(TimeOnly.MinValue),
-            round.TargetCount,
-            round.ArcherClass,
-            round.AgeGroup,
-            round.BowStyle,
-            round.Status,
-            round.TotalPoints,
-            clientCreatedUtc = Trim(round.ClientCreatedUtc),
-            clientUpdatedUtc = Trim(round.ClientUpdatedUtc),
-            roundType = RoundValidator.TypeOf(round),
-        };
-        var sql = existing is null
-            ? """
-              INSERT dbo.Round (RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status,
-                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc, LocationId, RoundType)
-              VALUES (@roundId, @archerId, @shootDate, @TargetCount, @ArcherClass, @AgeGroup, @BowStyle, @Status,
-                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME(), @locationId, @roundType);
-              """
-            : """
-              UPDATE dbo.Round
-              SET ShootDate = @shootDate, TargetCount = @TargetCount, ArcherClass = @ArcherClass, AgeGroup = @AgeGroup,
-                  BowStyle = @BowStyle, Status = @Status, TotalPoints = @TotalPoints, IsDeleted = 0,
-                  ClientCreatedUtc = @clientCreatedUtc, ClientUpdatedUtc = @clientUpdatedUtc, ServerUpdatedUtc = SYSUTCDATETIME(),
-                  LocationId = @locationId, RoundType = @roundType
-              WHERE RoundId = @roundId;
-              DELETE dbo.TargetScore WHERE RoundId = @roundId;   -- animals go with them (cascade)
-              """;
-        await conn.ExecuteAsync(new CommandDefinition(sql, p, tx, cancellationToken: ct));
-
-        await conn.ExecuteAsync(new CommandDefinition("""
-            INSERT dbo.TargetScore (RoundId, TargetNo, TargetType, OverridePoints, Points, Arrows)
-            VALUES (@roundId, @TargetNo, @Type, @OverridePoints, @Points, @arrows);
-            """,
-            round.Targets.Select(t => new
-            {
-                roundId, t.TargetNo, t.Type, t.OverridePoints, t.Points,
-                arrows = t.Type == RoundValidator.Woodsman ? (t.Arrows ?? "") : null,
-            }),
-            tx, cancellationToken: ct));
-
-        await conn.ExecuteAsync(new CommandDefinition("""
-            INSERT dbo.AnimalScore (RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points)
-            VALUES (@roundId, @TargetNo, @Index, @State, @ArrowNo, @Hit, @Points);
-            """,
-            round.Targets.SelectMany(t => t.Animals.Select(a =>
-                new { roundId, t.TargetNo, a.Index, a.State, a.ArrowNo, a.Hit, a.Points })),
-            tx, cancellationToken: ct));
-
-        var serverUpdated = await conn.ExecuteScalarAsync<DateTime>(new CommandDefinition(
-            "SELECT ServerUpdatedUtc FROM dbo.Round WHERE RoundId = @roundId;", new { roundId }, tx, cancellationToken: ct));
-
+        var serverUpdated = await RoundWriter.SaveAsync(conn, tx, roundId, round, archerId, existing is not null, groupId, null, ct);
         await tx.CommitAsync(ct);
         return Results.Ok(new { roundId, result = "saved", serverUpdatedUtc = serverUpdated });
     }
+
+    /// <summary>SQL datetime2(3) keeps milliseconds; trim so comparisons with stored values are exact.</summary>
+    internal static DateTime TrimUtc(DateTime utc) => Trim(utc);
 
     private static async Task<IResult> Get(Guid roundId, ClaimsPrincipal user, Db db, CancellationToken ct)
     {
@@ -179,6 +131,82 @@ public static class RoundEndpoints
     }
 
     private sealed record ExistingRound(Guid ArcherId, DateTime ClientUpdatedUtc, DateTime ServerUpdatedUtc);
+}
+
+/// <summary>Writes a checked round (insert or full replace) for an archer. Used by uploads and accepted requests.</summary>
+public static class RoundWriter
+{
+    public static async Task<DateTime> SaveAsync(
+        Microsoft.Data.SqlClient.SqlConnection conn, System.Data.Common.DbTransaction tx, Guid roundId, RoundDto round,
+        Guid archerId, bool exists, Guid? groupId, Guid? scoredById, CancellationToken ct)
+    {
+        // Store the location the id stands for now (it may have been merged); unknown → none.
+        Guid? locationId = round.LocationId is { } lid
+            && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc
+            ? loc.LocationId
+            : null;
+
+        var p = new
+        {
+            roundId,
+            locationId,
+            archerId,
+            shootDate = round.ShootDate.ToDateTime(TimeOnly.MinValue),
+            round.TargetCount,
+            round.ArcherClass,
+            round.AgeGroup,
+            round.BowStyle,
+            round.Status,
+            round.TotalPoints,
+            clientCreatedUtc = RoundEndpoints.TrimUtc(round.ClientCreatedUtc),
+            clientUpdatedUtc = RoundEndpoints.TrimUtc(round.ClientUpdatedUtc),
+            roundType = RoundValidator.TypeOf(round),
+            groupId,
+            scoredById,
+        };
+        var sql = !exists
+            ? """
+              INSERT dbo.Round (RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status,
+                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc, LocationId, RoundType,
+                                GroupId, ScoredById)
+              VALUES (@roundId, @archerId, @shootDate, @TargetCount, @ArcherClass, @AgeGroup, @BowStyle, @Status,
+                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME(), @locationId, @roundType,
+                      @groupId, @scoredById);
+              """
+            : """
+              UPDATE dbo.Round
+              SET ShootDate = @shootDate, TargetCount = @TargetCount, ArcherClass = @ArcherClass, AgeGroup = @AgeGroup,
+                  BowStyle = @BowStyle, Status = @Status, TotalPoints = @TotalPoints, IsDeleted = 0,
+                  ClientCreatedUtc = @clientCreatedUtc, ClientUpdatedUtc = @clientUpdatedUtc, ServerUpdatedUtc = SYSUTCDATETIME(),
+                  LocationId = @locationId, RoundType = @roundType,
+                  GroupId = COALESCE(@groupId, GroupId), ScoredById = COALESCE(@scoredById, ScoredById)
+              WHERE RoundId = @roundId;
+              DELETE dbo.TargetScore WHERE RoundId = @roundId;   -- animals go with them (cascade)
+              """;
+        await conn.ExecuteAsync(new CommandDefinition(sql, p, tx, cancellationToken: ct));
+
+        await conn.ExecuteAsync(new CommandDefinition("""
+            INSERT dbo.TargetScore (RoundId, TargetNo, TargetType, OverridePoints, Points, Arrows)
+            VALUES (@roundId, @TargetNo, @Type, @OverridePoints, @Points, @arrows);
+            """,
+            round.Targets.Select(t => new
+            {
+                roundId, t.TargetNo, t.Type, t.OverridePoints, t.Points,
+                arrows = t.Type == RoundValidator.Woodsman ? (t.Arrows ?? "") : null,
+            }),
+            tx, cancellationToken: ct));
+
+        await conn.ExecuteAsync(new CommandDefinition("""
+            INSERT dbo.AnimalScore (RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points)
+            VALUES (@roundId, @TargetNo, @Index, @State, @ArrowNo, @Hit, @Points);
+            """,
+            round.Targets.SelectMany(t => t.Animals.Select(a =>
+                new { roundId, t.TargetNo, a.Index, a.State, a.ArrowNo, a.Hit, a.Points })),
+            tx, cancellationToken: ct));
+
+        return await conn.ExecuteScalarAsync<DateTime>(new CommandDefinition(
+            "SELECT ServerUpdatedUtc FROM dbo.Round WHERE RoundId = @roundId;", new { roundId }, tx, cancellationToken: ct));
+    }
 }
 
 /// <summary>Loads a stored round with its targets and animals.</summary>
