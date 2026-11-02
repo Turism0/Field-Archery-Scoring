@@ -2,7 +2,7 @@
 <#
     NFAS API – roles and admin tests (roadmap step 1). Run in PowerShell 7 (pwsh):
 
-        .\Test-Roles.ps1 -Username pete                                  # against https://nfas.fnurble.co.uk
+        .\Test-Roles.ps1 -Username pete                                  # against https://fieldarchery.fnurble.co.uk
         .\Test-Roles.ps1 -Username pete -BaseUrl http://localhost:8085   # on Odin, straight to IIS
 
     -Username is the Owner account (the one set in 004_roles.sql); it asks for its password.
@@ -12,7 +12,7 @@
 #>
 param(
     [Parameter(Mandatory)][string]$Username,
-    [string]$BaseUrl = 'https://nfas.fnurble.co.uk'
+    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk'
 )
 
 $ErrorActionPreference = 'Stop'

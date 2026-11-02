@@ -9,7 +9,7 @@
     Three throwaway accounts (zz_test_…): A and B are friends, C isn't.
     Every line should start with OK. Tidy up afterwards with server/sql/900_delete_test_accounts.sql.
 #>
-param([string]$BaseUrl = 'https://nfas.fnurble.co.uk')
+param([string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk')
 
 $ErrorActionPreference = 'Stop'
 $script:problems = 0

@@ -2,13 +2,13 @@
 <#
     NFAS API – step 5a round upload tests. Run in PowerShell 7 (pwsh):
 
-        .\Test-Rounds.ps1                                   # against https://nfas.fnurble.co.uk
+        .\Test-Rounds.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Rounds.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS
 
     Creates two throwaway accounts (zz_test_…) and one round. Remove them afterwards with
     server/sql/900_delete_test_accounts.sql. Every line should start with OK.
 #>
-param([string]$BaseUrl = 'https://nfas.fnurble.co.uk')
+param([string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk')
 
 $ErrorActionPreference = 'Stop'
 $script:problems = 0

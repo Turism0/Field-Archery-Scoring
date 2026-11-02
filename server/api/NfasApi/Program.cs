@@ -1,5 +1,5 @@
 // NFAS Big Game Scorer API.
-// Runs on Odin under IIS, behind Nginx Proxy Manager at https://nfas.fnurble.co.uk.
+// Runs on Odin under IIS, behind Nginx Proxy Manager at https://fieldarchery.fnurble.co.uk.
 // The connection string (with the nfas_api password) lives in appsettings.Production.json
 // on the server only; it is never committed to Git.
 

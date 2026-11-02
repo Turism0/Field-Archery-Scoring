@@ -14,7 +14,7 @@
 #>
 param(
     [Parameter(Mandatory)][string]$Username,
-    [string]$BaseUrl = 'https://nfas.fnurble.co.uk'
+    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk'
 )
 
 $ErrorActionPreference = 'Stop'

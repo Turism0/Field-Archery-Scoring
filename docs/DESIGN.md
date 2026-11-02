@@ -55,13 +55,13 @@ Phone (Kotlin/Compose)                         Home server
 ┌───────────────────────────┐   HTTPS (NPM,   ┌──────────────────────┐    ┌──────────────┐
 │ UI → ViewModels           │   wildcard TLS) │ ASP.NET Core Web API │ →  │ SQL Server   │
 │ Repositories              │ ──────────────▶ │ on Odin (IIS)        │    │ on Mimir     │
-│ Room (SQLite) = truth     │  nfas.fnurble    └──────────────────────┘    └──────────────┘
+│ Room (SQLite) = truth     │  fieldarchery…  └──────────────────────┘    └──────────────┘
 │ WorkManager sync (iter 2) │
 └───────────────────────────┘
 ```
 
 - The phone's Room database is the source of truth while scoring. Every write is local first.
-- The app never talks to SQL Server directly — only to the API at `https://nfas.fnurble.co.uk`.
+- The app never talks to SQL Server directly — only to the API at `https://fieldarchery.fnurble.co.uk`.
 - API: ASP.NET Core minimal API on **.NET 10 LTS** (supported to Nov 2028), IIS on Odin (app pool "No Managed Code"), Microsoft.Data.SqlClient to `sql.fnurble.co.uk` with encryption. The connection string sits in `appsettings.Production.json` on Odin only.
 - Sync runs through WorkManager (`data/sync/`) with a network constraint, so it waits for signal and retries with exponential back-off.
   - Triggers: any change to a round (`RoundRepository.onChanged`), signing in, app start, and pull-to-refresh on the home screen (runs straight away in the foreground and shows the result). Unique work, appended, so a change made mid-upload is sent afterwards.

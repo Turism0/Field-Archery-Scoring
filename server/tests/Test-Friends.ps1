@@ -2,13 +2,13 @@
 <#
     NFAS API – step 7a friends tests. Run in PowerShell 7 (pwsh):
 
-        .\Test-Friends.ps1                                   # against https://nfas.fnurble.co.uk
+        .\Test-Friends.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Friends.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS
 
     Creates three throwaway accounts (zz_test_…): A shoots rounds, B becomes A's friend, C doesn't.
     Remove them afterwards with server/sql/900_delete_test_accounts.sql. Every line should start with OK.
 #>
-param([string]$BaseUrl = 'https://nfas.fnurble.co.uk')
+param([string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk')
 
 $ErrorActionPreference = 'Stop'
 $script:problems = 0

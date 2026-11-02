@@ -2,13 +2,13 @@
 <#
     NFAS API – step 3 account tests. Run in PowerShell 7 (pwsh) from any PC:
 
-        .\Test-Accounts.ps1                                   # against https://nfas.fnurble.co.uk
+        .\Test-Accounts.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Accounts.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS
 
     Creates a throwaway account named zz_test_xxxxxx. Remove test accounts afterwards with
     server/sql/900_delete_test_accounts.sql. Every line should start with OK.
 #>
-param([string]$BaseUrl = 'https://nfas.fnurble.co.uk')
+param([string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk')
 
 $ErrorActionPreference = 'Stop'
 $script:problems = 0

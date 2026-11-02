@@ -2,7 +2,7 @@
 <#
     NFAS API – shoot location tests (roadmap step 2a). Run in PowerShell 7 (pwsh):
 
-        .\Test-Locations.ps1 -Username pete                                  # against https://nfas.fnurble.co.uk
+        .\Test-Locations.ps1 -Username pete                                  # against https://fieldarchery.fnurble.co.uk
         .\Test-Locations.ps1 -Username pete -BaseUrl http://localhost:8085   # on Odin, straight to IIS
 
     -Username is the Owner (or an Admin) account, for the rename and merge tests; it asks for the password.
@@ -12,7 +12,7 @@
 #>
 param(
     [Parameter(Mandatory)][string]$Username,
-    [string]$BaseUrl = 'https://nfas.fnurble.co.uk'
+    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk'
 )
 
 $ErrorActionPreference = 'Stop'

@@ -1,7 +1,7 @@
 # NFAS server
 
 - `sql/`: database scripts for SQL Server 2025 on Mimir (step 1, done). See `../docs/DESIGN.md`.
-- `api/NfasApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://nfas.fnurble.co.uk** through Nginx Proxy Manager.
+- `api/NfasApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://fieldarchery.fnurble.co.uk** through Nginx Proxy Manager.
 
 The app only ever talks to the API; the API is the only thing that talks to SQL Server.
 
@@ -106,7 +106,7 @@ rate-limit allowance.
 In PowerShell 7 on any PC, from `server\tests`:
 
 ```powershell
-.\Test-Accounts.ps1                                  # through NPM: https://nfas.fnurble.co.uk
+.\Test-Accounts.ps1                                  # through NPM: https://fieldarchery.fnurble.co.uk
 .\Test-Accounts.ps1 -BaseUrl http://localhost:8085   # on Odin, straight to IIS
 ```
 
@@ -279,12 +279,12 @@ Open http://localhost:8085/health. Expected:
 
 New proxy host:
 
-- Domain: `nfas.fnurble.co.uk`
+- Domain: `fieldarchery.fnurble.co.uk`
 - Scheme `http`, forward to Odin's IP, port `8085`
 - SSL: the wildcard certificate, **Force SSL**, HTTP/2 on
 - **No** "Local LAN Only" access list: phones need to reach it from outside
 
 Then check:
 
-- https://nfas.fnurble.co.uk/health from a PC at home
-- the same URL from your phone **on mobile data, with WiFi off**. This proves public DNS (Cloudflare needs an `nfas` or wildcard record) and the 443 forward work. Remember the UK-only geoblock.
+- https://fieldarchery.fnurble.co.uk/health from a PC at home
+- the same URL from your phone **on mobile data, with WiFi off**. This proves public DNS (Cloudflare needs a `fieldarchery` or wildcard record) and the 443 forward work. Remember the UK-only geoblock.

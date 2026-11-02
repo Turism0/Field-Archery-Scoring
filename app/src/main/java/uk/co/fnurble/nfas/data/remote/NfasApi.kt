@@ -12,7 +12,7 @@ import java.net.URLEncoder
 
 object ApiConfig {
     /** The NFAS API on Odin, through Nginx Proxy Manager. */
-    const val BASE_URL = "https://nfas.fnurble.co.uk"
+    const val BASE_URL = "https://fieldarchery.fnurble.co.uk"
 }
 
 /**
