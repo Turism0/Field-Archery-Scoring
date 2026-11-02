@@ -39,15 +39,31 @@ data class FriendRoundSummary(
     val locationName: String? = null,
 )
 
+/** A round a friend scored for you in their group, waiting for you to accept or decline. */
+data class RoundOffer(
+    val roundId: String,
+    val fromUsername: String,
+    val shootDate: LocalDate,
+    val targetCount: Int,
+    val classLine: String,
+    val totalPoints: Int,
+    val locationName: String? = null,
+)
+
 /**
  * Friends, straight from the server each time (nothing about friends is stored on the phone).
  * Needs signal and a signed-in account; failures are [ApiException]s with a message to show.
  */
-class FriendsRepository(private val api: NfasApi, private val accounts: AccountStore) {
+class FriendsRepository(
+    private val api: NfasApi,
+    private val accounts: AccountStore,
+    /** Asks the background sync to run (an accepted round then downloads to this phone). */
+    private val onAccepted: () -> Unit = {},
+) {
 
     suspend fun overview(): FriendsOverview = call { token ->
         val json = api.friends(token)
-        FriendsOverview(
+        val overview = FriendsOverview(
             friends = json.getJSONArray("friends").objects().map { f ->
                 FriendSummary(
                     archerId = f.getString("archerId"),
@@ -63,6 +79,55 @@ class FriendsRepository(private val api: NfasApi, private val accounts: AccountS
             incoming = json.getJSONArray("incoming").objects().map { FriendRequest(it.getString("archerId"), it.getString("username")) },
             outgoing = json.getJSONArray("outgoing").objects().map { FriendRequest(it.getString("archerId"), it.getString("username")) },
         )
+        // Remembered for adding friends to a group round with no signal.
+        accounts.setCachedFriends(overview.friends.map { CachedFriend(it.archerId, it.username) })
+        overview
+    }
+
+    /** Rounds friends have scored for you, waiting for an answer (newest first). Updates the Friends tile badge. */
+    suspend fun offers(): List<RoundOffer> = call { token ->
+        val list = api.offers(token).getJSONArray("received").objects().map { o ->
+            val cls = if (o.getString("archerClass") == "L") ArcherClass.LADIES else ArcherClass.GENTS
+            val age = AgeGroup.valueOf(o.getString("ageGroup"))
+            val bow = BowStyle.fromCode(o.getString("bowStyle"))?.code ?: o.getString("bowStyle")
+            RoundOffer(
+                roundId = o.getString("roundId"),
+                fromUsername = o.getString("fromUsername"),
+                shootDate = LocalDate.parse(o.getString("shootDate").take(10)),
+                targetCount = o.getInt("targetCount"),
+                classLine = (if (o.optString("roundType") == "WOODSMAN") "Woodsman · " else "") +
+                    "${cls.displayName} ${age.displayName} $bow",
+                totalPoints = o.getInt("totalPoints"),
+                locationName = o.stringOrNull("locationName"),
+            )
+        }
+        accounts.setRoundOffers(list.size)
+        list
+    }
+
+    /** The round in a request, to look at before answering. */
+    suspend fun offerRound(roundId: String): Round = call { token ->
+        val json = api.offer(token, roundId)
+        val offer = json.getJSONObject("offer")
+        val round = json.getJSONObject("round")
+            // The stored round doesn't carry its own id or server fields; add what the reader needs.
+            .put("roundId", roundId)
+            .put("isDeleted", false)
+            .put("serverUpdatedUtc", offer.optString("updatedUtc"))
+        if (round.isNull("locationName") && !offer.isNull("locationName")) round.put("locationName", offer.getString("locationName"))
+        round.toRoundData().toDomain()
+    }
+
+    /** Accept: the round becomes yours (it downloads to this phone on the next sync). */
+    suspend fun acceptOffer(roundId: String) = call { token ->
+        api.acceptOffer(token, roundId)
+        accounts.setRoundOffers((accounts.roundOffers.value - 1).coerceAtLeast(0))
+        onAccepted()
+    }
+
+    suspend fun declineOffer(roundId: String) = call { token ->
+        api.declineOffer(token, roundId)
+        accounts.setRoundOffers((accounts.roundOffers.value - 1).coerceAtLeast(0))
     }
 
     /** Returns the server's message, e.g. "Friend request sent to …" or "You and … are now friends." */

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendSummary
+import uk.co.fnurble.nfas.data.RoundOffer
 import uk.co.fnurble.nfas.ui.FriendsViewModel
 import uk.co.fnurble.nfas.ui.Load
 import uk.co.fnurble.nfas.ui.components.SectionCard
@@ -58,7 +59,10 @@ fun FriendsScreen(
     onBack: () -> Unit,
     onProfile: () -> Unit,
     onOpenFriend: (FriendSummary) -> Unit,
+    /** A round a friend scored for you: look at it, then accept or decline. */
+    onOpenOffer: (RoundOffer) -> Unit = {},
 ) {
+    val offers by vm.offers.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val overview by vm.overview.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -149,6 +153,15 @@ fun FriendsScreen(
                     }
                     is Load.Ready -> {
                         val data = o.value
+                        if (offers.isNotEmpty()) {
+                            item(key = "offersHeader") { Header("Rounds scored for you") }
+                            items(offers, key = { "offer-" + it.roundId }) { offer ->
+                                OfferRow(offer, busy, onOpen = { onOpenOffer(offer) }) {
+                                    TextButton(onClick = { vm.declineOffer(offer) }, enabled = !busy) { Text("Decline") }
+                                    Button(onClick = { vm.acceptOffer(offer) }, enabled = !busy) { Text("Accept") }
+                                }
+                            }
+                        }
                         if (data.incoming.isNotEmpty()) {
                             item(key = "incomingHeader") { Header("Friend requests") }
                             items(data.incoming, key = { "in-" + it.archerId }) { req ->
@@ -203,6 +216,33 @@ private fun RequestRow(req: FriendRequest, note: String, busy: Boolean, actions:
                 Text(note, style = MaterialTheme.typography.bodySmall)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (busy) CircularProgressIndicator(Modifier.padding(8.dp)) else actions()
+            }
+        }
+    }
+}
+
+/** A round scored for you by a friend in their group: who, when, class, total. Tap to see the scorecard. */
+@Composable
+private fun OfferRow(offer: RoundOffer, busy: Boolean, onOpen: () -> Unit, actions: @Composable () -> Unit) {
+    Card(onClick = onOpen, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${offer.totalPoints} points · ${offer.shootDate.format(UkDate)}", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Scored by ${offer.fromUsername} · ${offer.classLine} · ${offer.targetCount} targets",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    offer.locationName?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onOpen, enabled = !busy) { Text("Scorecard") }
                 if (busy) CircularProgressIndicator(Modifier.padding(8.dp)) else actions()
             }
         }

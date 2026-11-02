@@ -33,7 +33,7 @@
    3. **Round types:** *Done: DB + API 1.9.01, app 1.9.05.* Phone database v3: `round.round_type` (null = Big Game), `target.arrows` (W/K/M); target type WOODSMAN has no animal rows. Woodsman stats are per target (out of 30).
       - 3a. Groundwork: `RoundType` table and a type on every round (server and phone), per-type rules in the API, Big Game-only database checks relaxed; uploads without a type count as Big Game.
       - 3b. **Woodsman:** single animal per target; shoot until you kill, up to 3 arrows; wound 5 on any arrow; kill 30 / 20 / 10 on the 1st / 2nd / 3rd arrow; miss 0 (e.g. wound + kill 25; miss, wound, kill 15; three wounds 15; max 30). Needs each arrow recorded, so a per-arrow field. Own scoring screen, scorecard and stats; type shown in history and to friends; friends' summaries per type.
-4. **Group scoring** (agreed 2 Nov 2026). *Server done in 1.9.06 (to be tested); app next.* A group shoots the same round type, number of targets, date and location; each archer keeps their own class, age group and bow style. Members: **joined** archers (own phone, account), **friends** added by the scorer (account, not joined) and **guests** (name only).
+4. **Group scoring** (agreed 2 Nov 2026). *Server done in 1.9.06 (tested, 1.9.09); app 2.0 = one phone scores the group (to test); 2.1 live groups next.* A group shoots the same round type, number of targets, date and location; each archer keeps their own class, age group and bow style. Members: **joined** archers (own phone, account), **friends** added by the scorer (account, not joined) and **guests** (name only).
    - **Scoring methods** (chosen by the host when the group starts):
       1. **Single scorer, others viewing.** One phone enters every score; joined archers watch the live table on their own phones. With no one joined this is plain one-phone group scoring.
       2. **Double scoring.** Two scorers enter every archer's score; a score is saved only when both entries match. If they differ, both phones show both entries and both re-enter until they match.
@@ -44,6 +44,7 @@
    - **Joining:** the host's phone shows a **6-character code** and a **QR code** holding it; others type it or scan it. Needs an account; being friends isn't needed (you're standing together). The group shows usernames only. The code stops working when the host closes the group or after 24 hours.
    - **Signal – both ways.** With signal, phones exchange entries through the server (live table refreshed every few seconds). With no signal, phones link **directly** (Google Nearby Connections: Bluetooth / Wi-Fi, the host's phone is the hub) so matching still works target by target; everything reaches the server when there's signal. The host's phone makes the group id and code itself, so a group can start with no signal; the server records it later.
    - **Server (1.9.06):** schema v6 – `ScoreGroup` (id made by the host phone, code, host, method, round type, targets, date, location, closed / expiry), `ScoreGroupMember` (account or guest name, joined or added, join order, round), `ScoreGroupScorer` (card → scorer, two per card for methods 2–3), `ScoreEntry` (target, card, scorer, entry, time) for matching through the server; `Round.GroupId`, `Round.ScoredById` and an offered state for friends' requests; in-progress uploads allowed for group rounds only. Endpoints: create / join / close group, entries in and out (since a time), live table, offers list / accept / decline.
+   - **App 2.0 (agreed 2 Nov 2026):** the new round screen has **Just me / Group**; Group adds you, friends (from your friends list, cached for no signal) and guests (name), each with class, age group and bow style, in scoring order (move up / down), up to 8. Scoring goes **archer by archer** on each target (title "Target 3 · Dave", Next: Dave … then the next target), with a strip of everyone's running totals and ticks (tap to jump). Finishing finishes everyone's round. Your round is in your history marked "group of n" with a **group scorecard** (everyone's totals; open anyone's card); friends get a request (Friends tile badge, accept / decline, view the card first).
    - **App releases:** 2.0 = one phone scores the group (friends' requests, guests); 2.1 = live groups through the server (join by code and QR, all four methods, live table); 2.2 = phone to phone with no signal.
    - **Libraries:** `com.google.zxing:core` to draw the QR (no permissions); Google code scanner (`play-services-code-scanner`, no camera permission, needs Google Play services); Nearby Connections (`play-services-nearby`, needs nearby-devices / Bluetooth permissions) for 2.2. Build files diffed against Pete's before adding.
 5. **History and stats** (after group scoring): trends over time, personal bests, filtered history, season summary.
@@ -77,7 +78,7 @@ Phone (Kotlin/Compose)                         Home server
 | Table | Purpose | Synced? |
 |---|---|---|
 | `profile` | Real name, DoB, account username (set on sign-in), class, manual age group, main bow style (single row) | **Never** |
-| `round` | `id` (UUID made on phone), shoot date, target count, class, age group, bow style, status, total, `created_at`, `updated_at`, `sync_state`, `deleted` | Yes |
+| `round` | `id` (UUID made on phone), shoot date, target count, class, age group, bow style, status, total, `created_at`, `updated_at`, `sync_state`, `deleted`; v2 location columns; v3 `round_type`; **v4** `group_id`, `group_role` (SCORER / FRIEND / GUEST), `group_name`, `group_archer_id`, `group_order` | Yes (own rounds); friends' group rounds go as requests; guests never |
 | `target` | (`round_id`, `target_no`), type, override points, points, `updated_at`, `sync_state` | Yes |
 | `animal` | (`round_id`, `target_no`, `animal_index`), state (Pending/Missed/Scored), arrow no, hit, points | Yes |
 
@@ -89,6 +90,8 @@ Design points:
 - **Class, age group and bow style are copied onto each round**, so later profile changes (or a junior moving up a group) don't rewrite history.
 - **Points are stored** as well as the raw result (arrow + hit), so overrides and any future rule change don't alter old cards, and the server can report without re-implementing the rules.
 - Room schema JSON is exported to `app/schemas/` for writing migrations.
+- **Group rounds scored on one phone (v4, app 2.0)** are ordinary rounds sharing a `group_id`, one per archer, so scoring, scorecards and stats need nothing new. History, Home and upload only see `group_role` null or SCORER; FRIEND rounds are sent with `PUT /api/offers/{id}` when finished (deleted → withdrawn; 409 once accepted → left as sent); GUEST rounds stay on the phone and are deleted 30 days after the round started. Location and the date / number of targets apply to the whole group; class, age group and bow style are per archer. A new target type on one archer's target is copied to the others not yet scored on it.
+- **Friends are cached** (username and id only, in `AccountStore`) whenever the list is fetched, so they can be added to a group round with no signal.
 - **Stats are derived, not stored:** total, average per animal (predator/prey = 2, fan = n), hit counts and rates are worked out from the round each time (`RoundStats` in `domain/Round.kt`), so changing a definition never needs a migration.
 
 ## Screens and navigation
@@ -97,7 +100,10 @@ Design points:
 home ─┬─ scoreRound ─┬─ (continue) ─────────────▶ round/{id}?target=n  (scoring) ──finish──▶ card/{id}
       │              └─ roundType ─▶ newRound/{type} ─start─▶ round/{id}                       │
       ├─ history ──(finished round)──▶ card/{id} ──edit / tap target──▶ round/{id}?target=n ◀──┘
-      ├─ friends ─▶ friend/{archerId}/{username} ─▶ friendCard/{archerId}/{username}/{roundId}  (read-only)
+      ├─ friends ─┬▶ friend/{archerId}/{username} ─▶ friendCard/{archerId}/{username}/{roundId}  (read-only)
+      │           └▶ offer/{roundId}/{username}  (a round scored for you: accept / decline)
+      │   (newRound: Just me / Group → round/{id} with the group strip; Next goes archer by archer, then the next target)
+      │   (card/{id} of a group round → group card → card/{memberRoundId})
       │   (round/{id} or card/{id} → location sheet → pickLocation/{roundId}: the map in pick mode)
       │   (round/{id} or card/{id} ⋮ → editRound/{roundId}: date, targets, class, age group, bow style)
       ├─ map ─▶ location/{locationId} ─┬▶ card/{roundId}  (yours)

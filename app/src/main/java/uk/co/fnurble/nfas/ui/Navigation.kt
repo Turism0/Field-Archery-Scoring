@@ -21,6 +21,7 @@ import uk.co.fnurble.nfas.ui.screens.HomeScreen
 import uk.co.fnurble.nfas.ui.screens.LocationMapScreen
 import uk.co.fnurble.nfas.ui.screens.LocationPageScreen
 import uk.co.fnurble.nfas.ui.screens.NewRoundScreen
+import uk.co.fnurble.nfas.ui.screens.OfferScreen
 import uk.co.fnurble.nfas.ui.screens.ProfileScreen
 import uk.co.fnurble.nfas.ui.screens.RoundTypeScreen
 import uk.co.fnurble.nfas.ui.screens.ScoreRoundScreen
@@ -126,6 +127,20 @@ fun NfasNavHost() {
                 onBack = { nav.popBackStack() },
                 onProfile = { nav.navigate("profile") },
                 onOpenFriend = { f -> nav.navigate("friend/${f.archerId}/${f.username}") },
+                onOpenOffer = { o -> nav.navigate("offer/${o.roundId}/${o.fromUsername}") },
+            )
+        }
+        // A round a friend scored for you: scorecard with Accept / Decline.
+        composable(
+            "offer/{roundId}/{username}",
+            arguments = listOf(
+                navArgument("roundId") { type = NavType.StringType },
+                navArgument("username") { type = NavType.StringType },
+            ),
+        ) {
+            OfferScreen(
+                vm = appViewModel { c, saved -> OfferViewModel(c.friendsRepository, saved) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable(
@@ -202,7 +217,7 @@ fun NfasNavHost() {
             val roundType = entry.arguments?.getString("roundType")
                 ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
-                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType) },
+                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType, c.accountStore) },
                 roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },
@@ -226,7 +241,8 @@ fun NfasNavHost() {
                 // Finishing shows the scorecard; back from there goes home.
                 onFinished = { nav.navigate(scorecardRoute(roundId)) { popUpTo("home") } },
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },
-                onEditDetails = { nav.navigate("editRound/$roundId") },
+                // In a group, the archer being scored now.
+                onEditDetails = { id -> nav.navigate("editRound/$id") },
             )
         }
         composable(
@@ -241,6 +257,7 @@ fun NfasNavHost() {
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },
                 onEditDetails = { nav.navigate("editRound/$roundId") },
+                onOpenMember = { id -> nav.navigate(scorecardRoute(id)) },
             )
         }
     }

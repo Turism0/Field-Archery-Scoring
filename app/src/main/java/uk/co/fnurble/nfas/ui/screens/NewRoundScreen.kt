@@ -28,6 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.OutlinedButton
+import uk.co.fnurble.nfas.data.local.GroupRole
+import uk.co.fnurble.nfas.ui.GroupMemberDraft
+import uk.co.fnurble.nfas.ui.components.GroupMemberDialog
+import uk.co.fnurble.nfas.ui.components.GroupMemberRow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -58,6 +66,8 @@ fun NewRoundScreen(
     onStarted: (String) -> Unit,
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
+    // Add / edit a friend or guest in a group round.
+    var memberDialog by remember { mutableStateOf<Pair<GroupRole, GroupMemberDraft?>?>(null) }
     // Ask for location when starting (Android only shows the prompt until it's been refused twice).
     // Either answer starts the round; without permission the round simply has no location.
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -90,7 +100,10 @@ fun NewRoundScreen(
             )
         },
         bottomBar = {
-            BottomActionBar(text = "Start round", enabled = form?.isValid == true) { startRound() }
+            BottomActionBar(
+                text = if (form?.group == true) "Start group round" else "Start round",
+                enabled = form?.isValid == true,
+            ) { startRound() }
         },
     ) { padding ->
         val f = form
@@ -102,6 +115,19 @@ fun NewRoundScreen(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SectionCard(title = "Who's scoring") {
+                SegmentedChoice(listOf(false, true), f.group, { if (it) "Group" else "Just me" }) { g ->
+                    vm.update { it.copy(group = g) }
+                }
+                if (f.group) {
+                    Text(
+                        "You score everyone on this phone, archer by archer on each target.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             SectionCard(title = "Shoot") {
                 DateField(
                     label = "Shoot date",
@@ -126,7 +152,10 @@ fun NewRoundScreen(
                 }
             }
 
-            SectionCard(title = "Archer", subtitle = "Filled in from your profile. Changes here only affect this round.") {
+            SectionCard(
+                title = if (f.group) "You" else "Archer",
+                subtitle = "Filled in from your profile. Changes here only affect this round.",
+            ) {
                 SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c ->
                     vm.update { it.copy(archerClass = c) }
                 }
@@ -148,13 +177,66 @@ fun NewRoundScreen(
                 )
             }
 
+            if (f.group) {
+                SectionCard(
+                    title = "Group",
+                    subtitle = "In scoring order. You're first; up to ${RoundRepository.MAX_GROUP} archers.",
+                ) {
+                    Text("You", style = MaterialTheme.typography.titleSmall)
+                    f.members.forEachIndexed { i, m ->
+                        GroupMemberRow(
+                            m = m,
+                            canUp = i > 0,
+                            canDown = i < f.members.lastIndex,
+                            onUp = { vm.moveMember(m.key, -1) },
+                            onDown = { vm.moveMember(m.key, 1) },
+                            onEdit = { memberDialog = m.role to m },
+                            onRemove = { vm.removeMember(m.key) },
+                        )
+                    }
+                    val friends = remember(f.members) { vm.friends().filter { fr -> f.members.none { it.archerId == fr.archerId } } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { memberDialog = GroupRole.FRIEND to null },
+                            enabled = f.canAddMember && friends.isNotEmpty(),
+                        ) { Text("Add friend") }
+                        OutlinedButton(
+                            onClick = { memberDialog = GroupRole.GUEST to null },
+                            enabled = f.canAddMember,
+                        ) { Text("Add guest") }
+                    }
+                    if (friends.isEmpty() && f.canAddMember) {
+                        Text(
+                            if (!vm.signedIn) "Sign in (Profile) to add friends; guests can be added any time."
+                            else "No friends to add. Open Friends once with signal to load your list.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
             if (!f.isValid) {
                 Text(
-                    "Fill in the number of targets, class, age group and bow style to start.",
+                    if (f.group && f.members.isEmpty()) "Add at least one friend or guest to the group."
+                    else "Fill in the number of targets, class, age group and bow style to start.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
+    }
+
+    memberDialog?.let { (role, existing) ->
+        GroupMemberDialog(
+            role = role,
+            existing = existing,
+            friends = vm.friends().filter { fr -> form?.members.orEmpty().none { it.archerId == fr.archerId && it.key != existing?.key } },
+            onDismiss = { memberDialog = null },
+            onSave = { m ->
+                if (existing != null) vm.replaceMember(m) else vm.addMember(m)
+                memberDialog = null
+            },
+        )
     }
 }

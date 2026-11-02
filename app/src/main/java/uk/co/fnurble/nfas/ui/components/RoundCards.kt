@@ -55,7 +55,7 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, onClick: () -> Unit) {
                 }
                 Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${r.classLine} · ${r.targetCount} targets",
+                    "${r.classLine} · ${r.targetCount} targets" + if (r.groupSize > 1) " · group of ${r.groupSize}" else "",
                     style = MaterialTheme.typography.bodyMedium,
                     color = scheme.onSurfaceVariant,
                 )

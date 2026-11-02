@@ -85,7 +85,7 @@ class NfasApi(
         return request("GET", "/api/rounds?$query", body = null, token = token)
     }
 
-    /** { archerId, username, createdUtc, role } for the signed-in account. */
+    /** { archerId, username, createdUtc, role, duplicateLocations, roundOffers } for the signed-in account. */
     suspend fun me(token: String): JSONObject = request("GET", "/api/me", body = null, token = token)
 
     // ---- Admin (the server checks the role on every call) ----
@@ -176,6 +176,33 @@ class NfasApi(
     /** One of a friend's finished rounds, same shape as the download list. */
     suspend fun friendRound(token: String, archerId: String, roundId: String): JSONObject =
         request("GET", "/api/friends/$archerId/rounds/$roundId", body = null, token = token)
+
+    // ---- Rounds scored for a friend (requests they accept or decline) ----
+
+    /** Sends (or corrects) a finished round scored for a friend. 409 round_exists once they've accepted it. */
+    suspend fun offerRound(token: String, roundId: String, forArcherId: String, groupId: String?, round: JSONObject) {
+        val body = JSONObject().put("forArcherId", forArcherId).put("groupId", groupId ?: JSONObject.NULL).put("round", round)
+        request("PUT", "/api/offers/$roundId", body, token)
+    }
+
+    /** Takes back a request not yet answered (404 if it was already answered or never sent). */
+    suspend fun withdrawOffer(token: String, roundId: String) {
+        request("DELETE", "/api/offers/$roundId", body = null, token = token)
+    }
+
+    /** { received: [...], sent: [...] } */
+    suspend fun offers(token: String): JSONObject = request("GET", "/api/offers", body = null, token = token)
+
+    /** { offer: {...}, round: {...} } */
+    suspend fun offer(token: String, roundId: String): JSONObject = request("GET", "/api/offers/$roundId", body = null, token = token)
+
+    suspend fun acceptOffer(token: String, roundId: String) {
+        request("POST", "/api/offers/$roundId/accept", body = null, token = token)
+    }
+
+    suspend fun declineOffer(token: String, roundId: String) {
+        request("POST", "/api/offers/$roundId/decline", body = null, token = token)
+    }
 
     private fun credentials(username: String, password: String, deviceName: String) =
         JSONObject().put("username", username).put("password", password).put("deviceName", deviceName)

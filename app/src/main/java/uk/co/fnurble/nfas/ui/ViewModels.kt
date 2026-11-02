@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -30,6 +31,11 @@ import uk.co.fnurble.nfas.data.FriendRequest
 import uk.co.fnurble.nfas.data.FriendRoundSummary
 import uk.co.fnurble.nfas.data.FriendsOverview
 import uk.co.fnurble.nfas.data.FriendsRepository
+import uk.co.fnurble.nfas.data.GroupMember
+import uk.co.fnurble.nfas.data.NewGroupMember
+import uk.co.fnurble.nfas.data.RoundOffer
+import uk.co.fnurble.nfas.data.CachedFriend
+import uk.co.fnurble.nfas.data.local.GroupRole
 import uk.co.fnurble.nfas.data.LocationPage
 import uk.co.fnurble.nfas.data.LocationPageRepository
 import uk.co.fnurble.nfas.data.LocationRepository
@@ -162,6 +168,13 @@ class HomeViewModel(
     val role: StateFlow<AccountRole> = accountStore.role
     /** Possible duplicate locations waiting (badge on the Admin tile). */
     val duplicateLocations: StateFlow<Int> = accountStore.duplicateLocations
+    /** Rounds friends have scored for you, waiting for an answer (badge on the Friends tile). */
+    val roundOffers: StateFlow<Int> = accountStore.roundOffers
+
+    init {
+        // Guests' scores in group rounds are only kept for 30 days.
+        viewModelScope.launch { roundRepo.deleteOldGuests() }
+    }
 }
 
 /** Score history: finished rounds only, newest first. */
@@ -531,6 +544,10 @@ class FriendsViewModel(private val friends: FriendsRepository, accounts: Account
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
+    private val _offers = MutableStateFlow<List<RoundOffer>>(emptyList())
+    /** Rounds friends have scored for you, waiting for an answer. */
+    val offers: StateFlow<List<RoundOffer>> = _offers.asStateFlow()
+
     private val _username = MutableStateFlow("")
     val username: StateFlow<String> = _username.asStateFlow()
 
@@ -549,7 +566,14 @@ class FriendsViewModel(private val friends: FriendsRepository, accounts: Account
         viewModelScope.launch {
             if (showSpinner) _refreshing.value = true
             _overview.value = try {
-                Load.Ready(friends.overview())
+                val o = friends.overview()
+                // Requests for rounds too (an older server without them just shows none).
+                _offers.value = try {
+                    friends.offers()
+                } catch (e: ApiException) {
+                    if (e.status == 404) emptyList() else throw e
+                }
+                Load.Ready(o)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (_overview.value is Load.Ready) {
@@ -586,6 +610,16 @@ class FriendsViewModel(private val friends: FriendsRepository, accounts: Account
     fun cancel(request: FriendRequest) = act {
         friends.remove(request.archerId)
         _message.value = "Request to ${request.username} cancelled."
+    }
+
+    fun acceptOffer(offer: RoundOffer) = act {
+        friends.acceptOffer(offer.roundId)
+        _message.value = "Round from ${offer.fromUsername} added to your history."
+    }
+
+    fun declineOffer(offer: RoundOffer) = act {
+        friends.declineOffer(offer.roundId)
+        _message.value = "Round from ${offer.fromUsername} declined."
     }
 
     /** Runs a change on the server, then reloads the list. */
@@ -670,6 +704,57 @@ class FriendScorecardViewModel(private val friends: FriendsRepository, saved: Sa
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
+}
+
+/** A round a friend scored for you, to look at before accepting or declining. Nav args "roundId", "username". */
+class OfferViewModel(private val friends: FriendsRepository, saved: SavedStateHandle) : ViewModel() {
+    private val roundId: String = checkNotNull(saved["roundId"])
+    val username: String = checkNotNull(saved["username"])
+
+    private val _round = MutableStateFlow<Load<Round>>(Load.Loading)
+    val round: StateFlow<Load<Round>> = _round.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
+    fun messageShown() { _message.value = null }
+
+    init { load() }
+
+    fun load() {
+        viewModelScope.launch {
+            _round.value = Load.Loading
+            _round.value = try {
+                Load.Ready(friends.offerRound(roundId))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
+
+    fun accept(onDone: () -> Unit) = act(onDone) { friends.acceptOffer(roundId) }
+
+    fun decline(onDone: () -> Unit) = act(onDone) { friends.declineOffer(roundId) }
+
+    private fun act(onDone: () -> Unit, block: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                block()
+                onDone()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _busy.value = false
             }
         }
     }
@@ -822,8 +907,14 @@ data class NewRoundForm(
     val ageGroupChoice: AgeGroup? = null,
     val bowStyle: BowStyle? = null,
     val profile: Profile = Profile(),
+    /** Group round scored on this phone (app 2.0): you plus [members]. */
+    val group: Boolean = false,
+    val members: List<GroupMemberDraft> = emptyList(),
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
+
+    /** Room for more archers (the limit includes you). */
+    val canAddMember: Boolean get() = members.size + 1 < RoundRepository.MAX_GROUP
 
     /** Age group from the profile for the shoot date. */
     val profileAgeGroup: AgeGroup?
@@ -839,17 +930,54 @@ data class NewRoundForm(
             else -> "not set"
         }
 
-    val isValid: Boolean get() = targetCount != null && archerClass != null && ageGroup != null && bowStyle != null
+    val isValid: Boolean
+        get() = targetCount != null && archerClass != null && ageGroup != null && bowStyle != null &&
+            (!group || members.isNotEmpty())
 }
+
+/** Someone being added to a group round: a friend (from your friends list) or a guest (name only). */
+data class GroupMemberDraft(
+    val key: String = java.util.UUID.randomUUID().toString(),
+    val role: GroupRole,
+    val name: String,
+    val archerId: String? = null,
+    val archerClass: ArcherClass,
+    val ageGroup: AgeGroup,
+    val bowStyle: BowStyle,
+)
 
 class NewRoundViewModel(
     private val profiles: ProfileRepository,
     private val rounds: RoundRepository,
     private val locations: LocationRepository,
     private val type: RoundType = RoundType.BIG_GAME,
+    private val accountStore: AccountStore? = null,
 ) : ViewModel() {
     private val _form = MutableStateFlow<NewRoundForm?>(null)
     val form: StateFlow<NewRoundForm?> = _form.asStateFlow()
+
+    /** Signed in: friends can be added to a group (else guests only). */
+    val signedIn: Boolean get() = accountStore?.account?.value != null
+
+    /** Your friends as last fetched (works with no signal), for adding to a group. */
+    fun friends(): List<CachedFriend> = accountStore?.cachedFriends().orEmpty().sortedBy { it.username.lowercase() }
+
+    fun addMember(m: GroupMemberDraft) = update { f ->
+        if (!f.canAddMember || (m.archerId != null && f.members.any { it.archerId == m.archerId })) f
+        else f.copy(members = f.members + m)
+    }
+
+    fun replaceMember(m: GroupMemberDraft) = update { f -> f.copy(members = f.members.map { if (it.key == m.key) m else it }) }
+
+    fun removeMember(key: String) = update { f -> f.copy(members = f.members.filterNot { it.key == key }) }
+
+    /** Scoring order: move someone up or down the list (you're always first). */
+    fun moveMember(key: String, by: Int) = update { f ->
+        val i = f.members.indexOfFirst { it.key == key }
+        val j = i + by
+        if (i < 0 || j !in f.members.indices) f
+        else f.copy(members = f.members.toMutableList().apply { add(j, removeAt(i)) })
+    }
 
     init {
         // Follow profile changes (e.g. after "Edit profile"), filling anything not yet chosen.
@@ -874,7 +1002,14 @@ class NewRoundViewModel(
         val f = _form.value ?: return
         if (!f.isValid) return
         viewModelScope.launch {
-            val id = rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type)
+            val id = if (f.group) {
+                rounds.createGroupRound(
+                    f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
+                    f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
+                )
+            } else {
+                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type)
+            }
             // GPS fix in the background (if allowed); scoring starts straight away.
             locations.captureFor(id)
             onCreated(id)
@@ -993,6 +1128,8 @@ data class EditRoundForm(
     val bowStyle: BowStyle,
     /** As the round is now, to warn about removing scored targets. */
     val original: Round,
+    /** In a group: whose round this is ("You", a friend or a guest); null when it's not a group round. */
+    val groupName: String? = null,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
 
@@ -1018,7 +1155,8 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
     init {
         viewModelScope.launch {
             val r = rounds.round(roundId).first { it != null }!!
-            _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle, r)
+            val member = rounds.group(roundId).first().firstOrNull { it.roundId == roundId }
+            _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle, r, member?.name)
         }
     }
 
@@ -1040,10 +1178,20 @@ class ScoringViewModel(
     private val rounds: RoundRepository,
     private val saved: SavedStateHandle,
 ) : ViewModel() {
-    val roundId: String = checkNotNull(saved["roundId"])
+    /** The round opened from the nav route (in a group, whoever was tapped; usually the scorer's own round). */
+    val startRoundId: String = checkNotNull(saved["roundId"])
 
-    val round: StateFlow<Round?> =
-        rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    /** The round being scored now: in a group this moves from archer to archer. */
+    private val _roundId = MutableStateFlow(saved.get<String>(KEY_CURRENT) ?: startRoundId)
+    val roundId: StateFlow<String> = _roundId.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val round: StateFlow<Round?> = _roundId.flatMapLatest { rounds.round(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Everyone in the group, in scoring order (empty when it's not a group round). */
+    val group: StateFlow<List<GroupMember>> = rounds.group(startRoundId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Restored target, else the one asked for in the nav route (e.g. "Edit target 7" on the scorecard). */
     private val _targetNo = MutableStateFlow(saved.get<Int>(KEY_TARGET) ?: saved.get<Int>(ARG_START_TARGET) ?: 0)
@@ -1068,14 +1216,70 @@ class ScoringViewModel(
         saved[KEY_TARGET] = n
     }
 
-    private fun edit(change: (TargetScore) -> TargetScore) {
-        val r = round.value ?: return
-        val current = r.target(_targetNo.value)
-        val updated = runCatching { change(current) }.getOrNull() ?: return
-        viewModelScope.launch { rounds.saveTarget(roundId, updated) }
+    private fun setRound(id: String) {
+        _roundId.value = id
+        saved[KEY_CURRENT] = id
     }
 
-    fun setType(type: TargetType, fanAnimals: Int = TargetScore.MIN_FAN) = edit { it.withType(type, fanAnimals) }
+    /** Group: score someone else on this target (or their next unscored one if they're behind). */
+    fun selectMember(m: GroupMember) {
+        val n = _targetNo.value
+        setRound(m.roundId)
+        setTarget(if (m.round.canGoTo(n)) n else m.round.firstUnscoredTargetNo ?: n)
+    }
+
+    /** Where Next goes in a group: the next archer on this target, or the first archer on the next target. */
+    fun nextInGroup(): Pair<GroupMember, Int>? {
+        val g = group.value.takeIf { it.size > 1 } ?: return null
+        val i = g.indexOfFirst { it.roundId == _roundId.value }.takeIf { it >= 0 } ?: return null
+        val n = _targetNo.value
+        return if (i < g.lastIndex) g[i + 1] to n else g.first() to n + 1
+    }
+
+    /** Where Prev goes in a group: the archer before on this target, or the last archer on the target before. */
+    fun prevInGroup(): Pair<GroupMember, Int>? {
+        val g = group.value.takeIf { it.size > 1 } ?: return null
+        val i = g.indexOfFirst { it.roundId == _roundId.value }.takeIf { it >= 0 } ?: return null
+        val n = _targetNo.value
+        return if (i > 0) g[i - 1] to n else g.last() to n - 1
+    }
+
+    fun next() {
+        val r = round.value ?: return
+        val step = nextInGroup()
+        if (step == null) { goTo(_targetNo.value + 1); return }
+        val (m, n) = step
+        if (n > r.targetCount) return
+        setRound(m.roundId)
+        setTarget(n)
+    }
+
+    fun prev() {
+        val step = prevInGroup()
+        if (step == null) { goTo(_targetNo.value - 1); return }
+        val (m, n) = step
+        if (n < 1) return
+        setRound(m.roundId)
+        setTarget(n)
+    }
+
+    private fun edit(change: (TargetScore) -> TargetScore) {
+        val r = round.value ?: return
+        val id = _roundId.value
+        val current = r.target(_targetNo.value)
+        val updated = runCatching { change(current) }.getOrNull() ?: return
+        viewModelScope.launch { rounds.saveTarget(id, updated) }
+    }
+
+    /** In a group, everyone not yet scored on this target gets the same target type. */
+    fun setType(type: TargetType, fanAnimals: Int = TargetScore.MIN_FAN) {
+        edit { it.withType(type, fanAnimals) }
+        if (group.value.size > 1) {
+            val id = _roundId.value
+            val n = _targetNo.value
+            viewModelScope.launch { rounds.setTypeForGroup(id, n, type, fanAnimals) }
+        }
+    }
 
     /** Tapping the selected result again clears it. */
     fun toggleResult(animalIndex: Int, result: AnimalResult) = edit { t ->
@@ -1093,20 +1297,23 @@ class ScoringViewModel(
 
     fun clearTarget() = edit { it.cleared() }
 
+    /** Finishes the round (in a group, everyone's). */
     fun finish(onDone: () -> Unit) = viewModelScope.launch {
-        rounds.setStatus(roundId, RoundStatus.COMPLETED)
+        rounds.setGroupStatus(_roundId.value, RoundStatus.COMPLETED)
         onDone()
     }
 
-    fun reopen() = viewModelScope.launch { rounds.setStatus(roundId, RoundStatus.IN_PROGRESS) }
+    fun reopen() = viewModelScope.launch { rounds.setGroupStatus(_roundId.value, RoundStatus.IN_PROGRESS) }
 
+    /** Deletes the round (in a group, everyone's). */
     fun delete(onDone: () -> Unit) = viewModelScope.launch {
-        rounds.delete(roundId)
+        rounds.deleteGroup(_roundId.value)
         onDone()
     }
 
     companion object {
         private const val KEY_TARGET = "targetNo"
+        private const val KEY_CURRENT = "currentRoundId"
 
         /** Optional nav argument: target to open first (0 = next unscored). */
         const val ARG_START_TARGET = "target"
@@ -1124,10 +1331,15 @@ class ScorecardViewModel(
     val round: StateFlow<Round?> =
         rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    fun reopen() = viewModelScope.launch { rounds.setStatus(roundId, RoundStatus.IN_PROGRESS) }
+    /** Everyone in the group, for the group scorecard (empty when it's not a group round). */
+    val group: StateFlow<List<GroupMember>> = rounds.group(roundId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    fun reopen() = viewModelScope.launch { rounds.setGroupStatus(roundId, RoundStatus.IN_PROGRESS) }
+
+    /** Deletes the round; in a group, everyone's. */
     fun delete(onDone: () -> Unit) = viewModelScope.launch {
-        rounds.delete(roundId)
+        rounds.deleteGroup(roundId)
         onDone()
     }
 }

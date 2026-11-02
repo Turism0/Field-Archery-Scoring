@@ -70,6 +70,11 @@ import uk.co.fnurble.nfas.domain.WoodsmanScoring
 import uk.co.fnurble.nfas.domain.WoodsmanArrow
 import uk.co.fnurble.nfas.domain.ordinal
 import uk.co.fnurble.nfas.ui.ScoringViewModel
+import uk.co.fnurble.nfas.data.GroupMember
+import uk.co.fnurble.nfas.data.local.GroupRole
+import uk.co.fnurble.nfas.domain.Round
+import uk.co.fnurble.nfas.domain.RoundLocation
+import uk.co.fnurble.nfas.ui.components.GroupStrip
 import uk.co.fnurble.nfas.ui.components.LocationChip
 import uk.co.fnurble.nfas.ui.components.LocationSheet
 import uk.co.fnurble.nfas.ui.components.NumberField
@@ -86,10 +91,15 @@ fun ScoringScreen(
     onBack: () -> Unit,
     onFinished: () -> Unit,
     onPickLocation: () -> Unit,
-    onEditDetails: () -> Unit,
+    /** Round details for the round being scored (in a group, the current archer's). */
+    onEditDetails: (roundId: String) -> Unit,
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
+    val group by vm.group.collectAsStateWithLifecycle()
+    val currentId by vm.roundId.collectAsStateWithLifecycle()
+    val inGroup = group.size > 1
+    val member = group.firstOrNull { it.roundId == currentId }
     var showCard by rememberSaveable { mutableStateOf(false) }
     var showOverride by remember { mutableStateOf(false) }
     var confirmFinish by remember { mutableStateOf(false) }
@@ -100,7 +110,8 @@ fun ScoringScreen(
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
 
     val r = round
-    LaunchedEffect(r != null) { if (r != null) vm.ensureTargetSelected(r) }
+    // Also when moving to another archer in a group.
+    LaunchedEffect(r?.id) { if (r != null) vm.ensureTargetSelected(r) }
     // Round details changed (e.g. fewer targets): make sure the open target still exists.
     LaunchedEffect(r?.targetCount) { if (r != null) vm.ensureTargetSelected(r) }
     // Nothing known nearby: ask for the location's name once (they can also tap the location line later).
@@ -118,12 +129,16 @@ fun ScoringScreen(
                     title = {
                         Column {
                             Text(
-                                if (r != null && targetNo > 0) "Target $targetNo of ${r.targetCount}" else "Round",
+                                when {
+                                    r == null || targetNo == 0 -> "Round"
+                                    inGroup && member != null -> "Target $targetNo · ${member.name}"
+                                    else -> "Target $targetNo of ${r.targetCount}"
+                                },
                                 style = MaterialTheme.typography.titleLarge,
                             )
                             if (r != null) {
                                 Text(
-                                    "${r.typeAndClass} · ${r.shootDate.format(UkDate)}",
+                                    (if (inGroup) "of ${r.targetCount} · " else "") + "${r.typeAndClass} · ${r.shootDate.format(UkDate)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -140,13 +155,17 @@ fun ScoringScreen(
                         Box {
                             IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                val what = if (inGroup) "group round" else "round"
                                 if (r?.status == RoundStatus.COMPLETED) {
-                                    DropdownMenuItem(text = { Text("Reopen round") }, onClick = { menuOpen = false; vm.reopen() })
+                                    DropdownMenuItem(text = { Text("Reopen $what") }, onClick = { menuOpen = false; vm.reopen() })
                                 } else {
-                                    DropdownMenuItem(text = { Text("Finish round") }, onClick = { menuOpen = false; confirmFinish = true })
+                                    DropdownMenuItem(text = { Text("Finish $what") }, onClick = { menuOpen = false; confirmFinish = true })
                                 }
-                                DropdownMenuItem(text = { Text("Round details") }, onClick = { menuOpen = false; onEditDetails() })
-                                DropdownMenuItem(text = { Text("Delete round") }, onClick = { menuOpen = false; confirmDelete = true })
+                                DropdownMenuItem(
+                                    text = { Text(if (inGroup && member != null) "Round details – ${member.name}" else "Round details") },
+                                    onClick = { menuOpen = false; onEditDetails(currentId) },
+                                )
+                                DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }
                     },
@@ -156,19 +175,29 @@ fun ScoringScreen(
                         progress = { if (r.targetCount == 0) 0f else r.targetsComplete.toFloat() / r.targetCount },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    LocationChip(r.location, signedIn, onClick = { showLocation = true })
+                    // The group shares one location: show the scorer's (theirs has the GPS position).
+                    LocationChip(shownLocation(group, r), signedIn, onClick = { showLocation = true })
+                    if (inGroup && targetNo > 0) {
+                        GroupStrip(group, currentId, targetNo) { vm.selectMember(it) }
+                    }
                 }
             }
         },
         bottomBar = {
             if (r != null && targetNo > 0) {
                 val target = r.target(targetNo)
+                val next = if (inGroup) vm.nextInGroup() else null
+                val prev = if (inGroup) vm.prevInGroup() else null
                 TargetNavBar(
                     targetNo = targetNo,
                     targetCount = r.targetCount,
                     scored = target.isComplete,
-                    onPrev = { vm.goTo(targetNo - 1) },
-                    onNext = { vm.goTo(targetNo + 1) },
+                    // Group: the last archer on the last target finishes; otherwise on to the next archer.
+                    last = if (inGroup) next == null || next.second > r.targetCount else targetNo >= r.targetCount,
+                    prevEnabled = if (inGroup) prev != null && prev.second >= 1 else targetNo > 1,
+                    nextLabel = next?.let { (m, n) -> if (n == targetNo) "Next: ${m.name}" else "Target $n: ${m.name}" },
+                    onPrev = { vm.prev() },
+                    onNext = { vm.next() },
                     onFinish = { confirmFinish = true },
                     onDone = onBack,
                     finished = r.status == RoundStatus.COMPLETED,
@@ -217,7 +246,7 @@ fun ScoringScreen(
     }
 
     if (showLocation && r != null) {
-        LocationSheet(locationVm, r.location, onDismiss = { showLocation = false }, onPickOnMap = onPickLocation)
+        LocationSheet(locationVm, shownLocation(group, r), onDismiss = { showLocation = false }, onPickOnMap = onPickLocation)
     }
     if (showCard && r != null) {
         ScorecardSheet(
@@ -233,12 +262,23 @@ fun ScoringScreen(
         val unscored = r.targetCount - r.targetsComplete
         AlertDialog(
             onDismissRequest = { confirmFinish = false },
-            title = { Text("Finish round?") },
+            title = { Text(if (inGroup) "Finish group round?" else "Finish round?") },
             text = {
-                Text(
-                    if (unscored > 0) "$unscored target(s) aren't scored yet. Total ${r.totalPoints}."
-                    else "Total ${r.totalPoints}. You can reopen it later if needed.",
-                )
+                if (inGroup) {
+                    val left = group.sumOf { it.round.targetCount - it.round.targetsComplete }
+                    val friends = group.count { it.role == GroupRole.FRIEND }
+                    Text(
+                        (if (left > 0) "$left score(s) still to enter across the group. " else "") +
+                            "Everyone's round is finished" +
+                            (if (friends > 0) "; friends' rounds are sent to them to accept" else "") +
+                            ". You can reopen it later if needed.",
+                    )
+                } else {
+                    Text(
+                        if (unscored > 0) "$unscored target(s) aren't scored yet. Total ${r.totalPoints}."
+                        else "Total ${r.totalPoints}. You can reopen it later if needed.",
+                    )
+                }
             },
             confirmButton = { TextButton(onClick = { confirmFinish = false; vm.finish(onFinished) }) { Text("Finish") } },
             dismissButton = { TextButton(onClick = { confirmFinish = false }) { Text("Cancel") } },
@@ -248,8 +288,13 @@ fun ScoringScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete round?") },
-            text = { Text("This removes the round and all its scores.") },
+            title = { Text(if (inGroup) "Delete group round?" else "Delete round?") },
+            text = {
+                Text(
+                    if (inGroup) "This removes everyone's round in the group and all their scores. Requests already sent to friends are taken back."
+                    else "This removes the round and all its scores.",
+                )
+            },
             confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete(onBack) }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )
@@ -366,6 +411,10 @@ private fun TargetNavBar(
     targetCount: Int,
     scored: Boolean,
     finished: Boolean,
+    last: Boolean = targetNo >= targetCount,
+    prevEnabled: Boolean = targetNo > 1,
+    /** Group: "Next: Dave" instead of "Next target". */
+    nextLabel: String? = null,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onFinish: () -> Unit,
@@ -376,13 +425,12 @@ private fun TargetNavBar(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = onPrev,
-                    enabled = targetNo > 1,
+                    enabled = prevEnabled,
                     modifier = Modifier.height(52.dp),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = null)
                     Text("Prev")
                 }
-                val last = targetNo >= targetCount
                 Button(
                     onClick = when {
                         !last -> onNext
@@ -396,7 +444,7 @@ private fun TargetNavBar(
                         when {
                             !scored -> "Score target $targetNo to continue"
                             last -> if (finished) "Done" else "Finish round"
-                            else -> "Next target"
+                            else -> nextLabel ?: "Next target"
                         },
                         style = MaterialTheme.typography.titleSmall,
                     )
@@ -667,3 +715,7 @@ private fun OverrideDialog(initial: Int, onDismiss: () -> Unit, onSave: (Int) ->
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
+
+/** In a group everyone is at the same location; the scorer's round has it (and the GPS position). */
+private fun shownLocation(group: List<GroupMember>, r: Round): RoundLocation =
+    group.firstOrNull { it.role == GroupRole.SCORER }?.round?.location ?: r.location

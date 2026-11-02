@@ -54,7 +54,14 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Round details") },
+                title = {
+                    Column {
+                        Text("Round details")
+                        form?.groupName?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
@@ -76,7 +83,10 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SectionCard(title = "Shoot") {
+            SectionCard(
+                title = "Shoot",
+                subtitle = if (f.groupName != null) "Group round: the date and number of targets change for everyone." else null,
+            ) {
                 DateField(
                     label = "Shoot date",
                     date = f.shootDate,
@@ -98,7 +108,11 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
                 )
             }
 
-            SectionCard(title = "Archer", subtitle = "Only changes this round, not your profile.") {
+            SectionCard(
+                title = "Archer",
+                subtitle = if (f.groupName != null && f.groupName != "You") "Only changes ${f.groupName}'s round."
+                else "Only changes this round, not your profile.",
+            ) {
                 SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c ->
                     vm.update { it.copy(archerClass = c) }
                 }

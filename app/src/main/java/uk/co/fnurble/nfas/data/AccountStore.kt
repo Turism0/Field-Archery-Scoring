@@ -15,6 +15,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+/** A friend as remembered on this phone for adding to group rounds offline. */
+data class CachedFriend(val archerId: String, val username: String)
+
 /** The signed-in account on this phone. The password is never stored, only the API token. */
 data class Account(val archerId: String, val username: String, val token: String, val expiresUtc: String)
 
@@ -44,6 +47,29 @@ class AccountStore(context: Context) {
     val duplicateLocations: StateFlow<Int> = _duplicateLocations.asStateFlow()
 
     fun setDuplicateLocations(count: Int) { _duplicateLocations.value = count }
+
+    private val _roundOffers = MutableStateFlow(0)
+    /** Rounds friends have scored for you, waiting to be accepted (badge on the Friends tile). Not stored. */
+    val roundOffers: StateFlow<Int> = _roundOffers.asStateFlow()
+
+    fun setRoundOffers(count: Int) { _roundOffers.value = count }
+
+    /**
+     * Friends' usernames and ids from the last time the list was fetched, so friends can be added to a group round
+     * with no signal. Usernames only (the server's own data), cleared on sign-out.
+     */
+    fun cachedFriends(): List<CachedFriend> = try {
+        val arr = org.json.JSONArray(prefs.getString(K_FRIENDS, "[]"))
+        (0 until arr.length()).map { arr.getJSONObject(it) }.map { CachedFriend(it.getString("id"), it.getString("u")) }
+    } catch (e: org.json.JSONException) {
+        emptyList()
+    }
+
+    fun setCachedFriends(friends: List<CachedFriend>) {
+        val arr = org.json.JSONArray()
+        friends.forEach { arr.put(org.json.JSONObject().put("id", it.archerId).put("u", it.username)) }
+        prefs.edit().putString(K_FRIENDS, arr.toString()).apply()
+    }
 
     fun setRole(role: AccountRole) {
         prefs.edit().putString(K_ROLE, role.name).apply()
@@ -78,6 +104,7 @@ class AccountStore(context: Context) {
         _lastSync.value = null
         _role.value = AccountRole.USER
         _duplicateLocations.value = 0
+        _roundOffers.value = 0
     }
 
     private fun load(): Account? = try {
@@ -136,5 +163,6 @@ class AccountStore(context: Context) {
         const val K_PULL_CURSOR = "pull_cursor"
         const val K_LAST_SYNC = "last_sync"
         const val K_ROLE = "role"
+        const val K_FRIENDS = "friends_cache"
     }
 }

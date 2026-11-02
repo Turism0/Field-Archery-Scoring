@@ -48,6 +48,8 @@ import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.ui.RoundLocationViewModel
 import uk.co.fnurble.nfas.ui.ScorecardViewModel
 import uk.co.fnurble.nfas.ui.components.LocationChip
+import uk.co.fnurble.nfas.ui.components.GroupCard
+import uk.co.fnurble.nfas.data.local.GroupRole
 import uk.co.fnurble.nfas.ui.components.LocationSheet
 import uk.co.fnurble.nfas.ui.components.label
 import uk.co.fnurble.nfas.ui.components.RunningStats
@@ -68,8 +70,13 @@ fun ScorecardScreen(
     onEdit: (targetNo: Int) -> Unit,
     onPickLocation: () -> Unit,
     onEditDetails: () -> Unit,
+    /** Group round: open someone else's scorecard. */
+    onOpenMember: (roundId: String) -> Unit = {},
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
+    val group by vm.group.collectAsStateWithLifecycle()
+    val inGroup = group.size > 1
+    val member = group.firstOrNull { it.roundId == vm.roundId }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
     var showLocation by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -78,7 +85,18 @@ fun ScorecardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Scorecard") },
+                title = {
+                    Column {
+                        Text("Scorecard")
+                        if (inGroup && member != null) {
+                            Text(
+                                if (member.role == GroupRole.SCORER) "You · group of ${group.size}" else "${member.name} · ${member.role.label()}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
@@ -89,12 +107,15 @@ fun ScorecardScreen(
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             if (round?.status == RoundStatus.COMPLETED) {
                                 DropdownMenuItem(
-                                    text = { Text("Reopen round") },
+                                    text = { Text(if (inGroup) "Reopen group round" else "Reopen round") },
                                     onClick = { menuOpen = false; vm.reopen() },
                                 )
                             }
                             DropdownMenuItem(text = { Text("Edit round details") }, onClick = { menuOpen = false; onEditDetails() })
-                            DropdownMenuItem(text = { Text("Delete round") }, onClick = { menuOpen = false; confirmDelete = true })
+                            DropdownMenuItem(
+                                text = { Text(if (inGroup) "Delete group round" else "Delete round") },
+                                onClick = { menuOpen = false; confirmDelete = true },
+                            )
                         }
                     }
                 },
@@ -121,6 +142,7 @@ fun ScorecardScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     RoundHeader(r)
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
+                    if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
                     RunningStats(r.stats)
                     MoreStats(r.stats)
                     Text(
@@ -152,8 +174,13 @@ fun ScorecardScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Delete round?") },
-            text = { Text("This removes the round and all its scores.") },
+            title = { Text(if (inGroup) "Delete group round?" else "Delete round?") },
+            text = {
+                Text(
+                    if (inGroup) "This removes everyone's round in the group and all their scores. Requests already sent to friends are taken back."
+                    else "This removes the round and all its scores.",
+                )
+            },
             confirmButton = { TextButton(onClick = { confirmDelete = false; vm.delete(onBack) }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )

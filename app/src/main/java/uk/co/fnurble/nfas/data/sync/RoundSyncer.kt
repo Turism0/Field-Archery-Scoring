@@ -3,6 +3,7 @@ package uk.co.fnurble.nfas.data.sync
 import org.json.JSONArray
 import org.json.JSONObject
 import uk.co.fnurble.nfas.data.AccountStore
+import uk.co.fnurble.nfas.data.CachedFriend
 import uk.co.fnurble.nfas.data.LocationRepository
 import uk.co.fnurble.nfas.data.local.LocationState
 import uk.co.fnurble.nfas.data.local.AnimalEntity
@@ -54,6 +55,7 @@ class RoundSyncer(
             val me = api.me(account.token)
             accounts.setRole(AccountRole.fromCode(me.optString("role")))
             accounts.setDuplicateLocations(me.optInt("duplicateLocations"))
+            accounts.setRoundOffers(me.optInt("roundOffers"))
             // Shoot locations before uploading, so finished rounds go up with theirs.
             try {
                 locations.lookUpPending()
@@ -62,7 +64,14 @@ class RoundSyncer(
                 if (e.isNetwork || e.status == 401) throw e   // anything else: rounds still sync
             }
             upload(account.token)
+            uploadOffers(account.token)
             val skipped = download(account.token)
+            // Remember friends for adding them to group rounds with no signal (not essential).
+            try {
+                cacheFriends(account.token)
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401) throw e
+            }
             accounts.setLastSync(Instant.now())
             Report(Outcome.DONE, skipped = skipped)
         } catch (e: ApiException) {
@@ -96,6 +105,47 @@ class RoundSyncer(
                 }
             }
         }
+    }
+
+    /**
+     * Rounds scored for friends in a group on this phone: finished ones go to the friend as a request (sent again if
+     * corrected), deleted ones are withdrawn. Once the friend has accepted, the server refuses changes (409): the
+     * round is theirs now, so it's marked sent.
+     */
+    private suspend fun uploadOffers(token: String) {
+        for (id in dao.pendingOfferIds()) {
+            val data = dao.loadRound(id) ?: continue
+            val editedAt = data.round.updatedAt.toEpochMilli()
+            val friend = data.round.groupArcherId
+            try {
+                when {
+                    data.round.deleted -> try {
+                        api.withdrawOffer(token, id)
+                    } catch (e: ApiException) {
+                        if (e.status != 404) throw e   // never sent, or already answered
+                    }
+                    friend == null -> {
+                        dao.markSync(id, editedAt, SyncState.FAILED.name)
+                        continue
+                    }
+                    else -> api.offerRound(token, id, friend, data.round.groupId, data.toJson())
+                }
+                dao.markSync(id, editedAt, SyncState.SYNCED.name)
+            } catch (e: ApiException) {
+                when {
+                    e.status == 409 -> dao.markSync(id, editedAt, SyncState.SYNCED.name)
+                    // No longer friends, or refused: don't retry until it's edited again.
+                    e.status in 400..499 && e.status != 401 && e.status != 429 -> dao.markSync(id, editedAt, SyncState.FAILED.name)
+                    else -> throw e
+                }
+            }
+        }
+    }
+
+    private suspend fun cacheFriends(token: String) {
+        val list = api.friends(token).getJSONArray("friends")
+        accounts.setCachedFriends((0 until list.length()).map { list.getJSONObject(it) }
+            .map { CachedFriend(it.getString("archerId"), it.getString("username")) })
     }
 
     /** Returns how many downloaded rounds couldn't be read. */
@@ -142,13 +192,23 @@ class RoundSyncer(
         }
         val data = json.toRoundData()
         // Keep this phone's own GPS position (never on the server), and a lookup still waiting here.
-        val merged = if (local != null && local.fixLat != null) {
+        val withFix = if (local != null && local.fixLat != null) {
             data.round.copy(
                 fixLat = local.fixLat,
                 fixLon = local.fixLon,
                 locationState = data.round.locationState ?: local.locationState,
             )
         } else data.round
+        // And its place in a group scored on this phone (the server doesn't send it back).
+        val merged = if (local?.groupId != null) {
+            withFix.copy(
+                groupId = local.groupId,
+                groupRole = local.groupRole,
+                groupName = local.groupName,
+                groupArcherId = local.groupArcherId,
+                groupOrder = local.groupOrder,
+            )
+        } else withFix
         dao.replaceRound(merged, data.targets, data.animals)
     }
 
@@ -195,6 +255,7 @@ internal fun RoundData.toJson(): JSONObject {
         .put("clientUpdatedUtc", round.updatedAt.toString())
         .put("locationId", round.locationId ?: JSONObject.NULL)
         .put("roundType", round.roundType ?: "BIG_GAME")
+        .put("groupId", round.groupId ?: JSONObject.NULL)
         .put("targets", targetArray)
 }
 

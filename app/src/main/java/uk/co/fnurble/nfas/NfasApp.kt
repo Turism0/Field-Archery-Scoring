@@ -29,7 +29,7 @@ class AppContainer(app: Application) {
 
     val profileRepository = ProfileRepository(db.profileDao())
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })
-    val friendsRepository = FriendsRepository(api, accountStore)
+    val friendsRepository = FriendsRepository(api, accountStore, onAccepted = { syncScheduler.request() })
     val adminRepository = AdminRepository(api, accountStore)
     val locationPageRepository = LocationPageRepository(api, accountStore)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */

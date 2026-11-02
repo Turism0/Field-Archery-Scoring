@@ -74,6 +74,7 @@ fun HomeScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val role by vm.role.collectAsStateWithLifecycle()
     val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
+    val roundOffers by vm.roundOffers.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
 
@@ -147,8 +148,13 @@ fun HomeScreen(
                 HomeTile(
                     icon = Icons.Filled.Face,
                     title = "Friends",
-                    subtitle = if (signedIn) "Friends' scorecards and stats, requests" else "Sign in to see friends' scorecards",
+                    subtitle = when {
+                        !signedIn -> "Sign in to see friends' scorecards"
+                        roundOffers > 0 -> "$roundOffers round${if (roundOffers == 1) "" else "s"} scored for you to accept"
+                        else -> "Friends' scorecards and stats, requests"
+                    },
                     onClick = onFriends,
+                    badge = if (signedIn) roundOffers else 0,
                 )
                 HomeTile(
                     icon = Icons.Filled.LocationOn,

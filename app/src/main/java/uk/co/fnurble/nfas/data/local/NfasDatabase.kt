@@ -1,7 +1,9 @@
 package uk.co.fnurble.nfas.data.local
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Database
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -37,8 +39,41 @@ interface ProfileDao {
 
 @Dao
 abstract class RoundDao {
-    @Query("SELECT * FROM round WHERE deleted = 0 ORDER BY shoot_date DESC, created_at DESC")
-    abstract fun observeRounds(): Flow<List<RoundEntity>>
+    /**
+     * This archer's own rounds (not ones scored for friends or guests in a group), with the size of their group
+     * (0 = not a group round).
+     */
+    @Query(
+        "SELECT r.*, (SELECT COUNT(*) FROM round g WHERE g.group_id = r.group_id AND g.deleted = 0) AS group_size " +
+            "FROM round r WHERE r.deleted = 0 AND (r.group_role IS NULL OR r.group_role = 'SCORER') " +
+            "ORDER BY r.shoot_date DESC, r.created_at DESC",
+    )
+    abstract fun observeRounds(): Flow<List<RoundWithGroupSize>>
+
+    // ---- Groups scored on this phone (database v4) ----
+
+    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
+    abstract fun observeGroup(groupId: String): Flow<List<RoundEntity>>
+
+    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
+    abstract suspend fun getGroup(groupId: String): List<RoundEntity>
+
+    /** Friends' rounds to send as requests (finished) or withdraw (deleted). */
+    @Query(
+        "SELECT id FROM round WHERE group_role = 'FRIEND' AND sync_state = 'PENDING' " +
+            "AND (deleted = 1 OR status = 'COMPLETED') ORDER BY updated_at",
+    )
+    abstract suspend fun pendingOfferIds(): List<String>
+
+    /** Guests' scores are temporary: gone 30 days after the round was started. */
+    @Query("DELETE FROM round WHERE group_role = 'GUEST' AND created_at < :cutoffMillis")
+    abstract suspend fun deleteGuestsBefore(cutoffMillis: Long): Int
+
+    /** Starts a group round: everyone's round with all its targets, in one go. */
+    @Transaction
+    open suspend fun createRounds(rounds: List<RoundData>) {
+        rounds.forEach { createRound(it.round, it.targets, it.animals) }
+    }
 
     @Query("SELECT * FROM round WHERE id = :id")
     abstract fun observeRound(id: String): Flow<RoundEntity?>
@@ -60,7 +95,10 @@ abstract class RoundDao {
     }
 
     /** Rounds waiting to go to the server: finished rounds and deletions (in-progress rounds stay on the phone). */
-    @Query("SELECT id FROM round WHERE sync_state = 'PENDING' AND (deleted = 1 OR status = 'COMPLETED') ORDER BY updated_at")
+    @Query(
+        "SELECT id FROM round WHERE sync_state = 'PENDING' AND (deleted = 1 OR status = 'COMPLETED') " +
+            "AND (group_role IS NULL OR group_role = 'SCORER') ORDER BY updated_at",
+    )
     abstract suspend fun pendingUploadIds(): List<String>
 
     /**
@@ -146,10 +184,14 @@ abstract class RoundDao {
     @Query("UPDATE round SET location_state = 'NEEDS_NAME' WHERE id = :id AND location_state = 'PENDING_LOOKUP'")
     abstract suspend fun markNeedsName(id: String)
 
-    /** Sets the round's location as an edit, so a finished round goes up to the server again. */
+    /**
+     * Sets the round's location as an edit, so a finished round goes up to the server again. In a group, everyone's
+     * round gets it (they're all at the same shoot).
+     */
     @Query(
         "UPDATE round SET location_id = :locationId, location_name = :name, location_state = 'SET', " +
-            "updated_at = :nowMillis, sync_state = 'PENDING' WHERE id = :id",
+            "updated_at = :nowMillis, sync_state = 'PENDING' " +
+            "WHERE id = :id OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM round WHERE id = :id))",
     )
     abstract suspend fun setLocation(id: String, locationId: String, name: String, nowMillis: Long)
 
@@ -168,6 +210,12 @@ abstract class RoundDao {
     }
 }
 
+/** A round with the number of rounds in its group (0 when it isn't a group round). */
+data class RoundWithGroupSize(
+    @Embedded val round: RoundEntity,
+    @ColumnInfo(name = "group_size") val groupSize: Int,
+)
+
 data class RoundData(
     val round: RoundEntity,
     val targets: List<TargetEntity>,
@@ -176,7 +224,7 @@ data class RoundData(
 
 @Database(
     entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -187,8 +235,20 @@ abstract class NfasDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): NfasDatabase =
             Room.databaseBuilder(context, NfasDatabase::class.java, "nfas.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
+
+        /** v4: groups scored on this phone (app 2.0). Existing rounds aren't in a group. */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN group_id TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN group_role TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN group_name TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN group_archer_id TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN group_order INTEGER")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_round_group_id ON round (group_id)")
+            }
+        }
 
         /** v3: round types (app 1.9). Existing rounds are Big Game (null type); Woodsman targets keep their arrows. */
         val MIGRATION_2_3 = object : Migration(2, 3) {

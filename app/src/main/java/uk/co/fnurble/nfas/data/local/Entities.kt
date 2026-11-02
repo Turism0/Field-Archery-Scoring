@@ -20,6 +20,14 @@ enum class SyncState { PENDING, SYNCED, FAILED }
 
 enum class AnimalState { PENDING, MISSED, SCORED }
 
+/**
+ * A round's place in a group scored on this phone (database v4). Null = an ordinary round.
+ * SCORER = this archer's own round in the group (in history and synced as normal); FRIEND = scored for a friend
+ * (sent to them as a request, never in this archer's history); GUEST = scored for a guest (phone only, deleted
+ * after 30 days).
+ */
+enum class GroupRole { SCORER, FRIEND, GUEST }
+
 /** Phone-side progress of a round's shoot location (null = no position). */
 enum class LocationState { PENDING_LOOKUP, NEEDS_NAME, SET }
 
@@ -46,7 +54,7 @@ data class ProfileEntity(
  * Class, age group and bow style are copied in at the start so later profile changes don't
  * alter old rounds.
  */
-@Entity(tableName = "round", indices = [Index("shoot_date")])
+@Entity(tableName = "round", indices = [Index("shoot_date"), Index("group_id")])
 data class RoundEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "shoot_date") val shootDate: LocalDate,
@@ -75,6 +83,15 @@ data class RoundEntity(
     @ColumnInfo(name = "fix_lon") val fixLon: Double? = null,
     /** Round type (database v3): null = Big Game (every round from before v3), or a RoundType name. */
     @ColumnInfo(name = "round_type") val roundType: String? = null,
+    // ---- Group scored on this phone (database v4). Every round in the group shares the group id. ----
+    @ColumnInfo(name = "group_id") val groupId: String? = null,
+    @ColumnInfo(name = "group_role") val groupRole: GroupRole? = null,
+    /** The friend's username or the guest's name (null for the scorer's own round). */
+    @ColumnInfo(name = "group_name") val groupName: String? = null,
+    /** The friend's server archer id (FRIEND only), so the round can be sent to them. */
+    @ColumnInfo(name = "group_archer_id") val groupArcherId: String? = null,
+    /** Scoring order in the group: 0 = the scorer. */
+    @ColumnInfo(name = "group_order") val groupOrder: Int? = null,
 )
 
 @Entity(
