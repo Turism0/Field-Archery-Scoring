@@ -397,7 +397,20 @@ class AdminDuplicatesViewModel(
 // ---------------- Shoot location map and page ----------------
 
 /** Map of shoot locations: public ones plus your own private ones; ones you've shot at are highlighted. */
-class LocationMapViewModel(private val repo: LocationPageRepository, accounts: AccountRepository) : ViewModel() {
+class LocationMapViewModel(
+    private val repo: LocationPageRepository,
+    accounts: AccountRepository,
+    private val locationsRepo: LocationRepository? = null,
+) : ViewModel() {
+    /** Pick mode: sets [roundId]'s location to [location] (counts as an edit, so it re-uploads), then [onDone]. */
+    fun choose(roundId: String, location: MapLocation, onDone: () -> Unit) {
+        val repo = locationsRepo ?: return
+        viewModelScope.launch {
+            repo.choose(roundId, NearbyLocation(location.id, location.name, -1))
+            onDone()
+        }
+    }
+
     val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
 

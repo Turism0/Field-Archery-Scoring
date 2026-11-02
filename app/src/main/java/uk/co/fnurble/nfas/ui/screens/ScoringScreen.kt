@@ -78,7 +78,13 @@ import uk.co.fnurble.nfas.ui.components.UkDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ScoringScreen(vm: ScoringViewModel, locationVm: RoundLocationViewModel, onBack: () -> Unit, onFinished: () -> Unit) {
+fun ScoringScreen(
+    vm: ScoringViewModel,
+    locationVm: RoundLocationViewModel,
+    onBack: () -> Unit,
+    onFinished: () -> Unit,
+    onPickLocation: () -> Unit,
+) {
     val round by vm.round.collectAsStateWithLifecycle()
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
     var showCard by rememberSaveable { mutableStateOf(false) }
@@ -198,7 +204,7 @@ fun ScoringScreen(vm: ScoringViewModel, locationVm: RoundLocationViewModel, onBa
     }
 
     if (showLocation && r != null) {
-        LocationSheet(locationVm, r.location, onDismiss = { showLocation = false })
+        LocationSheet(locationVm, r.location, onDismiss = { showLocation = false }, onPickOnMap = onPickLocation)
     }
     if (showCard && r != null) {
         ScorecardSheet(

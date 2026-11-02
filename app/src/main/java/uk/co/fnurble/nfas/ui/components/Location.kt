@@ -27,6 +27,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -92,7 +93,13 @@ fun LocationChip(location: RoundLocation, signedIn: Boolean, onClick: () -> Unit
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocationSheet(vm: RoundLocationViewModel, current: RoundLocation, onDismiss: () -> Unit) {
+fun LocationSheet(
+    vm: RoundLocationViewModel,
+    current: RoundLocation,
+    onDismiss: () -> Unit,
+    /** Opens the map to pick any known location for this round. */
+    onPickOnMap: () -> Unit,
+) {
     val nearby by vm.nearby.collectAsStateWithLifecycle()
     val hasFix by vm.hasFix.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -116,6 +123,14 @@ fun LocationSheet(vm: RoundLocationViewModel, current: RoundLocation, onDismiss:
             )
             if (current.status == LocationStatus.SET) {
                 Text("Now: ${current.name}", style = MaterialTheme.typography.bodyLarge)
+            }
+            OutlinedButton(
+                onClick = { onDismiss(); onPickOnMap() },
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.LocationOn, contentDescription = null, Modifier.size(18.dp))
+                Text("Choose on map", Modifier.padding(start = 8.dp))
             }
 
             if (!hasFix) {

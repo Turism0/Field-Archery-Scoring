@@ -66,6 +66,7 @@ fun ScorecardScreen(
     locationVm: RoundLocationViewModel,
     onBack: () -> Unit,
     onEdit: (targetNo: Int) -> Unit,
+    onPickLocation: () -> Unit,
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -143,7 +144,7 @@ fun ScorecardScreen(
 
     val current = round
     if (showLocation && current != null) {
-        LocationSheet(locationVm, current.location, onDismiss = { showLocation = false })
+        LocationSheet(locationVm, current.location, onDismiss = { showLocation = false }, onPickOnMap = onPickLocation)
     }
 
     if (confirmDelete) {

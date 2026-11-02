@@ -59,6 +59,21 @@ fun NfasNavHost() {
                 onOpenLocation = { loc -> nav.navigate("location/${loc.id}") },
             )
         }
+        // Choose a round's location on the map (from the location sheet).
+        composable(
+            "pickLocation/{roundId}",
+            arguments = listOf(navArgument("roundId") { type = NavType.StringType }),
+        ) { entry ->
+            val roundId = entry.arguments?.getString("roundId").orEmpty()
+            val vm = appViewModel { c, _ -> LocationMapViewModel(c.locationPageRepository, c.accountRepository, c.locationRepository) }
+            LocationMapScreen(
+                vm = vm,
+                onBack = { nav.popBackStack() },
+                onProfile = { nav.navigate("profile") },
+                onOpenLocation = { loc -> vm.choose(roundId, loc) { nav.popBackStack() } },
+                pickMode = true,
+            )
+        }
         composable(
             "location/{locationId}",
             arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
@@ -197,6 +212,7 @@ fun NfasNavHost() {
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.
                 onFinished = { nav.navigate(scorecardRoute(roundId)) { popUpTo("home") } },
+                onPickLocation = { nav.navigate("pickLocation/$roundId") },
             )
         }
         composable(
@@ -209,6 +225,7 @@ fun NfasNavHost() {
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },
+                onPickLocation = { nav.navigate("pickLocation/$roundId") },
             )
         }
     }

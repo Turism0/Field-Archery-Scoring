@@ -63,6 +63,8 @@ fun LocationMapScreen(
     onBack: () -> Unit,
     onProfile: () -> Unit,
     onOpenLocation: (MapLocation) -> Unit,
+    /** Choosing a location for a round: tapping a pin's pop-up picks it instead of opening its page. */
+    pickMode: Boolean = false,
 ) {
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val locations by vm.locations.collectAsStateWithLifecycle()
@@ -72,7 +74,7 @@ fun LocationMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Shoot locations") },
+                title = { Text(if (pickMode) "Choose the shoot location" else "Shoot locations") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
@@ -101,7 +103,7 @@ fun LocationMapScreen(
                         }
                     }
                     is Load.Ready -> {
-                        LocationMap(l.value, onOpenLocation)
+                        LocationMap(l.value, onOpenLocation, pickMode)
                         Legend(Modifier.align(Alignment.BottomStart).padding(12.dp), shot = l.value.count { it.myRounds > 0 }, total = l.value.size)
                     }
                 }
@@ -111,7 +113,7 @@ fun LocationMapScreen(
 }
 
 @Composable
-private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocation) -> Unit) {
+private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocation) -> Unit, pickMode: Boolean) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shotColour = MaterialTheme.colorScheme.primary.toArgb()
@@ -159,7 +161,7 @@ private fun LocationMap(locations: List<MapLocation>, onOpenLocation: (MapLocati
                         append(if (loc.myRounds > 0) "You: ${loc.myRounds} round${if (loc.myRounds == 1) "" else "s"}" else "Not shot here yet")
                         if (!loc.isPrivate) append(" · everyone: ${loc.rounds}")
                     }
-                    subDescription = "Tap here for scorecards and stats"
+                    subDescription = if (pickMode) "Tap here to use this location" else "Tap here for scorecards and stats"
                     setOnMarkerClickListener { m, _ ->
                         if (m.isInfoWindowShown) {
                             m.closeInfoWindow()
