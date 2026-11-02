@@ -39,7 +39,7 @@ function New-TestUser {
 }
 
 function Points([string]$Arrows) {
-    $p = ($Arrows.ToCharArray() | Where-Object { $_ -eq 'W' }).Count * 5
+    [int]$p = 5 * @($Arrows.ToCharArray() | Where-Object { $_ -eq 'W' }).Count
     $k = $Arrows.IndexOf('K'); if ($k -ge 0) { $p += 30 - $k * 10 }
     $p
 }
@@ -47,17 +47,18 @@ function Points([string]$Arrows) {
 # A Woodsman round from a list of arrow strings; $Points / $Type / $Override let a test break one target.
 function New-Woodsman([string[]]$Arrows, $LocationId = $null, [hashtable]$Break = @{}) {
     $now = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
-    $targets = @(); $i = 0
+    $targets = @(); $i = 0; $total = 0
     foreach ($a in $Arrows) {
         $i++
         $t = @{ targetNo = $i; type = 'WOODSMAN'; overridePoints = $null; points = (Points $a); arrows = $a; animals = @() }
         if ($Break.ContainsKey($i)) { foreach ($k in $Break[$i].Keys) { $t[$k] = $Break[$i][$k] } }
         $targets += $t
+        $total += [int]$t.points
     }
     @{
         roundType = 'WOODSMAN'; shootDate = (Get-Date).ToString('yyyy-MM-dd'); targetCount = $Arrows.Count
         archerClass = 'G'; ageGroup = 'ADULT'; bowStyle = 'LB'; status = 'COMPLETED'
-        totalPoints = ($targets | Measure-Object -Property points -Sum).Sum
+        totalPoints = $total
         clientCreatedUtc = $now; clientUpdatedUtc = $now; locationId = $LocationId
         targets = $targets
     }
@@ -83,7 +84,7 @@ $L = (Call POST '/api/locations' @{ name = "zz_test Woods $tag"; latitude = $lat
 $arrows = @('K', 'WK', 'MWK', 'WWW', 'MMM', 'WWK', 'MK')
 $id = [guid]::NewGuid()
 $r = Call PUT "/api/rounds/$id" (New-Woodsman $arrows $L) -Token $A.Token
-Expect 'Woodsman round saved (K 30, WK 25, MWK 15, WWW 15, MMM 0, WWK 20, MK 20)' ($r.Status -eq 200) "($($r.Status) $($r.Body.message))"
+Expect 'Woodsman round saved (K 30, WK 25, MWK 15, WWW 15, MMM 0, WWK 20, MK 20)' ($r.Status -eq 200) "($($r.Status) $($r.Body.message)$($r.Body.title) $($r.Body.detail))"
 $r = Call GET "/api/rounds/$id" -Token $A.Token
 Expect 'comes back as WOODSMAN with total 125' ($r.Body.roundType -eq 'WOODSMAN' -and $r.Body.totalPoints -eq 125) "($($r.Body.roundType) $($r.Body.totalPoints))"
 Expect 'arrows come back as sent' ((@($r.Body.targets | ForEach-Object arrows) -join ',') -eq ($arrows -join ',')) "($(@($r.Body.targets | ForEach-Object arrows) -join ','))"
