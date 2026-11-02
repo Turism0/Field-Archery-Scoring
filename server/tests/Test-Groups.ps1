@@ -106,7 +106,7 @@ $r = Join-Group $code1 $C
 Expect 'C joins with the code' ($r.Status -eq 200 -and (MemberOf $r.Body $C).kind -eq 'JOINED' -and @($r.Body.members).Count -eq 4) (Why $r)
 $r = Join-Group $code1.ToLower() $C
 Expect 'joining again (lower case) doesn''t add C twice' ($r.Status -eq 200 -and @($r.Body.members).Count -eq 4) (Why $r)
-$r = Join (New-Code) $D
+$r = Join-Group (New-Code) $D
 Expect 'a wrong code is not found' ($r.Status -eq 404) (Why $r)
 $r = Call GET "/api/groups/$g1" -Token $D.Token
 Expect 'D (not in the group) can''t see it' ($r.Status -eq 404) (Why $r)
