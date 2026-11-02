@@ -49,6 +49,14 @@ data class LocationPage(
 /** Map and location pages, straight from the server (nothing stored on the phone). Needs signal. */
 class LocationPageRepository(private val api: NfasApi, private val accounts: AccountStore) {
 
+    /**
+     * A new location at a point picked on the map (not tied to a round). If the name is already used,
+     * the [ApiException] (409 name_taken) says so.
+     */
+    suspend fun create(name: String, lat: Double, lon: Double, isPrivate: Boolean) {
+        call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
+    }
+
     suspend fun map(): List<MapLocation> = call { token ->
         api.locationMap(token).getJSONArray("locations").objects().map { it.toMapLocation() }
     }

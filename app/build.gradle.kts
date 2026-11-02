@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fnurble.nfas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.8.03"
+        versionCode = 20
+        versionName = "1.8.04"
     }
 
     buildTypes {

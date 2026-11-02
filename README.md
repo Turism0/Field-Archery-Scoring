@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.8.03
+## Version 1.8.04
 
+- **1.8.04:** **New location** button on the Shoot locations map: tap it, then tap the map where the location is, name it (Private switch too) and it's added to the map. A name already used is refused with a message.
 - **1.8.03:** more ways to set a round's location. The location sheet now also has a **Known locations** drop-down (every public location and your private ones, by name), shown even when the round has no GPS position. On **Choose on map**, tap the map itself where the shoot is to name a **new location** there (with the Private switch); a name already used offers the existing location instead.
 - **1.8.02:** change a round's location by picking it on the map. The location sheet (tap the location line on the scoring screen or scorecard) has **Choose on map**: the map opens in pick mode, tap a pin then its pop-up to use that location. Works for rounds with no GPS position too. A finished round uploads again with its new location.
 - **1.8.01:** map fix: tapping the pop-up over a pin now opens the location page too (as well as tapping the pin again).
@@ -51,7 +52,7 @@ Versioning: minor changes go 1.8.01, 1.8.02 … 1.8.99; major changes move to th
   - **Friends** → add by username, requests, friends with a summary each → a friend's finished rounds → their scorecard (read-only).
   Pull down on Home or Score history to sync now.
 - **Friends** (signed in, needs signal): add a friend by username (they accept before either sees the other's rounds); incoming requests with Accept / Decline, outgoing with Cancel; each friend shows rounds, best total, average per animal and last shoot. Tap a friend for their finished rounds (⋮ → Remove friend), and a round for its scorecard, same layout as yours but with no editing. Pull down to refresh. Nothing about friends is stored on the phone.
-- **Shoot locations** (signed in, needs signal): map of locations (shot-at pins highlighted). Tap a pin, then its name, for the **location page**: your scorecards there, friends' rounds and stats there, all-archer stats by bow style.
+- **Shoot locations** (signed in, needs signal): map of locations (shot-at pins highlighted); **New location** button, then tap the map to add one. Tap a pin, then its name, for the **location page**: your scorecards there, friends' rounds and stats there, all-archer stats by bow style.
 - **Admin** (Admins and the Owner only, needs signal): every account with its role (Owner, Admin, User), joined and last sign-in. The Owner has an Admin switch on each account; Admins see the list only. **Possible duplicates** (count shown on the Admin tile) → merge, or mark as different places. **Shoot locations** → rename, make private / public, or merge a duplicate into another (nearest first, confirm first). Pull down to refresh.
 - **Round type:** list of round types; currently NFAS Big Game. Add new types in `domain/RoundType.kt`.
 - **Profile:** Account card (sign in / create account, or "Signed in as …" with Sign out); name and date of birth (phone only); class (Ladies/Gents), age group (automatic from date of birth, or manual), main bow style.

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -89,6 +91,8 @@ fun LocationMapScreen(
     val taken by vm.taken.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     var newAt by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    /** "New location" tapped: the next tap on the map is where it goes. */
+    var placing by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -110,6 +114,15 @@ fun LocationMapScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
+        floatingActionButton = {
+            if (!pickMode && signedIn && !placing && locations is Load.Ready) {
+                ExtendedFloatingActionButton(
+                    onClick = { placing = true },
+                    icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                    text = { Text("New location") },
+                )
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             when {
@@ -135,9 +148,23 @@ fun LocationMapScreen(
                     is Load.Ready -> {
                         LocationMap(
                             l.value, onOpenLocation, pickMode,
-                            onMapTap = if (pickMode && roundId != null) { lat, lon -> newAt = lat to lon } else null,
+                            onMapTap = if ((pickMode && roundId != null) || placing) { lat, lon -> newAt = lat to lon } else null,
                         )
                         Legend(Modifier.align(Alignment.BottomStart).padding(12.dp), shot = l.value.count { it.myRounds > 0 }, total = l.value.size)
+                        if (placing) {
+                            Surface(
+                                Modifier.align(Alignment.TopCenter).padding(12.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shadowElevation = 2.dp,
+                            ) {
+                                Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Tap the map where the new location is.", style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f, fill = false))
+                                    TextButton(onClick = { placing = false }) { Text("Cancel") }
+                                }
+                            }
+                        }
                         if (pickMode) {
                             Surface(
                                 Modifier.align(Alignment.TopCenter).padding(12.dp),
@@ -166,6 +193,15 @@ fun LocationMapScreen(
             onSave = { name, private -> vm.createAt(roundId, name, point.first, point.second, private) { newAt = null; onPicked() } },
             onUseExisting = { taken?.let { t -> vm.chooseExisting(roundId, t) { newAt = null; vm.clearTaken(); onPicked() } } },
         )
+    } else if (point != null && placing) {
+        // Not for a round: just add the location (a name already used comes back as a message).
+        NewLocationDialog(
+            taken = null,
+            onDismiss = { newAt = null; placing = false },
+            onSave = { name, private -> vm.createNew(name, point.first, point.second, private) { newAt = null; placing = false } },
+            onUseExisting = {},
+            forRound = false,
+        )
     }
 }
 
@@ -176,6 +212,7 @@ private fun NewLocationDialog(
     onDismiss: () -> Unit,
     onSave: (name: String, private: Boolean) -> Unit,
     onUseExisting: () -> Unit,
+    forRound: Boolean = true,
 ) {
     var name by remember { mutableStateOf("") }
     var private by remember { mutableStateOf(false) }
@@ -184,7 +221,9 @@ private fun NewLocationDialog(
         title = { Text("New shoot location") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Name the location at the point you tapped. It's used for this round.",
+                Text(
+                    if (forRound) "Name the location at the point you tapped. It's used for this round."
+                    else "Name the location at the point you tapped.",
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedTextField(
                     value = name,

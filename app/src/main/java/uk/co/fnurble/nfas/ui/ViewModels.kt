@@ -411,6 +411,21 @@ class LocationMapViewModel(
     fun messageShown() { _message.value = null }
     fun clearTaken() { _taken.value = null }
 
+    /** "New location" on the map screen: a location at a tapped point, then the map reloads. */
+    fun createNew(name: String, lat: Double, lon: Double, isPrivate: Boolean, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.create(name, lat, lon, isPrivate)
+                _message.value = "${name.trim()} added" + if (isPrivate) " (private)." else "."
+                onDone()
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            }
+        }
+    }
+
     /** Pick mode: a new location at a point tapped on the map, given to [roundId]. */
     fun createAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean, onDone: () -> Unit) {
         val repo = locationsRepo ?: return
