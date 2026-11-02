@@ -44,7 +44,10 @@ abstract class RoundDao {
      * (0 = not a group round).
      */
     @Query(
-        "SELECT r.*, (SELECT COUNT(*) FROM round g WHERE g.group_id = r.group_id AND g.deleted = 0) AS group_size " +
+        "SELECT r.*, (SELECT COUNT(*) FROM round g WHERE g.group_id = r.group_id AND g.deleted = 0) AS group_size, " +
+            "(SELECT COUNT(*) FROM animal a WHERE a.round_id = r.id) AS animal_count, " +
+            "(SELECT COUNT(*) FROM target t WHERE t.round_id = r.id AND t.type = 'PREDATOR_PREY') AS predator_prey_count, " +
+            "(SELECT COUNT(*) FROM target t WHERE t.round_id = r.id AND t.type = 'FAN') AS fan_count " +
             "FROM round r WHERE r.deleted = 0 AND (r.group_role IS NULL OR r.group_role = 'SCORER') " +
             "ORDER BY r.shoot_date DESC, r.created_at DESC",
     )
@@ -214,6 +217,10 @@ abstract class RoundDao {
 data class RoundWithGroupSize(
     @Embedded val round: RoundEntity,
     @ColumnInfo(name = "group_size") val groupSize: Int,
+    /** Big Game: animals on the round's targets (predator/prey = 2, fan = n). */
+    @ColumnInfo(name = "animal_count") val animalCount: Int = 0,
+    @ColumnInfo(name = "predator_prey_count") val predatorPreyCount: Int = 0,
+    @ColumnInfo(name = "fan_count") val fanCount: Int = 0,
 )
 
 data class RoundData(

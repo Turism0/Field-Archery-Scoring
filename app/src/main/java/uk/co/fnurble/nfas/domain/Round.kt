@@ -4,6 +4,20 @@ import java.time.LocalDate
 
 enum class RoundStatus { IN_PROGRESS, COMPLETED }
 
+/**
+ * "36 targets", or "36 targets · 37 animals (1 predator/prey)" when some targets had more than one animal
+ * (predator/prey = 2, a fan = however many), so a higher total than a plain round of the same length makes sense.
+ */
+fun targetsDescription(targetCount: Int, animals: Int, predatorPrey: Int, fans: Int): String {
+    val base = "$targetCount target${if (targetCount == 1) "" else "s"}"
+    if (predatorPrey == 0 && fans == 0) return base
+    val extras = listOfNotNull(
+        predatorPrey.takeIf { it > 0 }?.let { "$it predator/prey" },
+        fans.takeIf { it > 0 }?.let { "$it fan${if (it == 1) "" else "s"}" },
+    ).joinToString(", ")
+    return "$base · $animals animals ($extras)"
+}
+
 data class Round(
     val id: String,
     val shootDate: LocalDate,
@@ -35,6 +49,16 @@ data class Round(
         if (targetNo !in 1..targetCount) return false
         return target(targetNo).isComplete || targetNo == firstUnscoredTargetNo
     }
+
+    /** "36 targets · 37 animals (1 predator/prey)"; Woodsman and plain rounds just say the number of targets. */
+    val targetsLine: String
+        get() = if (type == RoundType.WOODSMAN) targetsDescription(targetCount, targetCount, 0, 0)
+        else targetsDescription(
+            targetCount,
+            animals = (1..targetCount).sumOf { target(it).animals.size },
+            predatorPrey = targets.count { it.type == TargetType.PREDATOR_PREY },
+            fans = targets.count { it.type == TargetType.FAN },
+        )
 
     /** e.g. "Gents Adult LB". */
     val classLine: String get() = "${archerClass.displayName} ${ageGroup.displayName} ${bowStyle.code}"

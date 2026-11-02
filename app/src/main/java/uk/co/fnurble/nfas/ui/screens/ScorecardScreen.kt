@@ -205,7 +205,7 @@ internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
             }
             Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleLarge)
             Text(
-                "${r.typeAndClass} · ${r.targetCount} targets",
+                "${r.typeAndClass} · ${r.targetsLine}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )

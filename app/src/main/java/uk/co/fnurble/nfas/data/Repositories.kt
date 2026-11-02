@@ -31,6 +31,7 @@ import uk.co.fnurble.nfas.domain.BowStyle
 import uk.co.fnurble.nfas.domain.Round
 import uk.co.fnurble.nfas.domain.RoundStatus
 import uk.co.fnurble.nfas.domain.TargetScore
+import uk.co.fnurble.nfas.domain.targetsDescription
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -85,6 +86,8 @@ data class RoundSummary(
     val locationName: String? = null,
     /** How many archers were in the group (0 = not a group round). */
     val groupSize: Int = 0,
+    /** "36 targets · 37 animals (1 predator/prey)". */
+    val targetsLine: String = "$targetCount targets",
 )
 
 /** Someone being added to a group round on this phone: a friend (account) or a guest (name only). */
@@ -129,6 +132,8 @@ class RoundRepository(
                 syncState = it.syncState,
                 locationName = it.locationName,
                 groupSize = row.groupSize,
+                targetsLine = if (it.type() == RoundType.WOODSMAN) targetsDescription(it.targetCount, it.targetCount, 0, 0)
+                else targetsDescription(it.targetCount, row.animalCount, row.predatorPreyCount, row.fanCount),
             )
         }
     }
