@@ -7,7 +7,7 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 ## Updating the API on Odin
 
-If the release adds a database script (e.g. `sql/006_location_review_private.sql`), run it in SSMS on Mimir **first**.
+If the release adds a database script (e.g. `sql/007_round_types.sql`), run it in SSMS on Mimir **first**.
 
 After a new version, copy the changed files into `C:\zScripts\NfasApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
 
@@ -40,7 +40,7 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
-| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal }], incoming: [...], outgoing: [...] }` |
+| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game |
 | POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
 | POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
 | DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
@@ -76,6 +76,7 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
                  "animals": [ { "index": 0, "state": "SCORED", "arrowNo": 1, "hit": "KILL", "points": 20 } ] } ] }
 ```
 
+- `"roundType"`: `BIG_GAME` (default when missing) or `WOODSMAN`. A Woodsman round's targets are `"type": "WOODSMAN"` with `"animals": []` and `"arrows"`: the arrows in order, `W` wound (5), `K` kill (30 / 20 / 10 on arrow 1 / 2 / 3, shooting stops), `M` miss (0), e.g. `"WK"` = 25; an unfinished target has fewer than 3 and no K. Override 0–30. Big Game targets have no arrows.
 - Every score is checked against the Big Game rules (allowed hit per arrow and its points, predator/prey shared arrows, fan size, overrides, target and round totals). Anything wrong is refused with a list of problems.
 - Optional `"locationId"`: the shoot location. An id that was merged is stored as the location kept; an unknown id is stored as no location (the round is still saved). Downloads include `locationId` and `locationName`.
 - Same round id again is safe: the copy with the later `clientUpdatedUtc` wins, an equal or older copy is ignored (`unchanged`).
@@ -114,6 +115,14 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing Woodsman rounds (1.9.01)
+
+```powershell
+.\Test-Woodsman.ps1
+```
+
+Two test accounts (friends) and a test location: Woodsman scoring (K 30, WK 25, MWK 15, WWW 15, MMM 0, WWK 20, MK 20), impossible arrows and wrong points refused, overrides, Big Game and Woodsman targets kept apart, no type = Big Game, friends' summaries and location stats per type. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing the location map and page (1.7.03)
 

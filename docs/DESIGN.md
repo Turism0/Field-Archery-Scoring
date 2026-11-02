@@ -101,7 +101,7 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 
-## Server data model (SQL Server 2025 on Mimir) — schema version 4
+## Server data model (SQL Server 2025 on Mimir) — schema version 5
 
 Scripts in `server/sql/`, run in order in SSMS:
 
@@ -112,6 +112,7 @@ Scripts in `server/sql/`, run in order in SSMS:
 | `004_roles.sql` | admin | Schema v2: `Archer.Role` (USER / ADMIN / OWNER, one Owner), set your account as Owner |
 | `005_shoot_locations.sql` | admin | Schema v3: `ShootLocation` table and `Round.LocationId` |
 | `006_location_review_private.sql` | admin | Schema v4: `ShootLocation.IsPrivate` (name unique among public live locations only), `LocationPairApproval` (pairs an Admin has said are different places) |
+| `007_round_types.sql` | admin | Schema v5: `Round.RoundType` (BIG_GAME / WOODSMAN), `TargetScore.Arrows` (Woodsman arrows in order, W/K/M), target type WOODSMAN |
 | `003_test_as_api_login.sql` | `nfas_api` | Inserts test data inside a transaction, checks constraints, cascades and the friend view, then rolls back; also checks the login can't change the schema |
 
 | Table | Key | Holds |

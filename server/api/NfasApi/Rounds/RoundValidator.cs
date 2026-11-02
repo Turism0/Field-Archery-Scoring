@@ -1,8 +1,8 @@
 namespace NfasApi.Rounds;
 
 /// <summary>
-/// Checks an uploaded round against the NFAS Big Game rules, the same rules as the app
-/// (app/src/main/java/.../domain/Scoring.kt). Returns a list of problems; empty means valid.
+/// Checks an uploaded round against the rules for its type (NFAS Big Game or Woodsman), the same rules as
+/// the app (app/src/main/java/.../domain/Scoring.kt). Returns a list of problems; empty means valid.
 /// </summary>
 public static class RoundValidator
 {
@@ -15,6 +15,25 @@ public static class RoundValidator
     private static readonly HashSet<string> AgeGroups = ["ADULT", "JUNIOR", "CUB"];
     private static readonly HashSet<string> BowStyles = ["AFB", "BB", "BH", "CL", "XB", "TXB", "FS", "HT", "LB", "PV", "TD", "TB", "UL"];
     private static readonly HashSet<string> Statuses = ["IN_PROGRESS", "COMPLETED"];
+    public const string BigGame = "BIG_GAME";
+    public const string Woodsman = "WOODSMAN";
+    public const int WoodsmanMax = 30;
+
+    /// <summary>The round's type, BIG_GAME when not sent (older apps).</summary>
+    public static string TypeOf(RoundDto r) => string.IsNullOrWhiteSpace(r.RoundType) ? BigGame : r.RoundType.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// Points for a Woodsman target's arrows (W wound 5 each, K kill 30/20/10 on arrow 1/2/3, M miss 0),
+    /// or null if the arrows aren't possible: only W/K/M, at most 3, nothing after a kill.
+    /// </summary>
+    public static int? WoodsmanPoints(string? arrows)
+    {
+        var a = arrows ?? "";
+        if (a.Length > 3 || a.Any(c => c is not ('W' or 'K' or 'M'))) return null;
+        var kill = a.IndexOf('K');
+        if (kill >= 0 && kill != a.Length - 1) return null;   // shooting stops at the kill
+        return a.Count(c => c == 'W') * 5 + (kill < 0 ? 0 : WoodsmanMax - kill * 10);
+    }
 
     /// <summary>Points for a scoring arrow, or null if that hit isn't allowed on that arrow.</summary>
     public static int? PointsFor(int arrowNo, string hit) => (arrowNo, hit) switch
@@ -47,7 +66,10 @@ public static class RoundValidator
         if (!numbers.SequenceEqual(Enumerable.Range(1, Math.Max(0, r.TargetCount))))
             problems.Add($"Targets must be numbered 1 to {r.TargetCount}, once each.");
 
-        foreach (var t in targets) ValidateTarget(t, problems);
+        var type = TypeOf(r);
+        if (type == Woodsman) foreach (var t in targets) ValidateWoodsmanTarget(t, problems);
+        else if (type == BigGame) foreach (var t in targets) ValidateTarget(t, problems);
+        else problems.Add("Round type must be BIG_GAME or WOODSMAN.");
 
         if (problems.Count == 0 && targets.Sum(t => t.Points) != r.TotalPoints)
             problems.Add($"Total points {r.TotalPoints} don't match the targets ({targets.Sum(t => t.Points)}).");
@@ -55,10 +77,33 @@ public static class RoundValidator
         return problems;
     }
 
+    private static void ValidateWoodsmanTarget(TargetDto t, List<string> problems)
+    {
+        var where = $"Target {t.TargetNo}";
+        if (t.Type != Woodsman) { problems.Add($"{where}: a Woodsman round's targets must be WOODSMAN."); return; }
+        if ((t.Animals ?? []).Count != 0) { problems.Add($"{where}: Woodsman targets record arrows, not animals."); return; }
+        var points = WoodsmanPoints(t.Arrows);
+        if (points is null)
+        {
+            problems.Add($"{where}: arrows '{t.Arrows}' aren't possible (up to 3 of W, K, M; nothing after a kill).");
+            return;
+        }
+        if (t.OverridePoints is { } ov)
+        {
+            if (ov is < 0 or > WoodsmanMax) problems.Add($"{where}: override must be 0 to {WoodsmanMax}.");
+            else if (t.Points != ov) problems.Add($"{where}: points must equal the override ({ov}).");
+        }
+        else if (t.Points != points)
+        {
+            problems.Add($"{where}: points {t.Points} don't match the arrows '{t.Arrows}' ({points}).");
+        }
+    }
+
     private static void ValidateTarget(TargetDto t, List<string> problems)
     {
         var where = $"Target {t.TargetNo}";
         var animals = (t.Animals ?? []).OrderBy(a => a.Index).ToList();
+        if (!string.IsNullOrEmpty(t.Arrows)) { problems.Add($"{where}: Big Game targets don't record arrows."); return; }
 
         var countOk = t.Type switch
         {

@@ -79,30 +79,35 @@ public static class RoundEndpoints
             round.TotalPoints,
             clientCreatedUtc = Trim(round.ClientCreatedUtc),
             clientUpdatedUtc = Trim(round.ClientUpdatedUtc),
+            roundType = RoundValidator.TypeOf(round),
         };
         var sql = existing is null
             ? """
               INSERT dbo.Round (RoundId, ArcherId, ShootDate, TargetCount, ArcherClass, AgeGroup, BowStyle, Status,
-                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc, LocationId)
+                                TotalPoints, IsDeleted, ClientCreatedUtc, ClientUpdatedUtc, ServerUpdatedUtc, LocationId, RoundType)
               VALUES (@roundId, @archerId, @shootDate, @TargetCount, @ArcherClass, @AgeGroup, @BowStyle, @Status,
-                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME(), @locationId);
+                      @TotalPoints, 0, @clientCreatedUtc, @clientUpdatedUtc, SYSUTCDATETIME(), @locationId, @roundType);
               """
             : """
               UPDATE dbo.Round
               SET ShootDate = @shootDate, TargetCount = @TargetCount, ArcherClass = @ArcherClass, AgeGroup = @AgeGroup,
                   BowStyle = @BowStyle, Status = @Status, TotalPoints = @TotalPoints, IsDeleted = 0,
                   ClientCreatedUtc = @clientCreatedUtc, ClientUpdatedUtc = @clientUpdatedUtc, ServerUpdatedUtc = SYSUTCDATETIME(),
-                  LocationId = @locationId
+                  LocationId = @locationId, RoundType = @roundType
               WHERE RoundId = @roundId;
               DELETE dbo.TargetScore WHERE RoundId = @roundId;   -- animals go with them (cascade)
               """;
         await conn.ExecuteAsync(new CommandDefinition(sql, p, tx, cancellationToken: ct));
 
         await conn.ExecuteAsync(new CommandDefinition("""
-            INSERT dbo.TargetScore (RoundId, TargetNo, TargetType, OverridePoints, Points)
-            VALUES (@roundId, @TargetNo, @Type, @OverridePoints, @Points);
+            INSERT dbo.TargetScore (RoundId, TargetNo, TargetType, OverridePoints, Points, Arrows)
+            VALUES (@roundId, @TargetNo, @Type, @OverridePoints, @Points, @arrows);
             """,
-            round.Targets.Select(t => new { roundId, t.TargetNo, t.Type, t.OverridePoints, t.Points }),
+            round.Targets.Select(t => new
+            {
+                roundId, t.TargetNo, t.Type, t.OverridePoints, t.Points,
+                arrows = t.Type == RoundValidator.Woodsman ? (t.Arrows ?? "") : null,
+            }),
             tx, cancellationToken: ct));
 
         await conn.ExecuteAsync(new CommandDefinition("""
@@ -187,10 +192,10 @@ public static class RoundReader
         using var multi = await conn.QueryMultipleAsync(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
                    r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
-                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName
+                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName, r.RoundType
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.RoundId = @roundId;
-            SELECT TargetNo, TargetType, OverridePoints, Points
+            SELECT TargetNo, TargetType, OverridePoints, Points, Arrows
             FROM dbo.TargetScore WHERE RoundId = @roundId ORDER BY TargetNo;
             SELECT TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
             FROM dbo.AnimalScore WHERE RoundId = @roundId ORDER BY TargetNo, AnimalIndex;
@@ -205,9 +210,9 @@ public static class RoundReader
             r.RoundId, DateOnly.FromDateTime(r.ShootDate), r.TargetCount, r.ArcherClass.Trim(), r.AgeGroup, r.BowStyle,
             r.Status, r.TotalPoints, r.IsDeleted, Utc(r.ClientCreatedUtc), Utc(r.ClientUpdatedUtc), Utc(r.ServerUpdatedUtc),
             targets.Select(t => new TargetDto(t.TargetNo, t.TargetType, t.OverridePoints, t.Points,
-                animals[t.TargetNo].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList()))
+                animals[t.TargetNo].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList(), t.Arrows))
                 .ToList(),
-            r.LocationId, r.LocationName);
+            r.LocationId, r.LocationName, r.RoundType);
         return new Loaded(r.ArcherId, dto);
     }
 
@@ -219,10 +224,10 @@ public static class RoundReader
         using var multi = await conn.QueryMultipleAsync(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.Status,
                    r.TotalPoints, r.IsDeleted, r.ClientCreatedUtc, r.ClientUpdatedUtc, r.ServerUpdatedUtc,
-                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName
+                   r.LocationId, {LocationEndpoints.VisibleNameSql} AS LocationName, r.RoundType
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.RoundId IN @ids;
-            SELECT RoundId, TargetNo, TargetType, OverridePoints, Points
+            SELECT RoundId, TargetNo, TargetType, OverridePoints, Points, Arrows
             FROM dbo.TargetScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo;
             SELECT RoundId, TargetNo, AnimalIndex, State, ArrowNo, Hit, Points
             FROM dbo.AnimalScore WHERE RoundId IN @ids ORDER BY RoundId, TargetNo, AnimalIndex;
@@ -239,24 +244,24 @@ public static class RoundReader
                 r.RoundId, DateOnly.FromDateTime(r.ShootDate), r.TargetCount, r.ArcherClass.Trim(), r.AgeGroup, r.BowStyle,
                 r.Status, r.TotalPoints, r.IsDeleted, Utc(r.ClientCreatedUtc), Utc(r.ClientUpdatedUtc), Utc(r.ServerUpdatedUtc),
                 targets[id].Select(t => new TargetDto(t.TargetNo, t.TargetType, t.OverridePoints, t.Points,
-                    animals[(id, t.TargetNo)].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList()))
+                    animals[(id, t.TargetNo)].Select(a => new AnimalDto(a.AnimalIndex, a.State, a.ArrowNo, a.Hit, a.Points)).ToList(), t.Arrows))
                     .ToList(),
-                r.LocationId, r.LocationName);
+                r.LocationId, r.LocationName, r.RoundType);
         }).ToList();
     }
 
     private static DateTime Utc(DateTime d) => DateTime.SpecifyKind(d, DateTimeKind.Utc);
 
-    private sealed record TargetRowWithRound(Guid RoundId, short TargetNo, string TargetType, short? OverridePoints, short Points);
+    private sealed record TargetRowWithRound(Guid RoundId, short TargetNo, string TargetType, short? OverridePoints, short Points, string? Arrows);
 
     private sealed record AnimalRowWithRound(Guid RoundId, short TargetNo, byte AnimalIndex, string State, byte? ArrowNo, string? Hit, short Points);
 
     private sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
         string AgeGroup, string BowStyle, string Status, int TotalPoints, bool IsDeleted,
         DateTime ClientCreatedUtc, DateTime ClientUpdatedUtc, DateTime ServerUpdatedUtc,
-        Guid? LocationId, string? LocationName);
+        Guid? LocationId, string? LocationName, string RoundType);
 
-    private sealed record TargetRow(short TargetNo, string TargetType, short? OverridePoints, short Points);
+    private sealed record TargetRow(short TargetNo, string TargetType, short? OverridePoints, short Points, string? Arrows);
 
     private sealed record AnimalRow(short TargetNo, byte AnimalIndex, string State, byte? ArrowNo, string? Hit, short Points);
 }

@@ -15,14 +15,18 @@ public sealed record RoundDto(
     IReadOnlyList<TargetDto> Targets,
     // Shoot location (schema v3). Optional: older apps don't send it, and rounds without signal or
     // GPS have none. An unknown id is stored as no location rather than refusing the round.
-    Guid? LocationId = null);
+    Guid? LocationId = null,
+    // BIG_GAME (default, and what older apps mean) or WOODSMAN (schema v5).
+    string? RoundType = null);
 
 public sealed record TargetDto(
     int TargetNo,
     string Type,                 // STANDARD / PREDATOR_PREY / FAN
     int? OverridePoints,
     int Points,
-    IReadOnlyList<AnimalDto> Animals);
+    IReadOnlyList<AnimalDto> Animals,
+    // Woodsman targets: arrows in order, W = wound, K = kill, M = miss (e.g. "WK"). Big Game: null.
+    string? Arrows = null);
 
 public sealed record AnimalDto(
     int Index,                   // 0 = first animal (the predator on a predator/prey)
@@ -47,4 +51,5 @@ public sealed record StoredRoundDto(
     DateTime ServerUpdatedUtc,
     IReadOnlyList<TargetDto> Targets,
     Guid? LocationId,
-    string? LocationName);
+    string? LocationName,
+    string RoundType);

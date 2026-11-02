@@ -35,15 +35,17 @@ public static class FriendEndpoints
 
     public sealed record UsernameRequest(string? Username);
 
+    /// <summary>Rounds / best / average are Big Game (out of 24 per animal); Woodsman has its own count and best.</summary>
     public sealed record FriendSummary(
         Guid ArcherId, string Username, DateTime? FriendsSinceUtc,
-        int Rounds, int? BestTotal, DateTime? LastShootDate, double? AveragePerAnimal);
+        int Rounds, int? BestTotal, DateTime? LastShootDate, double? AveragePerAnimal,
+        int WoodsmanRounds, int? WoodsmanBest);
 
     public sealed record PendingRequest(Guid ArcherId, string Username, DateTime RequestedUtc, bool Outgoing);
 
     public sealed record FriendRoundSummary(
         Guid RoundId, DateTime ShootDate, short TargetCount, string ArcherClass, string AgeGroup, string BowStyle, int TotalPoints,
-        string? LocationName);
+        string? LocationName, string RoundType);
 
     // The pair is stored once, lower ArcherId first. SQL Server decides "lower" (its own uniqueidentifier order).
     private const string PairWhere = """
@@ -63,7 +65,12 @@ public static class FriendEndpoints
             done AS (
                 SELECT r.RoundId, r.ArcherId, r.TotalPoints, r.ShootDate
                 FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
-                WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0),
+                WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0 AND r.RoundType = 'BIG_GAME'),
+            wd AS (
+                SELECT r.ArcherId, COUNT(*) AS WoodsmanRounds, MAX(r.TotalPoints) AS WoodsmanBest, MAX(r.ShootDate) AS LastShootDate
+                FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
+                WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0 AND r.RoundType = 'WOODSMAN'
+                GROUP BY r.ArcherId),
             rs AS (
                 SELECT ArcherId, COUNT(*) AS Rounds, MAX(TotalPoints) AS BestTotal,
                        MAX(ShootDate) AS LastShootDate, SUM(CAST(TotalPoints AS bigint)) AS Points
@@ -74,12 +81,15 @@ public static class FriendEndpoints
                 GROUP BY d.ArcherId)
             SELECT a.ArcherId, a.Username, fr.AcceptedUtc AS FriendsSinceUtc,
                    ISNULL(rs.Rounds, 0) AS Rounds, rs.BestTotal,
-                   CAST(rs.LastShootDate AS datetime2(3)) AS LastShootDate,
-                   CASE WHEN an.Animals > 0 THEN CAST(rs.Points AS float) / an.Animals END AS AveragePerAnimal
+                   CAST(CASE WHEN wd.LastShootDate > rs.LastShootDate OR rs.LastShootDate IS NULL THEN wd.LastShootDate
+                             ELSE rs.LastShootDate END AS datetime2(3)) AS LastShootDate,
+                   CASE WHEN an.Animals > 0 THEN CAST(rs.Points AS float) / an.Animals END AS AveragePerAnimal,
+                   ISNULL(wd.WoodsmanRounds, 0) AS WoodsmanRounds, wd.WoodsmanBest
             FROM fr
             JOIN dbo.Archer a ON a.ArcherId = fr.FriendId
             LEFT JOIN rs ON rs.ArcherId = a.ArcherId
             LEFT JOIN an ON an.ArcherId = a.ArcherId
+            LEFT JOIN wd ON wd.ArcherId = a.ArcherId
             ORDER BY a.Username;
             """, new { me }, cancellationToken: ct))).ToList();
 
@@ -175,7 +185,7 @@ public static class FriendEndpoints
 
         var rounds = await conn.QueryAsync<FriendRoundSummary>(new CommandDefinition($"""
             SELECT r.RoundId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,
-                   r.BowStyle, r.TotalPoints, {LocationEndpoints.VisibleNameSql} AS LocationName
+                   r.BowStyle, r.TotalPoints, {LocationEndpoints.VisibleNameSql} AS LocationName, r.RoundType
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.ArcherId = @archerId AND r.Status = 'COMPLETED' AND r.IsDeleted = 0
             ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
@@ -193,6 +203,7 @@ public static class FriendEndpoints
                 r.BowStyle,
                 r.TotalPoints,
                 r.LocationName,
+                r.RoundType,
             }),
         });
     }

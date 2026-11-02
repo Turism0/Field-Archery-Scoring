@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.8.05
+## Version 1.9.01
 
+- **1.9.01:** server side of round types, starting with **Woodsman** (roadmap step 3). `server/sql/007_round_types.sql` (schema v5): every round has a type (Big Game for all existing ones); Woodsman targets store their arrows in order (W wound 5, K kill 30 / 20 / 10 on arrow 1 / 2 / 3, M miss; nothing after a kill, up to 3). The API checks Woodsman rules (and keeps Big Game and Woodsman targets apart), round downloads and friends' rounds say which type they are, friends' summaries keep Big Game and Woodsman separate, and location stats have a row per round type (Woodsman average is per target, out of 30). Test script `server/tests/Test-Woodsman.ps1`. No app changes yet; older apps keep working (no type = Big Game).
 - **1.8.05:** edit a round's details after it's started or finished: **Round details** in the scoring screen's ⋮ menu and **Edit round details** in the scorecard's ⋮ menu. Change the shoot date, number of targets, class, age group and bow style. Fewer targets removes the ones above (asks first if any are scored); more targets adds unscored ones and reopens a finished round. Scores aren't changed; a finished round uploads again with the new details.
 - **1.8.04:** **New location** button on the Shoot locations map: tap it, then tap the map where the location is, name it (Private switch too) and it's added to the map. A name already used is refused with a message.
 - **1.8.03:** more ways to set a round's location. The location sheet now also has a **Known locations** drop-down (every public location and your private ones, by name), shown even when the round has no GPS position. On **Choose on map**, tap the map itself where the shoot is to name a **new location** there (with the Private switch); a name already used offers the existing location instead.
@@ -43,7 +44,7 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 Versioning: minor changes go 1.8.01, 1.8.02 … 1.8.99; major changes move to the next tenth (1.9).
 
-## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: round types (Woodsman) and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
+## Status: iteration 2 (online) done: accounts, two-way sync, friends, roles and Admin menu, shoot locations. Next: Woodsman in the app and a map of shoot locations, then round types (Woodsman), round types (Woodsman); see `docs/DESIGN.md`
 
 ### Screens
 
