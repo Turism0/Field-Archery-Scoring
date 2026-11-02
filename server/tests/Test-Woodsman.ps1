@@ -73,8 +73,10 @@ Expect 'API is version 1.9.01 or later' ([version]($r.Body.apiVersion -replace '
 Expect 'database is schema version 5 or later (007 run)' ($r.Body.schemaVersion -ge 5) "(got $($r.Body.schemaVersion))"
 
 $A = New-TestUser; $B = New-TestUser
-$null = Call POST '/api/friends/requests' @{ username = $B.Name } -Token $A.Token
-$null = Call POST "/api/friends/$($A.Id)/accept" -Token $B.Token
+$r = Call POST '/api/friends/requests' @{ username = $B.Name } -Token $A.Token
+Expect 'A asks B to be friends' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.error) $($r.Body.message))"
+$r = Call POST "/api/friends/$($A.Id)/accept" -Token $B.Token
+Expect 'B accepts' ($r.Status -eq 200) "($($r.Status) $($r.Body.error) $($r.Body.message))"
 $lat = 57.0 + (Get-Random -Minimum 0 -Maximum 1000) / 1000.0; $lon = 4.0 + (Get-Random -Minimum 0 -Maximum 1000) / 1000.0
 $tag = -join ((97..122) | Get-Random -Count 5 | ForEach-Object { [char]$_ })
 $L = (Call POST '/api/locations' @{ name = "zz_test Woods $tag"; latitude = $lat; longitude = $lon } -Token $A.Token).Body.locationId
@@ -129,17 +131,20 @@ Expect 'refused: unknown round type' ($r.Status -eq 400) "($($r.Status))"
 
 # --- Friends and the location page keep the types apart -------------------------------------------
 $r = Call GET '/api/friends' -Token $B.Token
+$why = "HTTP $($r.Status) $($r.Body.error) $($r.Body.message)$($r.Body.title)"
 $f = @($r.Body.friends | Where-Object archerId -eq $A.Id)[0]
-Expect "friend summary: Big Game 1 round (best 20), Woodsman 2 rounds (best 125)" ($f.rounds -eq 1 -and $f.bestTotal -eq 20 -and $f.woodsmanRounds -eq 2 -and $f.woodsmanBest -eq 125) "($($f | ConvertTo-Json -Compress))"
+Expect "friend summary: Big Game 1 round (best 20), Woodsman 2 rounds (best 125)" ($f.rounds -eq 1 -and $f.bestTotal -eq 20 -and $f.woodsmanRounds -eq 2 -and $f.woodsmanBest -eq 125) "($($f | ConvertTo-Json -Compress)) $why"
 $r = Call GET "/api/friends/$($A.Id)/rounds" -Token $B.Token
-Expect "friend's rounds list says which type each is" (@($r.Body.rounds | Where-Object roundType -eq 'WOODSMAN').Count -eq 2 -and @($r.Body.rounds | Where-Object roundType -eq 'BIG_GAME').Count -eq 1) "($(@($r.Body.rounds).Count) rounds)"
+$why = "HTTP $($r.Status) $($r.Body.error) $($r.Body.message)$($r.Body.title)"
+Expect "friend's rounds list says which type each is" (@($r.Body.rounds | Where-Object roundType -eq 'WOODSMAN').Count -eq 2 -and @($r.Body.rounds | Where-Object roundType -eq 'BIG_GAME').Count -eq 1) "($(@($r.Body.rounds).Count) rounds) $why"
 $r = Call GET "/api/friends/$($A.Id)/rounds/$id" -Token $B.Token
-Expect "friend's Woodsman scorecard has the arrows" ($r.Body.roundType -eq 'WOODSMAN' -and @($r.Body.targets)[1].arrows -eq 'WK')
+Expect "friend's Woodsman scorecard has the arrows" ($r.Body.roundType -eq 'WOODSMAN' -and @($r.Body.targets)[1].arrows -eq 'WK') "(HTTP $($r.Status) $($r.Body.error) $($r.Body.message)$($r.Body.title))"
 
 $r = Call GET "/api/locations/$L/page" -Token $B.Token
+$why = "HTTP $($r.Status) $($r.Body.error) $($r.Body.message)$($r.Body.title)"
 $w = @($r.Body.bowStyles | Where-Object roundType -eq 'WOODSMAN')[0]
 $g = @($r.Body.bowStyles | Where-Object roundType -eq 'BIG_GAME')[0]
-Expect 'location stats: Woodsman and Big Game in separate rows' ($w -and $g) "($(@($r.Body.bowStyles).Count) rows)"
+Expect 'location stats: Woodsman and Big Game in separate rows' ($w -and $g) "($(@($r.Body.bowStyles).Count) rows) $why"
 Expect 'Woodsman average per target (125 / 7 = 17.9)' ($w.averagePerAnimal -eq 17.9) "(got $($w.averagePerAnimal))"
 $wf = @($r.Body.friends | Where-Object roundType -eq 'WOODSMAN')[0]
 Expect 'friends section: a Woodsman row for A' ($wf.username -eq $A.Name -and $wf.rounds -eq 1) "($($wf | ConvertTo-Json -Compress))"
