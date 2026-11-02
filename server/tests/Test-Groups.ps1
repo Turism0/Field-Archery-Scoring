@@ -132,7 +132,9 @@ Expect 'wrong points are refused' ($r.Status -eq 400) (Why $r)
 $r = Call GET "/api/groups/$g1" -Token $C.Token
 $cTotal = @($r.Body.totals | Where-Object memberId -eq $cMember1)[0]
 Expect 'C sees the live totals (C: 24 after 1 target)' ($cTotal.points -eq 24 -and $cTotal.targetsDone -eq 1) "($($cTotal.points) $($cTotal.targetsDone))"
-$since = $r.Body.serverTimeUtc
+# As ISO UTC: PowerShell turns the time into a local date, and its default text form loses the milliseconds and
+# can be read the wrong way round (day/month vs month/day) by the server.
+$since = ([datetime]$r.Body.serverTimeUtc).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
 Start-Sleep -Milliseconds 50
 $r = Send $g1 $A @((Entry 2 $guest1.memberId $host1.memberId))
 $r = Call GET "/api/groups/$g1`?since=$([uri]::EscapeDataString($since))" -Token $C.Token
@@ -228,7 +230,9 @@ $g4 = [guid]::NewGuid(); $code4 = New-Code; $host4 = New-Member 'HOST'; $guest4 
 $r = Call PUT "/api/groups/$g4" (New-Group $code4 'SELF' @($host4, $guest4)) -Token $A.Token
 $r = Join-Group $code4 $C; $cM4 = (MemberOf $r.Body $C).memberId
 $r = Call PUT "/api/groups/$g4" (New-Group $code4 'SELF' @($host4, $guest4) 'STARTED') -Token $A.Token
-Expect 'started: C scores C, A scores the guest' ($r.Status -eq 200 -and (ScorersOf $r.Body $cM4)[0] -eq $cM4 -and (ScorersOf $r.Body $guest4.memberId)[0] -eq $host4.memberId) (Why $r)
+# @(...) keeps a single scorer as a list: PowerShell unwraps one-item lists, and [0] on a string is its first letter.
+$cBy = @(ScorersOf $r.Body $cM4)[0]; $guestBy = @(ScorersOf $r.Body $guest4.memberId)[0]
+Expect 'started: C scores C, A scores the guest' ($r.Status -eq 200 -and $cBy -eq $cM4 -and $guestBy -eq $host4.memberId) "($($r.Status) C by $cBy, guest by $guestBy)"
 $r = Send $g4 $C @((Entry 1 $cM4 $cM4))
 Expect 'C''s own score is saved straight away' ((CellOf $r 1 $cM4).state -eq 'MATCHED') (Why $r)
 
