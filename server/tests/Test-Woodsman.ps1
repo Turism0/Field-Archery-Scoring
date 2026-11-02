@@ -100,10 +100,11 @@ $bad = @(
     @{ What = 'animals on a Woodsman target'; Break = @{ 1 = @{ animals = @((Scored 0 1 'KILL' 20)) } } }
     @{ What = 'override over 30'; Break = @{ 1 = @{ overridePoints = 31; points = 31 } } }
 )
-foreach ($b in $bad) {
-    $body = New-Woodsman @('K', 'WK') -Break $b.Break
+# (Not $b: PowerShell names ignore case, so $b would overwrite the test account $B.)
+foreach ($case in $bad) {
+    $body = New-Woodsman @('K', 'WK') -Break $case.Break
     $r = Call PUT "/api/rounds/$([guid]::NewGuid())" $body -Token $A.Token
-    Expect "refused: $($b.What)" ($r.Status -eq 400 -and $r.Body.error -eq 'invalid_round') "($($r.Status) $($r.Body.message))"
+    Expect "refused: $($case.What)" ($r.Status -eq 400 -and $r.Body.error -eq 'invalid_round') "($($r.Status) $($r.Body.message))"
 }
 $r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Woodsman @('K', 'WK') -Break @{ 1 = @{ overridePoints = 28; points = 28 } }) -Token $A.Token
 Expect 'override of 28 accepted' ($r.Status -eq 200) "($($r.Status) $($r.Body.message))"

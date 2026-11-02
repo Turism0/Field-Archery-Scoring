@@ -4,8 +4,9 @@ Android app for scoring NFAS Big Game rounds. Works fully offline; central sync 
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 1.9.03
+## Version 1.9.04
 
+- **1.9.04:** `Test-Woodsman.ps1` fix: a loop variable `$b` overwrote the test account `$B` (PowerShell names ignore case), so the friend and location checks ran signed out. No app or API changes.
 - **1.9.03:** `Test-Woodsman.ps1` shows the HTTP status and server message when the friends and location checks fail. No app or API changes.
 - **1.9.02:** test script fix: `Test-Woodsman.ps1` built the round total in a way PowerShell left empty, so every Woodsman upload was refused before the rules were checked. No app or API changes.
 - **1.9.01:** server side of round types, starting with **Woodsman** (roadmap step 3). `server/sql/007_round_types.sql` (schema v5): every round has a type (Big Game for all existing ones); Woodsman targets store their arrows in order (W wound 5, K kill 30 / 20 / 10 on arrow 1 / 2 / 3, M miss; nothing after a kill, up to 3). The API checks Woodsman rules (and keeps Big Game and Woodsman targets apart), round downloads and friends' rounds say which type they are, friends' summaries keep Big Game and Woodsman separate, and location stats have a row per round type (Woodsman average is per target, out of 30). Test script `server/tests/Test-Woodsman.ps1`. No app changes yet; older apps keep working (no type = Big Game).
