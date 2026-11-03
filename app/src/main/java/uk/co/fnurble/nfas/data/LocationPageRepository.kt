@@ -18,6 +18,8 @@ data class MapLocation(
     val isPrivate: Boolean,
     val myRounds: Int,
     val rounds: Int,
+    /** The course's size now (36 / 40, or 18 / 20 half), from the latest round there; null if no rounds yet. */
+    val courseTargets: Int? = null,
 )
 
 data class LocationFriend(
@@ -29,6 +31,8 @@ data class LocationFriend(
     val bestTotal: Int?,
     val averagePerAnimal: Double?,
     val roundsList: List<FriendRoundSummary>,
+    /** Average per animal × the course size: what a whole round here averages. */
+    val courseAverage: Double? = null,
 )
 
 /** Everyone's finished rounds at a location for one bow style (no names). */
@@ -40,6 +44,8 @@ data class BowStyleStats(
     val bestTotal: Int?,
     val averageTotal: Double?,
     val averagePerAnimal: Double?,
+    /** Average per animal × the course size. */
+    val courseAverage: Double? = null,
 )
 
 data class LocationPage(
@@ -76,6 +82,7 @@ class LocationPageRepository(private val api: NfasApi, private val accounts: Acc
                 isPrivate = location.optBoolean("isPrivate"),
                 myRounds = 0,
                 rounds = 0,
+                courseTargets = location.intOrNull("courseTargets"),
             ),
             myRounds = json.getJSONArray("myRounds").objects().map { it.toRoundSummary() },
             friends = json.getJSONArray("friends").objects().map { f ->
@@ -86,6 +93,7 @@ class LocationPageRepository(private val api: NfasApi, private val accounts: Acc
                     rounds = f.getInt("rounds"),
                     bestTotal = f.intOrNull("bestTotal"),
                     averagePerAnimal = f.doubleOrNull("averagePerAnimal"),
+                    courseAverage = f.doubleOrNull("courseAverage"),
                     roundsList = f.getJSONArray("roundsList").objects().map { it.toRoundSummary() },
                 )
             },
@@ -98,6 +106,7 @@ class LocationPageRepository(private val api: NfasApi, private val accounts: Acc
                     bestTotal = b.intOrNull("bestTotal"),
                     averageTotal = b.doubleOrNull("averageTotal"),
                     averagePerAnimal = b.doubleOrNull("averagePerAnimal"),
+                    courseAverage = b.doubleOrNull("courseAverage"),
                 )
             },
         )
@@ -136,9 +145,11 @@ private fun JSONObject.toRoundSummary(): FriendRoundSummary {
         classLine = (if (optString("roundType") == "WOODSMAN") "Woodsman · " else "") +
             "${cls.displayName} ${age.displayName} $bow",
         totalPoints = getInt("totalPoints"),
+        targetsLine = targetsLine(),
     )
 }
 
 private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
+// Missing (older server) counts as null too.
 private fun JSONObject.intOrNull(name: String): Int? = if (isNull(name)) null else getInt(name)
 private fun JSONObject.doubleOrNull(name: String): Double? = if (isNull(name)) null else getDouble(name)

@@ -135,7 +135,7 @@ fun FriendRoundsScreen(
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(round.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleMedium)
                                     Text(
-                                        "${round.classLine} · ${round.targetCount} targets",
+                                        "${round.classLine} · ${round.targetsLine}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

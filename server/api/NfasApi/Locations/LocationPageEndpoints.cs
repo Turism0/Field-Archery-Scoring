@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Dapper;
 using NfasApi.Auth;
 using NfasApi.Data;
+using NfasApi.Rounds;
 
 namespace NfasApi.Locations;
 
@@ -10,6 +11,8 @@ namespace NfasApi.Locations;
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
 ///                                    public live locations, plus your own private ones (Admins: all);
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
+///   (2.0.02: location.courseTargets = the course's size now (18/20/36/40, from the latest round there); friends and
+///    bowStyles get courseAverage = average per animal × courseTargets; rounds get animalCount, predatorPrey, fans.)
 ///   GET /api/locations/{id}/page   → { location, myRounds: [...], friends: [{ archerId, username, roundType, rounds, bestTotal,
 ///                                    averagePerAnimal, roundsList: [...] }], bowStyles: [{ roundType, bowStyle, archers, rounds,
 ///                                    bestTotal, averageTotal, averagePerAnimal }] }  (one row per round type)
@@ -23,7 +26,7 @@ public static class LocationPageEndpoints
     private sealed record Loc(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, Guid? CreatedById);
 
     public sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
-        string AgeGroup, string BowStyle, int TotalPoints, string RoundType);
+        string AgeGroup, string BowStyle, int TotalPoints, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
 
     private sealed record FriendRow(Guid ArcherId, string Username, string RoundType, int Rounds, int? BestTotal, double? AveragePerAnimal);
 
@@ -83,13 +86,18 @@ public static class LocationPageEndpoints
         var mine = loc.CreatedById == me;
         if (loc.IsPrivate && !mine && !user.IsAdmin()) return NotFound();
 
-        var myRounds = await conn.QueryAsync<RoundRow>(new CommandDefinition("""
-            SELECT RoundId, ArcherId, CAST(ShootDate AS datetime2(3)) AS ShootDate, TargetCount, ArcherClass, AgeGroup,
-                   BowStyle, TotalPoints, RoundType
-            FROM dbo.Round
-            WHERE LocationId = @id AND ArcherId = @me AND Status = 'COMPLETED' AND IsDeleted = 0
-            ORDER BY ShootDate DESC, ClientCreatedUtc DESC;
+        var myRounds = await conn.QueryAsync<RoundRow>(new CommandDefinition($"""
+            SELECT r.RoundId, r.ArcherId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,
+                   r.BowStyle, r.TotalPoints, r.RoundType, {RoundShape.ColumnsSql}
+            FROM dbo.Round r
+            WHERE r.LocationId = @id AND r.ArcherId = @me AND Status = 'COMPLETED' AND IsDeleted = 0
+            ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
             """, new { id = loc.LocationId, me }, cancellationToken: ct));
+
+        // The course's size now (36 / 40, or 18 / 20 for a half course), from the latest round here: averages are
+        // also given as a whole round of that size, worked out from the per-animal average.
+        var course = await RoundShape.CourseTargetsAsync(conn, loc.LocationId, ct);
+        double? CourseAverage(double? perAnimal) => perAnimal is { } a && course is { } c ? Math.Round(a * c) : null;
 
         object friends = Array.Empty<object>();
         object bowStyles = Array.Empty<object>();
@@ -113,9 +121,9 @@ public static class LocationPageEndpoints
                 GROUP BY a.ArcherId, a.Username, d.RoundType
                 ORDER BY d.RoundType, MAX(d.TotalPoints) DESC, a.Username;
                 """, new { id = loc.LocationId, me }, cancellationToken: ct))).ToList();
-            var friendRounds = (await conn.QueryAsync<RoundRow>(new CommandDefinition("""
+            var friendRounds = (await conn.QueryAsync<RoundRow>(new CommandDefinition($"""
                 SELECT r.RoundId, r.ArcherId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass,
-                       r.AgeGroup, r.BowStyle, r.TotalPoints, r.RoundType
+                       r.AgeGroup, r.BowStyle, r.TotalPoints, r.RoundType, {RoundShape.ColumnsSql}
                 FROM dbo.Round r JOIN dbo.vFriend f ON f.FriendId = r.ArcherId AND f.ArcherId = @me
                 WHERE r.LocationId = @id AND r.Status = 'COMPLETED' AND r.IsDeleted = 0
                 ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
@@ -124,6 +132,7 @@ public static class LocationPageEndpoints
             {
                 f.ArcherId, f.Username, f.RoundType, f.Rounds, f.BestTotal,
                 averagePerAnimal = f.AveragePerAnimal is { } avg ? Math.Round(avg, 1) : (double?)null,
+                courseAverage = CourseAverage(f.AveragePerAnimal),
                 roundsList = friendRounds[f.ArcherId].Where(r => r.RoundType == f.RoundType).Select(Summary),
             }).ToList();
 
@@ -148,6 +157,7 @@ public static class LocationPageEndpoints
                 b.RoundType, b.BowStyle, b.Archers, b.Rounds, b.BestTotal,
                 averageTotal = b.AverageTotal is { } t ? Math.Round(t, 1) : (double?)null,
                 averagePerAnimal = b.AveragePerAnimal is { } a ? Math.Round(a, 1) : (double?)null,
+                courseAverage = CourseAverage(b.AveragePerAnimal),
             }).ToList();
         }
 
@@ -156,6 +166,7 @@ public static class LocationPageEndpoints
             location = new
             {
                 loc.LocationId, loc.Name, latitude = (double)loc.Latitude, longitude = (double)loc.Longitude, loc.IsPrivate,
+                courseTargets = course,
             },
             myRounds = myRounds.Select(Summary),
             friends,
@@ -173,6 +184,9 @@ public static class LocationPageEndpoints
         r.BowStyle,
         r.TotalPoints,
         r.RoundType,
+        r.AnimalCount,
+        r.PredatorPrey,
+        r.Fans,
     };
 
     private static IResult NotFound() =>

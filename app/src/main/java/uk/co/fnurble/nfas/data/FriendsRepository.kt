@@ -8,6 +8,7 @@ import uk.co.fnurble.nfas.domain.AgeGroup
 import uk.co.fnurble.nfas.domain.ArcherClass
 import uk.co.fnurble.nfas.domain.BowStyle
 import uk.co.fnurble.nfas.domain.Round
+import uk.co.fnurble.nfas.domain.targetsDescription
 import java.time.LocalDate
 
 data class FriendSummary(
@@ -37,7 +38,16 @@ data class FriendRoundSummary(
     val classLine: String,
     val totalPoints: Int,
     val locationName: String? = null,
+    /** "36 targets · 37 animals (1 predator/prey)" (servers before 2.0.02 just give the number of targets). */
+    val targetsLine: String = "$targetCount targets",
 )
+
+/** "36 targets · 37 animals (1 predator/prey)" from a server round summary. */
+internal fun JSONObject.targetsLine(): String {
+    val targets = getInt("targetCount")
+    return if (optString("roundType") == "WOODSMAN" || !has("animalCount")) targetsDescription(targets, targets, 0, 0)
+    else targetsDescription(targets, optInt("animalCount"), optInt("predatorPrey"), optInt("fans"))
+}
 
 /** A round a friend scored for you in their group, waiting for you to accept or decline. */
 data class RoundOffer(
@@ -153,6 +163,7 @@ class FriendsRepository(
                     "${cls.displayName} ${age.displayName} $bow",
                 totalPoints = r.getInt("totalPoints"),
                 locationName = r.stringOrNull("locationName"),
+                targetsLine = r.targetsLine(),
             )
         }
     }

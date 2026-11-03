@@ -45,7 +45,7 @@ public static class FriendEndpoints
 
     public sealed record FriendRoundSummary(
         Guid RoundId, DateTime ShootDate, short TargetCount, string ArcherClass, string AgeGroup, string BowStyle, int TotalPoints,
-        string? LocationName, string RoundType);
+        string? LocationName, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
 
     // The pair is stored once, lower ArcherId first. SQL Server decides "lower" (its own uniqueidentifier order).
     private const string PairWhere = """
@@ -185,7 +185,8 @@ public static class FriendEndpoints
 
         var rounds = await conn.QueryAsync<FriendRoundSummary>(new CommandDefinition($"""
             SELECT r.RoundId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,
-                   r.BowStyle, r.TotalPoints, {LocationEndpoints.VisibleNameSql} AS LocationName, r.RoundType
+                   r.BowStyle, r.TotalPoints, {LocationEndpoints.VisibleNameSql} AS LocationName, r.RoundType,
+                   {RoundShape.ColumnsSql}
             FROM dbo.Round r LEFT JOIN dbo.ShootLocation l ON l.LocationId = r.LocationId
             WHERE r.ArcherId = @archerId AND r.Status = 'COMPLETED' AND r.IsDeleted = 0
             ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
@@ -204,6 +205,9 @@ public static class FriendEndpoints
                 r.TotalPoints,
                 r.LocationName,
                 r.RoundType,
+                r.AnimalCount,
+                r.PredatorPrey,
+                r.Fans,
             }),
         });
     }
