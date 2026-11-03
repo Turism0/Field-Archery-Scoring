@@ -1,4 +1,4 @@
-# NFAS server
+# Field Archery Scoring server
 
 - `sql/`: database scripts for SQL Server 2025 on Mimir (step 1, done). See `../docs/DESIGN.md`.
 - `api/NfasApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://fieldarchery.fnurble.co.uk** through Nginx Proxy Manager.
@@ -67,7 +67,7 @@ Start-WebAppPool NfasApi                    # press Enter: a pasted last line do
 | POST | `/api/locations/resolve` | Bearer token; `{ ids: [...] }` | `{ locations: [{ requestedId, locationId, name }] }`: current id and name for each known id (merged ones point at the location kept) |
 | GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds, isPrivate }] }`; 403 `not_admin` |
 | GET | `/api/locations/map` | Bearer token | `{ locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }`: public live locations plus your own private ones (Admins: all); finished rounds by you / by everyone |
-| GET | `/api/locations/{locationId}/page` | Bearer token | `{ location: { …, courseTargets }, myRounds, friends: [{ archerId, username, roundType, rounds, bestTotal, averagePerAnimal, courseAverage, roundsList }], bowStyles: [{ roundType, bowStyle, archers, rounds, bestTotal, averageTotal, averagePerAnimal, courseAverage }] }`. `courseTargets` (2.0.02): the course size now, from the latest finished round there that's 18, 20, 36 or 40 (else the latest round rounded to the nearest); `courseAverage` = average per animal × `courseTargets`. Round summaries here and in `/api/friends/{id}/rounds` include `animalCount`, `predatorPrey`, `fans`. Finished rounds only. Private: creator and Admins only (404 otherwise), no friends / bowStyles. Friends' rounds open with `/api/friends/{id}/rounds/{roundId}`. |
+| GET | `/api/locations/{locationId}/page` | Bearer token | `{ location, myRounds, friends: [{ archerId, username, roundType, rounds, bestTotal, averagePerAnimal, average36, average40, roundsList }], bowStyles: [{ roundType, bowStyle, archers, rounds, bestTotal, averageTotal, averagePerAnimal, average36, average40 }] }`. `average36` / `average40` (2.0.05) = average per animal × 36 / 40. Round summaries here and in `/api/friends/{id}/rounds` include `animalCount`, `predatorPrey`, `fans`. Finished rounds only. Private: creator and Admins only (404 otherwise), no friends / bowStyles. Friends' rounds open with `/api/friends/{id}/rounds/{roundId}`. |
 | GET | `/api/admin/locations/duplicates` | Admin or Owner | `{ pairs: [{ a, b, distanceMetres, reasons }] }`: live locations within the catchment (`nearby`) or with the same / a similar name (`same_name`, `similar_name`; ignores case, punctuation and words like Archers, Bowmen, Club, Field), not yet approved. Most likely first. |
 | POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
 | PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
@@ -131,13 +131,13 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
-## Testing course size and round make-up (2.0.02)
+## Testing course averages and round make-up (2.0.05)
 
 ```powershell
-.\Test-CourseSize.ps1
+.\Test-CourseAverages.ps1
 ```
 
-Two test accounts (friends) and test locations: no rounds = no course size; a 40-target round makes it 40 and a later 36-target round 36; a later 10-target round (not a usual size) leaves it at 36; only a 37-target round = 36, only a 19-target round = 20 (half course); course averages are per animal × course size, counting predator/prey as 2 and a fan as its animals; rounds report animals, predator/prey and fans on location pages and in friends' round lists. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+Two test accounts (friends) and a test location: 36- and 40-target averages are the per-animal average × 36 / 40, counting predator/prey as 2 and a fan as its animals; rounds report animals, predator/prey and fans on location pages and in friends' round lists. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing group scoring (1.9.06)
 
@@ -269,7 +269,7 @@ Import-Module WebAdministration
 New-WebAppPool -Name NfasApi
 Set-ItemProperty IIS:\AppPools\NfasApi -Name managedRuntimeVersion -Value ''   # "No Managed Code"
 New-Website -Name NfasApi -Port 8085 -PhysicalPath C:\inetpub\nfas-api -ApplicationPool NfasApi
-New-NetFirewallRule -DisplayName 'NFAS API (8085)' -Direction Inbound -Protocol TCP -LocalPort 8085 -Action Allow
+New-NetFirewallRule -DisplayName 'Field Archery Scoring API (8085)' -Direction Inbound -Protocol TCP -LocalPort 8085 -Action Allow
 ```
 
 ### 7. Test on Odin

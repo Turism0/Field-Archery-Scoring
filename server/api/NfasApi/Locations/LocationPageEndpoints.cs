@@ -11,8 +11,8 @@ namespace NfasApi.Locations;
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
 ///                                    public live locations, plus your own private ones (Admins: all);
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
-///   (2.0.02: location.courseTargets = the course's size now (18/20/36/40, from the latest round there); friends and
-///    bowStyles get courseAverage = average per animal × courseTargets; rounds get animalCount, predatorPrey, fans.)
+///   (2.0.05: friends and bowStyles get average36 / average40 = average per animal × 36 / 40;
+///    rounds get animalCount, predatorPrey, fans.)
 ///   GET /api/locations/{id}/page   → { location, myRounds: [...], friends: [{ archerId, username, roundType, rounds, bestTotal,
 ///                                    averagePerAnimal, roundsList: [...] }], bowStyles: [{ roundType, bowStyle, archers, rounds,
 ///                                    bestTotal, averageTotal, averagePerAnimal }] }  (one row per round type)
@@ -94,10 +94,9 @@ public static class LocationPageEndpoints
             ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC;
             """, new { id = loc.LocationId, me }, cancellationToken: ct));
 
-        // The course's size now (36 / 40, or 18 / 20 for a half course), from the latest round here: averages are
-        // also given as a whole round of that size, worked out from the per-animal average.
-        var course = await RoundShape.CourseTargetsAsync(conn, loc.LocationId, ct);
-        double? CourseAverage(double? perAnimal) => perAnimal is { } a && course is { } c ? Math.Round(a * c) : null;
+        // Averages are also given as a whole 36- and 40-target round, from the per-animal average, so predator/prey
+        // and fans don't push them up and rounds of different lengths compare fairly.
+        static double? Over(double? perAnimal, int targets) => perAnimal is { } a ? Math.Round(a * targets) : null;
 
         object friends = Array.Empty<object>();
         object bowStyles = Array.Empty<object>();
@@ -132,7 +131,8 @@ public static class LocationPageEndpoints
             {
                 f.ArcherId, f.Username, f.RoundType, f.Rounds, f.BestTotal,
                 averagePerAnimal = f.AveragePerAnimal is { } avg ? Math.Round(avg, 1) : (double?)null,
-                courseAverage = CourseAverage(f.AveragePerAnimal),
+                average36 = Over(f.AveragePerAnimal, 36),
+                average40 = Over(f.AveragePerAnimal, 40),
                 roundsList = friendRounds[f.ArcherId].Where(r => r.RoundType == f.RoundType).Select(Summary),
             }).ToList();
 
@@ -157,7 +157,8 @@ public static class LocationPageEndpoints
                 b.RoundType, b.BowStyle, b.Archers, b.Rounds, b.BestTotal,
                 averageTotal = b.AverageTotal is { } t ? Math.Round(t, 1) : (double?)null,
                 averagePerAnimal = b.AveragePerAnimal is { } a ? Math.Round(a, 1) : (double?)null,
-                courseAverage = CourseAverage(b.AveragePerAnimal),
+                average36 = Over(b.AveragePerAnimal, 36),
+                average40 = Over(b.AveragePerAnimal, 40),
             }).ToList();
         }
 
@@ -166,7 +167,6 @@ public static class LocationPageEndpoints
             location = new
             {
                 loc.LocationId, loc.Name, latitude = (double)loc.Latitude, longitude = (double)loc.Longitude, loc.IsPrivate,
-                courseTargets = course,
             },
             myRounds = myRounds.Select(Summary),
             friends,

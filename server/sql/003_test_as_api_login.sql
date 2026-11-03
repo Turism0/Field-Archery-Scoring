@@ -1,5 +1,5 @@
 /*
-    NFAS Big Game Scorer – step 1c: check it works
+    Field Archery Scoring – step 1c: check it works
     In SSMS, connect to sql.fnurble.co.uk as the nfas_api login (SQL Server Authentication,
     the password you set in script 001), then run this.
 

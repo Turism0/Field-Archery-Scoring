@@ -2,7 +2,7 @@
 
 ## Goals
 
-- Score NFAS Big Game rounds on the phone with no signal; sync to a central database when there is signal.
+- Score field archery rounds on the phone with no signal; sync to a central database when there is signal.
 - Keep personal data on the phone. The server holds scores, a username and the categories needed for results (class, age group, bow style) — no real names, no dates of birth.
 - Build iteratively.
 
@@ -116,7 +116,7 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
 - Home has tiles for Score a round, Score history and Friends; Score history shows finished rounds only.
 - The Admin tile shows only when the stored role (`AccountStore.role`, refreshed from `/api/me` on sign-in and every sync) is Admin or Owner. The Admin screen (`data/AdminRepository.kt`) is fetched from the API each time; if the server says the account is no longer an admin, the stored role drops and the screen closes.
 - Friends data (`data/FriendsRepository.kt`) is fetched from the API each time a friends screen opens or is pulled down; nothing about friends is stored on the phone. A friend's scorecard reuses the scorecard layout with `readOnly` target rows (predator/prey and fans still expand) and no edit button or menu.
-- Round types come from `domain/RoundType.kt` (one entry, NFAS Big Game). A second type will need a `round_type` column on the phone and server (Room migration + schema version 3).
+- Round types come from `domain/RoundType.kt` (Big Game, then Woodsman). A second type will need a `round_type` column on the phone and server (Room migration + schema version 3).
 - Starting a round clears the menu screens from the back stack; finishing a round replaces the scoring screen with the scorecard; back from either goes home.
 - The scoring screen enforces no skipping ahead (`Round.canGoTo`): a target can be opened if it's scored or it's the next unscored one.
 

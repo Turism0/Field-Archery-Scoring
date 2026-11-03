@@ -100,7 +100,7 @@ fun HomeScreen(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("NFAS Scoring") },
+                title = { Text("Field Archery Scoring") },
                 actions = {
                     IconButton(onClick = onProfile) { Icon(Icons.Filled.Person, contentDescription = "Profile") }
                 },

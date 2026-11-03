@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 <#
-    Rebuilds and restarts the NFAS API on Odin in one go:
+    Rebuilds and restarts the API on Odin in one go:
       1. stops the NfasApi app pool (so its files can be replaced)
       2. dotnet publish into C:\inetpub\nfas-api (appsettings.Production.json there is left alone)
       3. starts the app pool again, even if the publish failed (so the old version keeps running)
@@ -35,7 +35,7 @@ if (-not (Test-Path $csproj)) {
     exit 1
 }
 $expected = ([xml](Get-Content $csproj -Raw)).Project.PropertyGroup.InformationalVersion | Where-Object { $_ } | Select-Object -First 1
-Write-Host "Updating the NFAS API to $expected" -ForegroundColor Cyan
+Write-Host "Updating the API to $expected" -ForegroundColor Cyan
 
 Import-Module WebAdministration
 
@@ -85,4 +85,4 @@ if ($health.database -eq 'ok') { Ok "database reachable (schema version $($healt
 else { Problem "database is '$($health.database)'. Check appsettings.Production.json and that Mimir is up."; exit 1 }
 
 Write-Host ''
-Write-Host "Done: NFAS API $expected is live." -ForegroundColor Green
+Write-Host "Done: Field Archery Scoring API $expected is live." -ForegroundColor Green

@@ -11,7 +11,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 object ApiConfig {
-    /** The NFAS API on Odin, through Nginx Proxy Manager. */
+    /** The Field Archery Scoring API on Odin, through Nginx Proxy Manager. */
     const val BASE_URL = "https://fieldarchery.fnurble.co.uk"
 }
 
@@ -34,7 +34,7 @@ data class UsernameCheck(val username: String, val exists: Boolean)
 data class AuthResult(val archerId: String, val username: String, val token: String, val expiresUtc: String)
 
 /**
- * Small client for the NFAS API using the platform's HttpURLConnection and org.json,
+ * Small client for the API using the platform's HttpURLConnection and org.json,
  * so the app needs no extra libraries. All calls run on the IO dispatcher.
  */
 class NfasApi(

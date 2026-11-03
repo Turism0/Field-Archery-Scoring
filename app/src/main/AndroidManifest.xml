@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Talks to the NFAS API (https only). -->
+    <!-- Talks to the API (https only). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- To tell "device offline" apart from "server unavailable" on the home screen. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

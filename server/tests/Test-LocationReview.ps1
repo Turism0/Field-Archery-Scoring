@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – private locations and possible-duplicate alerts (API 1.7.01). Run in PowerShell 7 (pwsh):
+    API – private locations and possible-duplicate alerts (API 1.7.01). Run in PowerShell 7 (pwsh):
 
         .\Test-LocationReview.ps1 -Username pete
         .\Test-LocationReview.ps1 -Username pete -BaseUrl http://localhost:8085

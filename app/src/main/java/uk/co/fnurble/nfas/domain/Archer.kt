@@ -3,14 +3,14 @@ package uk.co.fnurble.nfas.domain
 import java.time.LocalDate
 import java.time.Period
 
-/** NFAS class. */
+/** Archer class. */
 enum class ArcherClass(val displayName: String) {
     LADIES("Ladies"),
     GENTS("Gents"),
 }
 
 /**
- * NFAS age groups. Age is taken on the day of the shoot.
+ * Age groups. Age is taken on the day of the shoot.
  * Adult 16+, Junior 12–15, Cub under 12.
  * (Juniors and Cubs shoot from different pegs within their group; the round only records the group.)
  */
@@ -39,7 +39,7 @@ enum class AgeGroup(val displayName: String) {
     }
 }
 
-/** NFAS bow styles with their short codes. */
+/** Bow styles with their short codes. */
 enum class BowStyle(val code: String, val displayName: String) {
     AMERICAN_FLATBOW("AFB", "American Flatbow"),
     BAREBOW("BB", "Barebow"),

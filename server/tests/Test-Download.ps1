@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS – step 6 download test, acting as a "second phone" on YOUR account. Run in PowerShell 7 (pwsh):
+    Field Archery Scoring – step 6 download test, acting as a "second phone" on YOUR account. Run in PowerShell 7 (pwsh):
 
         .\Test-Download.ps1 -Username pete
         .\Test-Download.ps1 -Username pete -BaseUrl http://localhost:8085

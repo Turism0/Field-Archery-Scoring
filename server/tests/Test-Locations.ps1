@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – shoot location tests (roadmap step 2a). Run in PowerShell 7 (pwsh):
+    API – shoot location tests (roadmap step 2a). Run in PowerShell 7 (pwsh):
 
         .\Test-Locations.ps1 -Username pete                                  # against https://fieldarchery.fnurble.co.uk
         .\Test-Locations.ps1 -Username pete -BaseUrl http://localhost:8085   # on Odin, straight to IIS

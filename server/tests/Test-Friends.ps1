@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – step 7a friends tests. Run in PowerShell 7 (pwsh):
+    API – step 7a friends tests. Run in PowerShell 7 (pwsh):
 
         .\Test-Friends.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Friends.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS

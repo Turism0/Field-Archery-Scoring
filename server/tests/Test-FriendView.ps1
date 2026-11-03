@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS – check the app's Friends screens with a test friend. Run in PowerShell 7 (pwsh):
+    Field Archery Scoring – check the app's Friends screens with a test friend. Run in PowerShell 7 (pwsh):
 
         .\Test-FriendView.ps1 -Username pete
         .\Test-FriendView.ps1 -Username pete -BaseUrl http://localhost:8085

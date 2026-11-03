@@ -1,4 +1,4 @@
-// NFAS Big Game Scorer API.
+// Field Archery Scoring API.
 // Runs on Odin under IIS, behind Nginx Proxy Manager at https://fieldarchery.fnurble.co.uk.
 // The connection string (with the nfas_api password) lives in appsettings.Production.json
 // on the server only; it is never committed to Git.
@@ -77,7 +77,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", () => Results.Text($"NFAS Big Game Scorer API {ApiInfo.Version}"));
+app.MapGet("/", () => Results.Text($"Field Archery Scoring API {ApiInfo.Version}"));
 
 // Proves the API is running and can reach SQL Server on Mimir.
 // Errors are logged (Windows Event Log, Application) but not shown to callers.
@@ -124,5 +124,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.0.02";
+    public const string Version = "2.0.05";
 }

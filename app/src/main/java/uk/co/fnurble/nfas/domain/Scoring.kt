@@ -8,7 +8,7 @@ enum class Hit(val displayName: String) {
 }
 
 /**
- * NFAS Big Game scoring values.
+ * Big Game scoring values.
  *
  *  Arrow 1: inner kill 24, kill 20, wound 16
  *  Arrow 2: kill 14, wound 10
@@ -55,7 +55,7 @@ enum class WoodsmanArrow(val letter: Char, val displayName: String) {
 }
 
 /**
- * NFAS Woodsman: one animal, shoot until you kill it, up to 3 arrows.
+ * Woodsman: one animal, shoot until you kill it, up to 3 arrows.
  *  Wound 5 on any arrow; kill 30 / 20 / 10 on arrow 1 / 2 / 3 (and shooting stops); miss 0.
  *  e.g. kill 1st = 30; wound then kill = 25; miss, wound, kill = 15; three wounds = 15.
  */

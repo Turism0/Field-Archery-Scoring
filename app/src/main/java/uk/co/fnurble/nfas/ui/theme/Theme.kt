@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
 /**
- * Set to false to always use the NFAS green palette below instead of the phone's
+ * Set to false to always use the green palette below instead of the phone's
  * wallpaper colours (Material You, Android 12+).
  */
 private const val USE_DYNAMIC_COLOUR = true

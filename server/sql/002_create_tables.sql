@@ -1,5 +1,5 @@
 /*
-    NFAS Big Game Scorer – step 1b: tables (schema version 1)
+    Field Archery Scoring – step 1b: tables (schema version 1)
     Run on Mimir in SSMS as a sysadmin, AFTER 001_create_database_and_login.sql.
 
     Shared tables keyed by ArcherId (not one table per user).

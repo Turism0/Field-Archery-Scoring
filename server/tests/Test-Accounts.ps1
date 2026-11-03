@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – step 3 account tests. Run in PowerShell 7 (pwsh) from any PC:
+    API – step 3 account tests. Run in PowerShell 7 (pwsh) from any PC:
 
         .\Test-Accounts.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Accounts.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS

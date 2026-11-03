@@ -122,7 +122,7 @@ fun LocationPageScreen(
                             if (data.friends.isEmpty()) {
                                 item(key = "friendsNone") { Muted("None of your friends have finished a round here yet.") }
                             }
-                            items(data.friends, key = { "f-" + it.archerId + it.roundType }) { f -> FriendCard(f, data.location.courseTargets) { r -> onOpenFriendRound(f, r) } }
+                            items(data.friends, key = { "f-" + it.archerId + it.roundType }) { f -> FriendCard(f) { r -> onOpenFriendRound(f, r) } }
 
                             // ---- Everyone ----
                             item(key = "allHeader") { Header("All archers, by bow style") }
@@ -135,17 +135,14 @@ fun LocationPageScreen(
                                             if (data.bowStyles.any { it.roundType != type }) {
                                                 Text(typeName(type), style = MaterialTheme.typography.labelLarge)
                                             }
-                                            BowStyleTable(rows, data.location.courseTargets)
+                                            BowStyleTable(rows)
                                         }
                                     }
                                 }
                                 item(key = "allNote") {
                                     Muted("Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, " +
-                                        "a fan as its animals); Woodsman is per target, out of 30." +
-                                        (data.location.courseTargets?.let {
-                                            " \"Avg $it\" is that average over a $it-target round: the course here is $it targets " +
-                                                "(from the latest round shot here)."
-                                        } ?: ""))
+                                        "a fan as its animals); Woodsman is per target, out of 30. Avg 36 and Avg 40 are that " +
+                                        "average over a whole 36- or 40-target round, so rounds of any length compare fairly.")
                                 }
                             }
                         }
@@ -190,7 +187,7 @@ private fun RoundRow(r: FriendRoundSummary, onClick: () -> Unit) {
 
 /** Friend's summary here; tap to show their rounds, tap a round for their scorecard. */
 @Composable
-private fun FriendCard(f: LocationFriend, course: Int?, onOpenRound: (FriendRoundSummary) -> Unit) {
+private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> Unit) {
     var expanded by rememberSaveable(f.archerId + f.roundType) { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -211,7 +208,7 @@ private fun FriendCard(f: LocationFriend, course: Int?, onOpenRound: (FriendRoun
                             (f.averagePerAnimal?.let {
                                 " · avg ${String.format(Locale.UK, "%.1f", it)} per ${if (f.roundType == "WOODSMAN") "target" else "animal"}"
                             } ?: "") +
-                            (if (f.courseAverage != null && course != null) " · ${course}-target avg ${f.courseAverage.toInt()}" else ""),
+                            (if (f.average36 != null && f.average40 != null) " · avg 36 targets ${f.average36.toInt()}, 40 targets ${f.average40.toInt()}" else ""),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -240,7 +237,7 @@ private fun FriendCard(f: LocationFriend, course: Int?, onOpenRound: (FriendRoun
 }
 
 @Composable
-private fun BowStyleTable(rows: List<BowStyleStats>, course: Int?) {
+private fun BowStyleTable(rows: List<BowStyleStats>) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(vertical = 8.dp)) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -248,8 +245,9 @@ private fun BowStyleTable(rows: List<BowStyleStats>, course: Int?) {
                 Cell("Archers", header = true)
                 Cell("Rounds", header = true)
                 Cell("Best", header = true)
-                // Average whole round on this course (from the per-animal average), not raw round totals.
-                Cell(if (course != null) "Avg $course" else "Avg", header = true)
+                // Average whole 36- and 40-target rounds (from the per-animal average), not raw round totals.
+                Cell("Avg 36", header = true)
+                Cell("Avg 40", header = true)
                 Cell("Per animal", weight = 1.2f, header = true)
             }
             rows.forEach { b ->
@@ -259,7 +257,8 @@ private fun BowStyleTable(rows: List<BowStyleStats>, course: Int?) {
                     Cell("${b.archers}")
                     Cell("${b.rounds}")
                     Cell(b.bestTotal?.toString() ?: "–")
-                    Cell(b.courseAverage?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
+                    Cell(b.average36?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
+                    Cell(b.average40?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
                     Cell(b.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–", weight = 1.2f)
                 }
             }

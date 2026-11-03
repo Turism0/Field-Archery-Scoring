@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – shoot location map and location page (API 1.7.03). Run in PowerShell 7 (pwsh):
+    API – shoot location map and location page (API 1.7.03). Run in PowerShell 7 (pwsh):
 
         .\Test-LocationPage.ps1
         .\Test-LocationPage.ps1 -BaseUrl http://localhost:8085

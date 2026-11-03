@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – group scoring (API 1.9.06). Run in PowerShell 7 (pwsh):
+    API – group scoring (API 1.9.06). Run in PowerShell 7 (pwsh):
 
         .\Test-Groups.ps1
         .\Test-Groups.ps1 -BaseUrl http://localhost:8085

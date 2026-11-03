@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – step 5a round upload tests. Run in PowerShell 7 (pwsh):
+    API – step 5a round upload tests. Run in PowerShell 7 (pwsh):
 
         .\Test-Rounds.ps1                                   # against https://fieldarchery.fnurble.co.uk
         .\Test-Rounds.ps1 -BaseUrl http://localhost:8085    # on Odin, straight to IIS

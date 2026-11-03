@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – rounds scored for a friend (API 1.9.06). Run in PowerShell 7 (pwsh):
+    API – rounds scored for a friend (API 1.9.06). Run in PowerShell 7 (pwsh):
 
         .\Test-Offers.ps1
         .\Test-Offers.ps1 -BaseUrl http://localhost:8085

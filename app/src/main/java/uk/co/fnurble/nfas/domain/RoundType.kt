@@ -7,7 +7,7 @@ package uk.co.fnurble.nfas.domain
  */
 enum class RoundType(val displayName: String, val description: String) {
     BIG_GAME(
-        displayName = "NFAS Big Game",
+        displayName = "Big Game",
         description = "3D animal targets, up to 3 arrows each: inner kill, kill or wound. " +
             "Includes predator/prey and fan targets.",
     ),

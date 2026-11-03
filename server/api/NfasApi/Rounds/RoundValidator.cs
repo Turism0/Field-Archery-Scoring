@@ -1,7 +1,7 @@
 namespace NfasApi.Rounds;
 
 /// <summary>
-/// Checks an uploaded round against the rules for its type (NFAS Big Game or Woodsman), the same rules as
+/// Checks an uploaded round against the rules for its type (Big Game or Woodsman), the same rules as
 /// the app (app/src/main/java/.../domain/Scoring.kt). Returns a list of problems; empty means valid.
 /// </summary>
 public static class RoundValidator

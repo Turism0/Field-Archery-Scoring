@@ -1,5 +1,5 @@
 /*
-    NFAS Big Game Scorer – step 1a: database and API login
+    Field Archery Scoring – step 1a: database and API login
     Run on Mimir (sql.fnurble.co.uk) in SSMS as a sysadmin (e.g. sa or your admin login).
 
     BEFORE RUNNING: replace the password below with a long random one (24+ characters).

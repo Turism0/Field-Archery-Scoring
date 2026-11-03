@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    NFAS API – Woodsman rounds (API 1.9.01). Run in PowerShell 7 (pwsh):
+    API – Woodsman rounds (API 1.9.01). Run in PowerShell 7 (pwsh):
 
         .\Test-Woodsman.ps1
         .\Test-Woodsman.ps1 -BaseUrl http://localhost:8085
