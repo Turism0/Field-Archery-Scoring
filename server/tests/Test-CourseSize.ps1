@@ -42,7 +42,8 @@ function New-TestUser {
     [pscustomobject]@{ Name = $r.Body.username; Id = $r.Body.archerId; Token = $r.Body.token }
 }
 
-function Kill([int]$Index) { @{ index = $Index; state = 'SCORED'; arrowNo = 1; hit = 'KILL'; points = 20 } }
+# (Not "Kill": PowerShell already uses that name for Stop-Process.)
+function New-Kill([int]$Index) { @{ index = $Index; state = 'SCORED'; arrowNo = 1; hit = 'KILL'; points = 20 } }
 
 # A finished LB round: every animal killed with the first arrow (20). Target 1 can be a predator/prey (20 + 20)
 # or a fan of 3 (60). Returns the round with its total and animals.
@@ -52,7 +53,7 @@ function New-Round($LocationId, [int]$Targets, [int]$DaysAgo, [string]$First = '
     for ($n = 1; $n -le $Targets; $n++) {
         $type = if ($n -eq 1) { $First } else { 'STANDARD' }
         $count = switch ($type) { 'PREDATOR_PREY' { 2 } 'FAN' { 3 } default { 1 } }
-        $a = @(0..($count - 1) | ForEach-Object { Kill $_ })
+        $a = @(0..($count - 1) | ForEach-Object { New-Kill $_ })
         $list += @{ targetNo = $n; type = $type; overridePoints = $null; points = 20 * $count; animals = $a }
         $total += 20 * $count; $animals += $count
     }
