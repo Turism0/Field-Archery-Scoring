@@ -56,7 +56,7 @@ function Nearby([double]$Lat, [double]$Lon, $Radius = $null, [string]$Token) {
 
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
-if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started? (server\api\NfasApi\Update-Api.ps1 starts it)" }
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started? (server\api\FieldArcheryApi\Update-Api.ps1 starts it)" }
 Expect 'API is version 1.5.01 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.5.1') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 3 or later (005_shoot_locations.sql run)' ($r.Body.schemaVersion -ge 3) "(got $($r.Body.schemaVersion))"
 

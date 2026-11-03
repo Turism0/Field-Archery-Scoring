@@ -1,5 +1,5 @@
 /*
-    NfasScoring – schema version 5: round types (roadmap step 3). First new type: Woodsman.
+    FieldArcheryScoring – schema version 5: round types (roadmap step 3). First new type: Woodsman.
 
     - Round.RoundType: BIG_GAME (every existing round) or WOODSMAN.
     - TargetScore.TargetType gains WOODSMAN: one animal, shoot until a kill, up to 3 arrows.
@@ -11,7 +11,7 @@
     Run in SSMS on Mimir as an administrator (check the query window's status bar: not nfas_api).
     Run this BEFORE publishing API 1.9.01. Safe to run again.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF EXISTS (SELECT 1 FROM dbo.SchemaVersion WHERE Version >= 5)

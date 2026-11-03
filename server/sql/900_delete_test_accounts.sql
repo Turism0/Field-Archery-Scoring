@@ -2,7 +2,7 @@
     Removes accounts created by the scripts in server/tests (usernames starting zz_test_),
     with their tokens, rounds, scores, groups and round requests, and test shoot locations (names starting zz_test). Safe to run any time, as admin or nfas_api.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 DECLARE @test TABLE (ArcherId UNIQUEIDENTIFIER PRIMARY KEY);
 INSERT @test SELECT ArcherId FROM dbo.Archer WHERE Username LIKE N'zz[_]test[_]%';

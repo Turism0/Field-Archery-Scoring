@@ -126,7 +126,7 @@ Scripts in `server/sql/`, run in order in SSMS:
 
 | Script | Run as | Does |
 |---|---|---|
-| `001_create_database_and_login.sql` | sysadmin | Creates database `NfasScoring` and login/user `nfas_api` (db_datareader + db_datawriter only, no schema changes). Set a strong password first; it never goes in Git. |
+| `001_create_database_and_login.sql` | sysadmin | Creates database `FieldArcheryScoring` and login/user `nfas_api` (db_datareader + db_datawriter only, no schema changes). Set a strong password first; it never goes in Git. |
 | `002_create_tables.sql` | sysadmin | Creates the tables below and records schema version 1 |
 | `004_roles.sql` | admin | Schema v2: `Archer.Role` (USER / ADMIN / OWNER, one Owner), set your account as Owner |
 | `005_shoot_locations.sql` | admin | Schema v3: `ShootLocation` table and `Round.LocationId` |
@@ -172,7 +172,7 @@ Decisions:
 - **Accounts:** username + password, no email. The app asks for a username; the API says whether it exists. Existing → "user already exists, enter password". New → create the account with a password.
 - Passwords are hashed by the API with ASP.NET Core's `PasswordHasher` (salted PBKDF2); only the hash is stored.
 - After signing in, the API issues a random token for that phone; the phone stores the token, never the password. App side: `data/AccountStore.kt` encrypts it with an AES-GCM key held in the Android Keystore, in `shared_prefs/nfas_account.xml`, which the backup rules leave out (a restored phone signs in again).
-- App networking: `data/remote/NfasApi.kt` uses the platform's HttpURLConnection and org.json (no extra libraries), HTTPS only, 15-second timeouts; errors carry a message to show the archer, and "no signal" is reported as such.
+- App networking: `data/remote/FieldArcheryApi.kt` uses the platform's HttpURLConnection and org.json (no extra libraries), HTTPS only, 15-second timeouts; errors carry a message to show the archer, and "no signal" is reported as such.
 - Signing in is optional; signing out tells the server if there's signal and always clears the phone. Only a SHA-256 hash of the token is stored on the server, so it can be revoked per phone.
 - Brute-force protection: sign-in calls limited per IP (30/minute, in memory only) and a 15-minute lockout after 5 wrong passwords.
 - Tokens are 32 random bytes (64 hex characters), valid for a year and extended while in use; signing out revokes only that phone's token.

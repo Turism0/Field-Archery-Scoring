@@ -6,7 +6,7 @@
     No real names or dates of birth are stored – those stay on the phone.
     Codes match the app's enums (domain/Archer.kt, domain/Scoring.kt).
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF OBJECT_ID(N'dbo.SchemaVersion') IS NOT NULL
@@ -198,5 +198,5 @@ GO
 
 SET NOEXEC OFF;
 GO
-PRINT 'NfasScoring schema version 1 created.';
+PRINT 'FieldArcheryScoring schema version 1 created.';
 GO

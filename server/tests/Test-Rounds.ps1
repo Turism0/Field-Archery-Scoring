@@ -65,7 +65,7 @@ $id = [guid]::NewGuid()
 $t0 = [datetime]::UtcNow.AddMinutes(-10)
 
 $r = Call GET '/health'
-if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started? (server\api\NfasApi\Update-Api.ps1 starts it)" }
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started? (server\api\FieldArcheryApi\Update-Api.ps1 starts it)" }
 Expect 'API is version 1.2.09 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.2.9') "(got $($r.Body.apiVersion) – publish the new build?)"
 
 $r = Call PUT "/api/rounds/$id" (New-Round $t0) -Token $tokenA

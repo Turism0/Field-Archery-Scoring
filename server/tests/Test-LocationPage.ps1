@@ -55,7 +55,7 @@ function New-Round($LocationId, [string]$Bow, [int]$First, [string]$Status = 'CO
 
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
-if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started?" }
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started?" }
 Expect 'API is version 1.7.03 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.7.3') "(got $($r.Body.apiVersion) – publish the new build?)"
 
 $A = New-TestUser; $B = New-TestUser; $C = New-TestUser

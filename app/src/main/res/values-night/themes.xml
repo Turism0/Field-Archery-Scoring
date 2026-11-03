@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.Nfas" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.FieldArchery" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>

@@ -76,7 +76,7 @@ function CellOf($Result, $No, $Card) { @($Result.Body.results | Where-Object { $
 
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
-if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the NfasApi app pool started?" }
+if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started?" }
 Expect 'API is version 1.9.06 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.9.6') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 6 or later (008 run)' ($r.Body.schemaVersion -ge 6) "(got $($r.Body.schemaVersion))"
 

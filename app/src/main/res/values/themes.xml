@@ -1,6 +1,6 @@
 <resources>
-    <!-- Window theme only (status bar / splash before Compose draws). Compose uses NfasTheme. -->
-    <style name="Theme.Nfas" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Window theme only (status bar / splash before Compose draws). Compose uses FieldArcheryTheme. -->
+    <style name="Theme.FieldArchery" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
     </style>
 </resources>

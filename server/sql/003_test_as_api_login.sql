@@ -7,7 +7,7 @@
     Expected: three result sets (archer, round with targets/animals, friend view), then
     "All checks passed", and two deliberate failures caught (duplicate username, schema change).
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 SET NOCOUNT ON;
 SET XACT_ABORT OFF;
 

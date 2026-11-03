@@ -1,5 +1,5 @@
 /*
-    NfasScoring – schema version 6: group scoring (roadmap step 4).
+    FieldArcheryScoring – schema version 6: group scoring (roadmap step 4).
 
     - ScoreGroup: a group shooting the same round together. The host's phone makes the id and the
       6-character join code (so a group can start with no signal). Method SINGLE (one scorer, others
@@ -16,7 +16,7 @@
     Run in SSMS on Mimir as an administrator (check the query window's status bar: not nfas_api).
     Run this BEFORE publishing API 1.9.06. Safe to run again.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF EXISTS (SELECT 1 FROM dbo.SchemaVersion WHERE Version >= 6)

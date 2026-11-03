@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NfasBigGame"
+rootProject.name = "FieldArcheryScoring"
 include(":app")

@@ -9,24 +9,24 @@
 USE master;
 GO
 
-IF DB_ID(N'NfasScoring') IS NULL
+IF DB_ID(N'FieldArcheryScoring') IS NULL
 BEGIN
-    CREATE DATABASE NfasScoring;
+    CREATE DATABASE FieldArcheryScoring;
 END
 GO
 
--- Login used only by the API on Odin. Read/write on NfasScoring, nothing else.
+-- Login used only by the API on Odin. Read/write on FieldArcheryScoring, nothing else.
 IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = N'nfas_api')
 BEGIN
     CREATE LOGIN nfas_api
         WITH PASSWORD = N'CHANGE_ME_to_a_long_random_password',
-             DEFAULT_DATABASE = NfasScoring,
+             DEFAULT_DATABASE = FieldArcheryScoring,
              CHECK_POLICY = ON,
              CHECK_EXPIRATION = OFF;
 END
 GO
 
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'nfas_api')
@@ -40,5 +40,5 @@ ALTER ROLE db_datareader ADD MEMBER nfas_api;
 ALTER ROLE db_datawriter ADD MEMBER nfas_api;
 GO
 
-PRINT 'Database NfasScoring and login nfas_api ready.';
+PRINT 'Database FieldArcheryScoring and login nfas_api ready.';
 GO

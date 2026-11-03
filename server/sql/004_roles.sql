@@ -1,5 +1,5 @@
 /*
-    NfasScoring – schema version 2: account roles (step 1 of the roadmap in docs/DESIGN.md).
+    FieldArcheryScoring – schema version 2: account roles (step 1 of the roadmap in docs/DESIGN.md).
 
     Every account gets a Role: USER (default), ADMIN or OWNER. There can only ever be one OWNER.
     Only the Owner can make or remove Admins (the API enforces that); Admins will be able to edit
@@ -9,7 +9,7 @@
     Run in SSMS on Mimir as an administrator (not nfas_api). Safe to run again: it does nothing
     once schema version 2 is there. Run this BEFORE publishing API 1.4.03.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF EXISTS (SELECT 1 FROM dbo.SchemaVersion WHERE Version >= 2)

@@ -1,7 +1,7 @@
 # Field Archery Scoring server
 
 - `sql/`: database scripts for SQL Server 2025 on Mimir (step 1, done). See `../docs/DESIGN.md`.
-- `api/NfasApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://fieldarchery.fnurble.co.uk** through Nginx Proxy Manager.
+- `api/FieldArcheryApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://fieldarchery.fnurble.co.uk** through Nginx Proxy Manager.
 
 The app only ever talks to the API; the API is the only thing that talks to SQL Server.
 
@@ -9,23 +9,44 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 If the release adds a database script (e.g. `sql/007_round_types.sql`), run it in SSMS on Mimir **first**.
 
-After a new version, copy the changed files into `C:\zScripts\NfasApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
+After a new version, copy the changed files into `C:\zScripts\FieldArcheryApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
 
 ```powershell
-C:\zScripts\NfasApi\Update-Api.ps1
+C:\zScripts\FieldArcheryApi\Update-Api.ps1
 ```
 
-It stops the `NfasApi` app pool, publishes into `C:\inetpub\nfas-api`, starts the pool again (even if the publish failed, so the old version keeps running), then checks `/health` shows the version in `NfasApi.csproj` and that the database is reachable. Every line should start with OK; anything else is in red. `appsettings.Production.json` in `C:\inetpub\nfas-api` is left alone. If Windows says the script is blocked, run `Unblock-File C:\zScripts\NfasApi\Update-Api.ps1` once.
+It stops the `FieldArcheryApi` app pool, publishes into `C:\inetpub\fieldarchery-api`, starts the pool again (even if the publish failed, so the old version keeps running), then checks `/health` shows the version in `FieldArcheryApi.csproj` and that the database is reachable. Every line should start with OK; anything else is in red. `appsettings.Production.json` in `C:\inetpub\fieldarchery-api` is left alone. If Windows says the script is blocked, run `Unblock-File C:\zScripts\FieldArcheryApi\Update-Api.ps1` once.
 
 The same by hand:
 
 ```powershell
 Import-Module WebAdministration
-Stop-WebAppPool NfasApi                     # releases the files so they can be replaced
-cd C:\zScripts\NfasApi
-dotnet publish -c Release -o C:\inetpub\nfas-api
-Start-WebAppPool NfasApi                    # press Enter: a pasted last line doesn't run by itself
+Stop-WebAppPool FieldArcheryApi                   # releases the files so they can be replaced
+cd C:\zScripts\FieldArcheryApi
+dotnet publish -c Release -o C:\inetpub\fieldarchery-api
+Start-WebAppPool FieldArcheryApi                 # press Enter: a pasted last line doesn't run by itself
 ```
+
+### Moving to the FieldArcheryApi project (2.0.14, once)
+
+The API project is now `server/api/FieldArcheryApi` (`FieldArcheryApi.csproj`, namespaces `FieldArcheryApi.*`). The old files must go, or `dotnet publish` finds two projects:
+
+```powershell
+Rename-Item C:\zScripts\FieldArcheryApi C:\zScripts\FieldArcheryApi.old
+New-Item C:\zScripts\FieldArcheryApi -ItemType Directory | Out-Null
+# copy everything in server\api\FieldArcheryApi into C:\zScripts\FieldArcheryApi (keep subfolders), and server\tests into C:\zScripts\FieldArcheryApi\tests
+C:\zScripts\FieldArcheryApi\Update-Api.ps1
+```
+
+The connection string's key is now `FieldArchery` (the old `Nfas` key still works, so the live settings file needn't change straight away). To rename it: in `C:\inetpub\fieldarchery-api\appsettings.Production.json` change `"Nfas":` to `"FieldArchery":`, then `Restart-WebAppPool FieldArcheryApi`. The old `NfasApi.dll` left in `C:\inetpub\fieldarchery-api` isn't used (web.config now starts `FieldArcheryApi.dll`) and can be deleted. Delete `C:\zScripts\FieldArcheryApi.old` once the new one is live.
+
+### Moving IIS to the new names (2.0.10, once)
+
+```powershell
+C:\zScripts\FieldArcheryApi\Rename-Iis.ps1
+```
+
+Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (copying the old pool's settings), renames the site to `FieldArcheryApi` (still port 8085), copies `C:\inetpub\nfas-api` to `C:\inetpub\fieldarchery-api` with `appsettings.Production.json`, gives the new pool read access, starts it and checks `/health`. The old `FieldArcheryApi` pool and `C:\inetpub\nfas-api` stay until you delete them (`Remove-WebAppPool NfasApi`, `Remove-Item C:\inetpub\nfas-api -Recurse`). After this, `Update-Api.ps1` publishes to the new folder.
 
 ## API endpoints
 
@@ -130,6 +151,14 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Running every test (2.0.16)
+
+```powershell
+.\Run-AllTests.ps1 -Username Turismo
+```
+
+Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, which each ask for the password) and prints a summary. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing course averages and round make-up (2.0.05)
 
@@ -245,8 +274,8 @@ or copy the `server\api` folder from your project to `C:\src\NFAS-Scoring\server
 ### 4. Build and publish into the IIS folder
 
 ```powershell
-cd C:\src\NFAS-Scoring\server\api\NfasApi
-dotnet publish -c Release -o C:\inetpub\nfas-api
+cd C:\src\NFAS-Scoring\server\api\FieldArcheryApi
+dotnet publish -c Release -o C:\inetpub\fieldarchery-api
 ```
 
 To update later: stop the site (or app pool), run the same publish command, start it again.
@@ -254,11 +283,11 @@ To update later: stop the site (or app pool), run the same publish command, star
 ### 5. Add the connection string (server only, never in Git)
 
 ```powershell
-Copy-Item .\appsettings.Production.json.example C:\inetpub\nfas-api\appsettings.Production.json
-notepad C:\inetpub\nfas-api\appsettings.Production.json
+Copy-Item .\appsettings.Production.json.example C:\inetpub\fieldarchery-api\appsettings.Production.json
+notepad C:\inetpub\fieldarchery-api\appsettings.Production.json
 ```
 
-Replace `PUT_THE_NFAS_API_PASSWORD_HERE` with the `nfas_api` password from step 1. Publishing again won't overwrite this file.
+Replace `PUT_THE_NFAS_API_PASSWORD_HERE` with the API login's password (`fieldarchery_api`, see `009_fieldarchery_api_permissions.sql`). Publishing again won't overwrite this file.
 
 ### 6. Create the IIS site
 
@@ -266,9 +295,9 @@ PowerShell as Administrator. Port 8085 is a suggestion; use any free port.
 
 ```powershell
 Import-Module WebAdministration
-New-WebAppPool -Name NfasApi
-Set-ItemProperty IIS:\AppPools\NfasApi -Name managedRuntimeVersion -Value ''   # "No Managed Code"
-New-Website -Name NfasApi -Port 8085 -PhysicalPath C:\inetpub\nfas-api -ApplicationPool NfasApi
+New-WebAppPool -Name FieldArcheryApi
+Set-ItemProperty IIS:\AppPools\FieldArcheryApi -Name managedRuntimeVersion -Value ''   # "No Managed Code"
+New-Website -Name FieldArcheryApi -Port 8085 -PhysicalPath C:\inetpub\fieldarchery-api -ApplicationPool FieldArcheryApi
 New-NetFirewallRule -DisplayName 'Field Archery Scoring API (8085)' -Direction Inbound -Protocol TCP -LocalPort 8085 -Action Allow
 ```
 
@@ -280,7 +309,7 @@ Open http://localhost:8085/health. Expected:
 {"status":"ok","database":"ok","schemaVersion":1,"apiVersion":"1.2.02","serverTimeUtc":"..."}
 ```
 
-- `"database":"unreachable"` (503): the details are in **Event Viewer → Windows Logs → Application** (source *NfasApi* / *.NET Runtime*). Usually the password, or step 2.
+- `"database":"unreachable"` (503): the details are in **Event Viewer → Windows Logs → Application** (source *FieldArcheryApi* / *.NET Runtime*). Usually the password, or step 2.
 - **HTTP 500.30 / 500.19**: the Hosting Bundle isn't installed or IIS wasn't restarted (step 1), or `appsettings.Production.json` is missing (step 5).
 
 ### 8. Nginx Proxy Manager

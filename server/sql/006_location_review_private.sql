@@ -1,5 +1,5 @@
 /*
-    NfasScoring – schema version 4: private shoot locations and approved look-alike pairs.
+    FieldArcheryScoring – schema version 4: private shoot locations and approved look-alike pairs.
 
     - ShootLocation.IsPrivate: only the archer who named it (and Admins) can see it. Others see
       "Private location" on friends' scorecards; it's left out of the map and all-archer stats.
@@ -10,7 +10,7 @@
     Run in SSMS on Mimir as an administrator (check the query window's status bar: not nfas_api).
     Run this BEFORE publishing API 1.7.01. Safe to run again.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF EXISTS (SELECT 1 FROM dbo.SchemaVersion WHERE Version >= 4)

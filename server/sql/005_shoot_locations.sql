@@ -1,5 +1,5 @@
 /*
-    NfasScoring – schema version 3: shoot locations (roadmap step 2a).
+    FieldArcheryScoring – schema version 3: shoot locations (roadmap step 2a).
 
     ShootLocation: one row per shoot ground, with a name and the position where it was first named.
     The phone takes a GPS fix when a round starts and asks the API for locations within about half a
@@ -13,7 +13,7 @@
     Run in SSMS on Mimir as an administrator (check the query window's status bar: not nfas_api).
     Run this BEFORE publishing API 1.5.01. Safe to run again: it does nothing once schema version 3 is there.
 */
-USE NfasScoring;
+USE FieldArcheryScoring;
 GO
 
 IF EXISTS (SELECT 1 FROM dbo.SchemaVersion WHERE Version >= 3)
