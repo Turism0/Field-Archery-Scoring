@@ -23,6 +23,8 @@ data class AdminLocation(
     val createdBy: String?,
     val rounds: Int,
     val isPrivate: Boolean = false,
+    /** Someone else's private location the Owner can see exists (name and position hidden, can't be changed). */
+    val hidden: Boolean = false,
 )
 
 /** Two locations that might be the same place. [reasons]: nearby, same_name, similar_name. */
@@ -62,12 +64,14 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
             AdminLocation(
                 id = l.getString("locationId"),
                 name = l.getString("name"),
-                latitude = l.getDouble("latitude"),
-                longitude = l.getDouble("longitude"),
+                // Hidden private locations come without a position.
+                latitude = if (l.isNull("latitude")) 0.0 else l.getDouble("latitude"),
+                longitude = if (l.isNull("longitude")) 0.0 else l.getDouble("longitude"),
                 createdUtc = l.instantOrNull("createdUtc"),
                 createdBy = if (l.isNull("createdBy")) null else l.getString("createdBy"),
                 rounds = l.getInt("rounds"),
                 isPrivate = l.optBoolean("isPrivate"),
+                hidden = l.optBoolean("hidden"),
             )
         }
     }

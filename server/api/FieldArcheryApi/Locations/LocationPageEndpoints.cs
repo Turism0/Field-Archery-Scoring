@@ -9,7 +9,7 @@ namespace FieldArcheryApi.Locations;
 /// <summary>
 /// Shoot location map and location page (API 1.7.03). All calls need "Authorization: Bearer &lt;token&gt;".
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
-///                                    public live locations, plus your own private ones (Admins: all);
+///                                    public live locations, plus your own private ones;
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
 ///   (2.0.05: friends and bowStyles get average36 / average40 = average per animal × 36 / 40;
 ///    rounds get animalCount, predatorPrey, fans.)
@@ -60,7 +60,7 @@ public static class LocationPageEndpoints
                    (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId) AS Rounds
             FROM dbo.ShootLocation l
             WHERE l.MergedIntoId IS NULL
-              AND (l.IsPrivate = 0 OR l.CreatedById = @me OR @isAdmin = 1)
+              AND (l.IsPrivate = 0 OR l.CreatedById = @me)
             ORDER BY l.Name;
             """, new { me = user.ArcherId(), isAdmin = user.IsAdmin() }, cancellationToken: ct));
         return Results.Ok(new
@@ -84,7 +84,7 @@ public static class LocationPageEndpoints
             "SELECT LocationId, Name, Latitude, Longitude, IsPrivate, CreatedById FROM dbo.ShootLocation WHERE LocationId = @id;",
             new { id = current.LocationId }, cancellationToken: ct));
         var mine = loc.CreatedById == me;
-        if (loc.IsPrivate && !mine && !user.IsAdmin()) return NotFound();
+        if (loc.IsPrivate && !mine) return NotFound();
 
         var myRounds = await conn.QueryAsync<RoundRow>(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,

@@ -43,10 +43,10 @@ public static class LocationEndpoints
 
     /// <summary>
     /// SQL for a location's name as the viewer may see it ("l" = ShootLocation, @viewer / @viewerIsAdmin bound).
-    /// Private locations show their name only to the archer who named them and to Admins.
+    /// Private locations show their name only to the archer who named them (2.0.17: not Admins either).
     /// </summary>
     public const string VisibleNameSql =
-        "CASE WHEN l.IsPrivate = 1 AND @viewerIsAdmin = 0 AND (l.CreatedById IS NULL OR l.CreatedById <> @viewer) " +
+        "CASE WHEN l.IsPrivate = 1 AND (l.CreatedById IS NULL OR l.CreatedById <> @viewer) " +
         "THEN N'" + PrivateName + "' ELSE l.Name END";
 
     public static void MapLocationEndpoints(this WebApplication app)
@@ -145,6 +145,10 @@ public static class LocationEndpoints
         return Results.Ok(new { locations = result });
     }
 
+    /// <summary>
+    /// Admin list (2.0.17): public locations and your own private ones. The Owner also sees that other people's private
+    /// locations exist (name and position hidden, "hidden": true) but can't change them; Admins don't see them at all.
+    /// </summary>
     private static async Task<IResult> AdminList(ClaimsPrincipal user, Db db, CancellationToken ct)
     {
         if (!user.IsAdmin()) return NotAdmin();
@@ -156,14 +160,26 @@ public static class LocationEndpoints
             FROM dbo.ShootLocation l
             LEFT JOIN dbo.Archer a ON a.ArcherId = l.CreatedById
             WHERE l.MergedIntoId IS NULL
-            ORDER BY l.Name;
-            """, cancellationToken: ct));
+              AND (l.IsPrivate = 0 OR l.CreatedById = @me OR @isOwner = 1)
+            ORDER BY CASE WHEN l.IsPrivate = 1 AND (l.CreatedById IS NULL OR l.CreatedById <> @me) THEN 1 ELSE 0 END, l.Name;
+            """, new { me = user.ArcherId(), isOwner = user.IsOwner() }, cancellationToken: ct));
+        var me = user.ArcherId();
+        var mineIds = (await conn.QueryAsync<Guid>(new CommandDefinition(
+            "SELECT LocationId FROM dbo.ShootLocation WHERE CreatedById = @me AND IsPrivate = 1;", new { me }, cancellationToken: ct))).ToHashSet();
         return Results.Ok(new
         {
-            locations = rows.Select(r => new
+            locations = rows.Select(r =>
             {
-                r.LocationId, r.Name, latitude = (double)r.Latitude, longitude = (double)r.Longitude,
-                createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds, r.IsPrivate,
+                var hidden = r.IsPrivate && !mineIds.Contains(r.LocationId);
+                return new
+                {
+                    r.LocationId,
+                    name = hidden ? PrivateName : r.Name,
+                    latitude = hidden ? (double?)null : (double)r.Latitude,
+                    longitude = hidden ? (double?)null : (double)r.Longitude,
+                    createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds, r.IsPrivate,
+                    hidden,
+                };
             }),
         });
     }
@@ -175,12 +191,24 @@ public static class LocationEndpoints
         if (NameProblem(name) is { } badName) return badName;
 
         await using var conn = await db.OpenAsync(ct);
+        if (req.IsPrivate == true)
+        {
+            var creator = await conn.ExecuteScalarAsync<Guid?>(new CommandDefinition(
+                "SELECT CreatedById FROM dbo.ShootLocation WHERE LocationId = @locationId AND MergedIntoId IS NULL;",
+                new { locationId }, cancellationToken: ct));
+            if (creator != user.ArcherId())
+                return Error(403, "not_creator", "Only the archer who named a location can make it private.");
+        }
         try
         {
             var changed = await conn.ExecuteAsync(new CommandDefinition("""
                 UPDATE dbo.ShootLocation
                 SET Name = @name, IsPrivate = COALESCE(@isPrivate, IsPrivate), RenamedUtc = SYSUTCDATETIME(), RenamedById = @by
-                WHERE LocationId = @locationId AND MergedIntoId IS NULL;
+                WHERE LocationId = @locationId AND MergedIntoId IS NULL
+                  -- Someone else's private location isn't an Admin's to see or change, and only its creator can make a
+                  -- location private (it then disappears for everyone else, Admins included).
+                  AND (IsPrivate = 0 OR CreatedById = @by)
+                  AND (@isPrivate IS NULL OR @isPrivate = 0 OR CreatedById = @by);
                 """, new { locationId, name, isPrivate = req.IsPrivate, by = user.ArcherId() }, cancellationToken: ct));
             return changed == 1
                 ? Results.Ok(new { locationId, name, isPrivate = req.IsPrivate })
@@ -192,19 +220,29 @@ public static class LocationEndpoints
         }
     }
 
-    private static async Task<IResult> Merge(Guid locationId, MergeRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    /// <summary>
+    /// Merge a duplicate into the location kept. Someone else's private location can only be merged when it's flagged
+    /// as a possible duplicate of the location it's merged into (2.0.17), and nothing is ever merged into someone
+    /// else's private location (that would hide everyone's rounds there).
+    /// </summary>
+    private static async Task<IResult> Merge(Guid locationId, MergeRequest req, ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {
         if (!user.IsAdmin()) return NotAdmin();
         if (req.IntoId is not { } intoId) return Error(400, "missing_into", "Choose the location to merge into.");
         if (intoId == locationId) return Error(400, "same_location", "A location can't be merged into itself.");
 
         await using var conn = await db.OpenAsync(ct);
+        var conflict = await DuplicateFinder.IsPairAsync(conn, Catchment(config), locationId, intoId, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        var live = (await conn.QueryAsync<Guid>(new CommandDefinition("""
-            SELECT LocationId FROM dbo.ShootLocation WITH (UPDLOCK, HOLDLOCK)
+        var live = (await conn.QueryAsync<(Guid LocationId, bool OthersPrivate)>(new CommandDefinition("""
+            SELECT LocationId,
+                   CAST(CASE WHEN IsPrivate = 1 AND (CreatedById IS NULL OR CreatedById <> @me) THEN 1 ELSE 0 END AS bit) AS OthersPrivate
+            FROM dbo.ShootLocation WITH (UPDLOCK, HOLDLOCK)
             WHERE LocationId IN (@locationId, @intoId) AND MergedIntoId IS NULL;
-            """, new { locationId, intoId }, tx, cancellationToken: ct))).ToHashSet();
-        if (!live.Contains(locationId) || !live.Contains(intoId))
+            """, new { locationId, intoId, me = user.ArcherId() }, tx, cancellationToken: ct))).ToDictionary(r => r.LocationId, r => r.OthersPrivate);
+        var ok = live.TryGetValue(locationId, out var fromPrivate) && live.TryGetValue(intoId, out var intoPrivate)
+            && !intoPrivate && (!fromPrivate || conflict);
+        if (!ok)
         {
             await tx.RollbackAsync(ct);
             return Error(404, "no_such_location", "Both locations must exist and not already be merged.");
@@ -225,7 +263,10 @@ public static class LocationEndpoints
         return Results.Ok(new { locationId = intoId, name, roundsMoved = moved });
     }
 
-    /// <summary>Possible duplicates for Admins: pairs nearby or with the same / a similar name, not yet approved.</summary>
+    /// <summary>
+    /// Possible duplicates for Admins: pairs nearby or with the same / a similar name, not yet approved. A private
+    /// location appears (with its name) only when it clashes with a public one (2.0.17).
+    /// </summary>
     private static async Task<IResult> Duplicates(ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {
         if (!user.IsAdmin()) return NotAdmin();
@@ -244,7 +285,7 @@ public static class LocationEndpoints
     }
 
     /// <summary>An Admin says two locations are different places: stop flagging them.</summary>
-    private static async Task<IResult> Approve(ApproveRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    private static async Task<IResult> Approve(ApproveRequest req, ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {
         if (!user.IsAdmin()) return NotAdmin();
         if (req.AId is not { } a || req.BId is not { } b || a == b)
@@ -252,10 +293,12 @@ public static class LocationEndpoints
             return Error(400, "invalid_pair", "Choose two different locations.");
         }
         await using var conn = await db.OpenAsync(ct);
-        var live = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
-            "SELECT COUNT(*) FROM dbo.ShootLocation WHERE LocationId IN (@a, @b) AND MergedIntoId IS NULL;",
-            new { a, b }, cancellationToken: ct));
-        if (live != 2) return Error(404, "no_such_location", "Both locations must exist and not be merged.");
+        var rows = (await conn.QueryAsync<bool>(new CommandDefinition(
+            "SELECT IsPrivate FROM dbo.ShootLocation WHERE LocationId IN (@a, @b) AND MergedIntoId IS NULL;",
+            new { a, b }, cancellationToken: ct))).ToList();
+        // Two public locations, or a private one flagged against a public one (2.0.17).
+        var okPair = rows.Count == 2 && (!rows.Any(p => p) || (rows.Count(p => p) == 1 && await DuplicateFinder.IsPairAsync(conn, Catchment(config), a, b, ct)));
+        if (!okPair) return Error(404, "no_such_location", "Both locations must exist and not be merged.");
 
         await conn.ExecuteAsync(new CommandDefinition("""
             DECLARE @low UNIQUEIDENTIFIER = CASE WHEN @a < @b THEN @a ELSE @b END;

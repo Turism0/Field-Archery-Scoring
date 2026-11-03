@@ -1,6 +1,7 @@
 #Requires -Version 7
 <#
-    API – private locations and possible-duplicate alerts (API 1.7.01). Run in PowerShell 7 (pwsh):
+    API – private locations and possible-duplicate alerts (API 2.0.17: private locations are only their creator's;
+    Admins see one only when it clashes with a public location). Run in PowerShell 7 (pwsh):
 
         .\Test-LocationReview.ps1 -Username pete
         .\Test-LocationReview.ps1 -Username pete -BaseUrl http://localhost:8085
@@ -59,13 +60,14 @@ function New-Round($LocationId) {
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
 if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started?" }
-Expect 'API is version 1.7.01 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.7.1') "(got $($r.Body.apiVersion) – publish the new build?)"
+Expect 'API is version 2.0.17 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'2.0.17') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 4 or later (006 run)' ($r.Body.schemaVersion -ge 4) "(got $($r.Body.schemaVersion))"
 
 $password = Read-Host "Password for $Username (Owner or Admin)" -MaskInput
 $r = Call POST '/api/auth/login' @{ username = $Username; password = $password; deviceName = 'Location review test script' }
 if ($r.Status -ne 200) { throw "Sign-in failed ($($r.Status)): $($r.Body.message)" }
 $admin = $r.Body.token
+$isOwner = (Call GET '/api/me' -Token $admin).Body.role -eq 'OWNER'
 $A = New-TestUser; $B = New-TestUser
 
 try {
@@ -101,15 +103,50 @@ try {
     $r = Call POST '/api/locations/resolve' @{ ids = @($aHome) } -Token $B.Token
     Expect "resolve doesn't reveal the name to others" (@($r.Body.locations)[0].name -eq 'Private location') "($(@($r.Body.locations)[0].name))"
 
-    # --- Possible duplicates ------------------------------------------------------------------------
+    # --- Admins don't see private locations ------------------------------------------------------------
+    $r = Call POST '/api/locations/resolve' @{ ids = @($aHome) } -Token $admin
+    Expect "Admins see 'Private location' too" (@($r.Body.locations)[0].name -eq 'Private location') "($(@($r.Body.locations)[0].name))"
+    $r = Call GET '/api/locations/map' -Token $admin
+    Expect "it isn't on an Admin's map" (@($r.Body.locations | Where-Object locationId -eq $aHome).Count -eq 0)
+    $r = Call GET "/api/locations/$aHome/page" -Token $admin
+    Expect "an Admin can't open its page" ($r.Status -eq 404) "($($r.Status))"
+    $r = Call GET '/api/admin/locations' -Token $admin
+    $row = @($r.Body.locations | Where-Object locationId -eq $aHome)[0]
+    if ($isOwner) {
+        Expect 'the Owner sees it exists in the admin list, name and position hidden' ($row -and $row.hidden -and $row.name -eq 'Private location' -and $null -eq $row.latitude) "($($row.name) $($row.latitude))"
+    } else {
+        Expect "an Admin doesn't see it in the admin list" ($null -eq $row)
+    }
+    $r = Call PUT "/api/admin/locations/$aHome" @{ name = "zz_test Renamed $tag" } -Token $admin
+    Expect "an Admin can't rename someone else's private location" ($r.Status -eq 404) "($($r.Status))"
+    $r = Call GET '/api/admin/locations/duplicates' -Token $admin
+    $pair = @($r.Body.pairs | Where-Object { @($_.a.locationId, $_.b.locationId) -contains $aHome -and @($_.a.locationId, $_.b.locationId) -contains $bHome })[0]
+    Expect "two private locations (A's and B's Homes) aren't flagged to Admins" ($null -eq $pair)
+
+    # --- A private location clashing with a public one --------------------------------------------------
+    $r = Call POST '/api/locations' @{ name = "zz_test Club $tag"; latitude = $lat + 0.0005; longitude = $lon } -Token $B.Token
+    $club = $r.Body.locationId
+    Expect 'B names a public club 55 m from the Homes' ($r.Status -eq 201) "($($r.Status) $($r.Body.message))"
     $r = Call GET '/api/admin/locations/duplicates' -Token $A.Token
     Expect 'a User cannot see possible duplicates' ($r.Status -eq 403) "($($r.Status))"
     $r = Call GET '/api/admin/locations/duplicates' -Token $admin
-    $pair = @($r.Body.pairs | Where-Object { @($_.a.locationId, $_.b.locationId) -contains $aHome -and @($_.a.locationId, $_.b.locationId) -contains $bHome })[0]
-    Expect 'the two Homes are flagged (nearby, same name)' ($pair -and $pair.reasons -contains 'nearby' -and $pair.reasons -contains 'same_name') "($($pair.reasons -join ', '))"
-    Expect 'admins see private locations in the list' ($pair.a.isPrivate -and $pair.b.isPrivate)
+    $pair = @($r.Body.pairs | Where-Object { @($_.a.locationId, $_.b.locationId) -contains $aHome -and @($_.a.locationId, $_.b.locationId) -contains $club })[0]
+    $priv = if ($pair.a.locationId -eq $aHome) { $pair.a } else { $pair.b }
+    Expect "A's private Home and the public club are flagged (nearby)" ($pair -and $pair.reasons -contains 'nearby') "($($pair.reasons -join ', '))"
+    Expect '...and Admins see the private name there' ($priv.isPrivate -and $priv.name -eq "zz_test Home $tag") "($($priv.name))"
 
-    # Similar names far apart: "Bowmen of Foo" v "Foo Archers", 10 km apart.
+    $r = Call POST "/api/admin/locations/$club/merge" @{ intoId = $aHome } -Token $admin
+    Expect "nothing can be merged into someone else's private location" ($r.Status -eq 404) "($($r.Status))"
+    $r = Call POST '/api/admin/locations/duplicates/approve' @{ aId = $bHome; bId = $club } -Token $admin
+    Expect "Admin marks B's private Home and the club as different places" ($r.Status -eq 204) "($($r.Status) $($r.Body.message))"
+    $r = Call POST "/api/admin/locations/$aHome/merge" @{ intoId = $club } -Token $admin
+    Expect "Admin merges A's private Home into the club (a flagged clash)" ($r.Status -eq 200 -and $r.Body.roundsMoved -eq 1) "($($r.Status) $($r.Body.roundsMoved) $($r.Body.message))"
+    $r = Call GET "/api/rounds/$round" -Token $A.Token
+    Expect "A's round is now at the club" ($r.Body.locationId -eq $club -and $r.Body.locationName -eq "zz_test Club $tag") "($($r.Body.locationName))"
+    $r = Call POST "/api/admin/locations/$bHome/merge" @{ intoId = $club } -Token $admin
+    Expect "B's private Home (approved, so no longer a clash) can't be merged" ($r.Status -eq 404) "($($r.Status))"
+
+    # --- Approving public pairs (similar names far apart) ------------------------------------------------
     $r = Call POST '/api/locations' @{ name = "zz_test Bowmen of Thorn$tag"; latitude = $lat + 0.09; longitude = $lon } -Token $A.Token
     $s1 = $r.Body.locationId
     $r = Call POST '/api/locations' @{ name = "zz_test Thorn$tag Archers"; latitude = $lat - 0.09; longitude = $lon } -Token $B.Token
@@ -120,7 +157,7 @@ try {
 
     $r = Call GET '/api/me' -Token $admin
     $before = $r.Body.duplicateLocations
-    Expect '/api/me gives Admins a count of possible duplicates' ($before -ge 2) "(got $before)"
+    Expect '/api/me gives Admins a count of possible duplicates' ($before -ge 1) "(got $before)"
     $r = Call GET '/api/me' -Token $A.Token
     Expect '...and Users 0' ($r.Body.duplicateLocations -eq 0) "(got $($r.Body.duplicateLocations))"
 
@@ -134,12 +171,17 @@ try {
     Expect 'the count goes down by one' ($r.Body.duplicateLocations -eq $before - 1) "(was $before, now $($r.Body.duplicateLocations))"
     $r = Call POST '/api/admin/locations/duplicates/approve' @{ aId = $s1; bId = $s1 } -Token $A.Token
     Expect 'a User cannot approve' ($r.Status -eq 403) "($($r.Status))"
+    # A public location far away with a clearly different name (the shared "zz_test" and tag made the Thorn ones
+    # similar enough to B's Home to count as a clash).
+    $tag2 = -join ((97..122) | Get-Random -Count 5 | ForEach-Object { [char]$_ })
+    $r = Call POST '/api/locations' @{ name = "zz_test Riverside Meadow Longbow Society $tag2"; latitude = $lat - 0.3; longitude = $lon } -Token $A.Token
+    $far = $r.Body.locationId
+    $r = Call POST '/api/admin/locations/duplicates/approve' @{ aId = $bHome; bId = $far } -Token $admin
+    Expect "a private location can't be approved against one it doesn't clash with" ($r.Status -eq 404) "($($r.Status))"
 
-    # --- Admin can make a location public / private --------------------------------------------------
-    $r = Call PUT "/api/admin/locations/$aHome" @{ name = "zz_test Home $tag"; isPrivate = $false } -Token $admin
-    Expect 'Admin makes a private location public' ($r.Status -eq 200) "($($r.Status) $($r.Body.message))"
-    $r = Nearby $lat $lon $B.Token
-    Expect 'now B finds it nearby' (@($r.Body.locations | Where-Object locationId -eq $aHome).Count -eq 1)
+    # --- Only the creator can make a location private -------------------------------------------------
+    $r = Call PUT "/api/admin/locations/$s2" @{ name = "zz_test Thorn$tag Archers"; isPrivate = $true } -Token $admin
+    Expect "an Admin can't make someone else's location private" ($r.Status -eq 403 -and $r.Body.error -eq 'not_creator') "($($r.Status) $($r.Body.error))"
 }
 finally {
     $null = Call POST '/api/auth/logout' -Token $admin

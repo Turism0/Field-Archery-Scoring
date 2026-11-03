@@ -177,9 +177,18 @@ private fun PairCard(
             LocationLine(pair.a)
             HorizontalDivider()
             LocationLine(pair.b)
+            // A private location can be merged into the public one, never the other way (that would hide everyone's rounds).
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onMergeAIntoB, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Keep 2nd", maxLines = 1) }
-                OutlinedButton(onClick = onMergeBIntoA, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Keep 1st", maxLines = 1) }
+                OutlinedButton(onClick = onMergeAIntoB, enabled = !busy && !pair.b.isPrivate, modifier = Modifier.weight(1f)) { Text("Keep 2nd", maxLines = 1) }
+                OutlinedButton(onClick = onMergeBIntoA, enabled = !busy && !pair.a.isPrivate, modifier = Modifier.weight(1f)) { Text("Keep 1st", maxLines = 1) }
+            }
+            if (pair.a.isPrivate || pair.b.isPrivate) {
+                Text(
+                    "Private locations are only shown to Admins when they clash with a public one. Keep the public one to " +
+                        "merge the private one into it, or mark them as different places.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             FilledTonalButton(onClick = onApprove, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                 Text("Different places – stop flagging")

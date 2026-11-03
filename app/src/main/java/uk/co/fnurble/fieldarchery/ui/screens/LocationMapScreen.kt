@@ -235,7 +235,7 @@ private fun NewLocationDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Private", style = MaterialTheme.typography.bodyLarge)
-                        Text("Only you and admins see it", style = MaterialTheme.typography.bodySmall,
+                        Text("Only you see it", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = private, onCheckedChange = { private = it })

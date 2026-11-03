@@ -99,7 +99,7 @@ fun LocationPageScreen(
                             item(key = "private") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     PrivateBadge()
-                                    Text("Only you and admins can see this location.", style = MaterialTheme.typography.bodySmall,
+                                    Text("Only you can see this location.", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }

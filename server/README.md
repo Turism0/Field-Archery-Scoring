@@ -86,12 +86,12 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | GET | `/api/locations/nearby?lat=&lon=&radius=` | Bearer token | `{ locations: [{ locationId, name, distanceMetres }], catchmentMetres }`, nearest first. Radius in metres: default the catchment (402 m, a quarter mile, `Locations:CatchmentMetres`), max 10 km. The position isn't stored. |
 | POST | `/api/locations` | Bearer token; `{ name, latitude, longitude, isPrivate? }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
 | POST | `/api/locations/resolve` | Bearer token; `{ ids: [...] }` | `{ locations: [{ requestedId, locationId, name }] }`: current id and name for each known id (merged ones point at the location kept) |
-| GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds, isPrivate }] }`; 403 `not_admin` |
-| GET | `/api/locations/map` | Bearer token | `{ locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }`: public live locations plus your own private ones (Admins: all); finished rounds by you / by everyone |
+| GET | `/api/admin/locations` | Bearer token, Admin or Owner | `{ locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds, isPrivate, hidden }] }`: public locations and your own private ones; the Owner also gets other people's private locations with `hidden: true`, name "Private location" and no position (2.0.17); 403 `not_admin` |
+| GET | `/api/locations/map` | Bearer token | `{ locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }`: public live locations plus your own private ones; finished rounds by you / by everyone |
 | GET | `/api/locations/{locationId}/page` | Bearer token | `{ location, myRounds, friends: [{ archerId, username, roundType, rounds, bestTotal, averagePerAnimal, average36, average40, roundsList }], bowStyles: [{ roundType, bowStyle, archers, rounds, bestTotal, averageTotal, averagePerAnimal, average36, average40 }] }`. `average36` / `average40` (2.0.05) = average per animal × 36 / 40. Round summaries here and in `/api/friends/{id}/rounds` include `animalCount`, `predatorPrey`, `fans`. Finished rounds only. Private: creator and Admins only (404 otherwise), no friends / bowStyles. Friends' rounds open with `/api/friends/{id}/rounds/{roundId}`. |
 | GET | `/api/admin/locations/duplicates` | Admin or Owner | `{ pairs: [{ a, b, distanceMetres, reasons }] }`: live locations within the catchment (`nearby`) or with the same / a similar name (`same_name`, `similar_name`; ignores case, punctuation and words like Archers, Bowmen, Club, Field), not yet approved. Most likely first. |
 | POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
-| PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` |
+| PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` (also for someone else's private location); 403 `not_creator` if making someone else's location private |
 | POST | `/api/admin/locations/{locationId}/merge` | Admin or Owner; `{ intoId }` | `{ locationId, name, roundsMoved }`: the duplicate's rounds move to `intoId`; 400 `same_location`; 404 if either is missing or already merged |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
@@ -194,14 +194,13 @@ Two test accounts (friends) and a test location: Woodsman scoring (K 30, WK 25, 
 
 Three test accounts (A and B friends, C not) and test locations in the North Sea: map counts (yours / everyone's, finished only, private hidden from others), the page's own rounds, friends section (friends only, average per animal), all-archer stats per bow style (non-friends included, no names), opening a friend's round, and private pages. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
-## Testing private locations and duplicate alerts (1.7.01)
+## Testing private locations and duplicate alerts (1.7.01, rules changed in 2.0.17)
 
 ```powershell
 .\Test-LocationReview.ps1 -Username <your username>
 ```
 
-Asks for your password. Two test accounts and test locations in the North Sea: a private location is only matched and named for its creator (friends see "Private location"), the same name can be reused for another private location, look-alike pairs are flagged (nearby, same name, "Bowmen of X" v "X Archers"), approving a pair stops it being flagged, `/api/me` counts them for Admins, and an Admin can make a location public. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
-
+Asks for your password. Two test accounts and test locations in the North Sea: a private location is only matched and named for its creator (friends and Admins see "Private location"; not on an Admin's map, no page for them; the Owner sees it exists in the admin list, hidden); two people's private locations near each other aren't flagged; a private location next to a public club is flagged to Admins with its name, can be merged into the club (its rounds move) but nothing can be merged into it, and can be approved as a different place; Admins can't rename it or make others' locations private; similar names far apart are flagged and can be approved; the /api/me count. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 ## Testing shoot locations (step 2a)
 
 ```powershell

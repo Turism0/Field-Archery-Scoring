@@ -216,7 +216,7 @@ fun LocationSheet(
                 Column(Modifier.weight(1f)) {
                     Text("Private", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Only you (and admins) see it, e.g. your garden. Others shooting here won't be matched to it.",
+                        "Only you see it, e.g. your garden. Others shooting here won't be matched to it. Admins only see it if it clashes with a public location.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

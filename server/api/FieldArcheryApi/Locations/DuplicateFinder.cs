@@ -8,6 +8,8 @@ namespace FieldArcheryApi.Locations;
 /// Finds pairs of live shoot locations that might be the same place: within the catchment of each
 /// other, or with the same or a similar name (ignoring case, punctuation and words like "Archers",
 /// "Bowmen", "Club", "Field"). Pairs an Admin has approved as different are left out.
+/// Private locations (2.0.17) are only flagged against a public location: that's the one time Admins see a private
+/// location, so they can merge it or mark it as a different place. Two private locations are never paired.
 /// </summary>
 public static class DuplicateFinder
 {
@@ -45,6 +47,7 @@ public static class DuplicateFinder
                 var a = locs[i];
                 var b = locs[j];
                 if (approved.Contains((a.LocationId, b.LocationId))) continue;
+                if (a.IsPrivate && b.IsPrivate) continue;   // only private vs public counts as a conflict
 
                 var metres = (int)Math.Round(LocationEndpoints.Metres(
                     (double)a.Latitude, (double)a.Longitude, (double)b.Latitude, (double)b.Longitude));
@@ -61,6 +64,11 @@ public static class DuplicateFinder
         // Most likely duplicates first: both reasons, then nearest.
         return pairs.OrderByDescending(p => p.Reasons.Count).ThenBy(p => p.DistanceMetres).ToList();
     }
+
+    /// <summary>True if the two locations are a possible duplicate pair right now (in either order).</summary>
+    public static async Task<bool> IsPairAsync(SqlConnection conn, int catchmentMetres, Guid x, Guid y, CancellationToken ct) =>
+        (await FindAsync(conn, catchmentMetres, ct)).Any(p =>
+            (p.A.LocationId == x && p.B.LocationId == y) || (p.A.LocationId == y && p.B.LocationId == x));
 
     /// <summary>"The Bowmen of Foo-Bar!" → "foobar". Falls back to all the words if they're all common ones.</summary>
     public static string Key(string name)

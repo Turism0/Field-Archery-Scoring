@@ -133,7 +133,18 @@ fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
                             }
                         }
                         items(l.value, key = { it.id }) { loc ->
-                            LocationCard(loc) { selected = loc }
+                            // Other people's private locations (Owner only): shown so you know they exist, can't be opened.
+                            LocationCard(loc, onClick = if (loc.hidden) null else ({ selected = loc }))
+                        }
+                        if (l.value.any { it.hidden }) {
+                            item(key = "hiddenNote") {
+                                Text(
+                                    "Private locations belong to the archer who named them: their names and positions are hidden. " +
+                                        "They only appear under Possible duplicates if they clash with a public location.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
@@ -145,7 +156,7 @@ fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
     selected?.let { loc ->
         LocationActions(
             location = loc,
-            others = all.filter { it.id != loc.id },
+            others = all.filter { it.id != loc.id && !it.hidden },
             busy = busy,
             onRename = { name, private -> vm.rename(loc, name, private) { selected = null } },
             onMerge = { keep -> vm.merge(loc, keep) { selected = null } },
@@ -155,9 +166,10 @@ fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun LocationCard(loc: AdminLocation, onClick: () -> Unit) {
+private fun LocationCard(loc: AdminLocation, onClick: (() -> Unit)?) {
     Card(
-        onClick = onClick,
+        onClick = onClick ?: {},
+        enabled = onClick != null,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
@@ -177,7 +189,7 @@ private fun LocationCard(loc: AdminLocation, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+            if (onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         }
     }
 }
@@ -224,7 +236,7 @@ private fun LocationActions(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Private", style = MaterialTheme.typography.bodyLarge)
-                        Text("Only the archer who named it and admins see it", style = MaterialTheme.typography.bodySmall,
+                        Text("Only the archer who named it sees it", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = private, onCheckedChange = { private = it }, enabled = !busy)
