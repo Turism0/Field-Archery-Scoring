@@ -54,7 +54,7 @@
    - **Trends:** each finished round's average per animal, x by date, rolling average of the last 5; Canvas chart, no chart library.
    - **Seasons:** calendar years, per round type; combined stats by treating the year's targets as one round.
    - **Placement:** Stats tile on Home (tabs Bests / Trends / Seasons); filters and PB marks in Score history.
-6. **Handicap** (agreed Nov 2026): compare scores across bow styles and classes as Unlimited Gents equivalents, from the NFAS Nationals and 3D Championships results, kept up to date by a server job. *Server 2.2.01;* app next (Admin → Handicap page, equivalent scores). Full design and test results in `docs/HANDICAP.md`.
+6. **Handicap** (agreed Nov 2026): compare scores across bow styles and classes as Unlimited Gents equivalents, from the NFAS Nationals and 3D Championships results, kept up to date by a server job. *Server 2.2.01–2.2.04; app 2.2.05* (calculator tile, rating, friends, location pages, Admin → Handicap). Full design and test results in `docs/HANDICAP.md`.
 7. **No-signal group scoring** (2.3): Nearby Connections as in section 4.
 
 ## Architecture

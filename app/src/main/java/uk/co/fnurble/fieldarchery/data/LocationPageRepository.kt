@@ -147,7 +147,7 @@ private fun JSONObject.toRoundSummary(): FriendRoundSummary {
             "${cls.displayName} ${age.displayName} $bow",
         totalPoints = getInt("totalPoints"),
         targetsLine = targetsLine(),
-    )
+    ).withHandicapFields(this)
 }
 
 private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

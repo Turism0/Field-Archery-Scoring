@@ -16,6 +16,8 @@ import uk.co.fnurble.fieldarchery.ui.screens.EditRoundScreen
 import uk.co.fnurble.fieldarchery.ui.screens.FriendRoundsScreen
 import uk.co.fnurble.fieldarchery.ui.screens.FriendScorecardScreen
 import uk.co.fnurble.fieldarchery.ui.screens.FriendsScreen
+import uk.co.fnurble.fieldarchery.ui.screens.AdminHandicapScreen
+import uk.co.fnurble.fieldarchery.ui.screens.HandicapCalculatorScreen
 import uk.co.fnurble.fieldarchery.ui.screens.HistoryScreen
 import uk.co.fnurble.fieldarchery.ui.screens.HomeScreen
 import uk.co.fnurble.fieldarchery.ui.screens.JoinScreen
@@ -46,11 +48,12 @@ fun FieldArcheryNavHost() {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                vm = appViewModel { c, _ -> HomeViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore, c.networkStatus, c::checkServer) },
+                vm = appViewModel { c, _ -> HomeViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore, c.networkStatus, c::checkServer, c.handicapRepository) },
                 onProfile = { nav.navigate("profile") },
                 onScoreRound = { nav.navigate("scoreRound") },
                 onHistory = { nav.navigate("history") },
                 onStats = { nav.navigate("stats") },
+                onHandicap = { nav.navigate("handicap") },
                 onFriends = { nav.navigate("friends") },
                 onAdmin = { nav.navigate("admin") },
                 onMap = { nav.navigate("map") },
@@ -97,7 +100,7 @@ fun FieldArcheryNavHost() {
             arguments = listOf(navArgument("locationId") { type = NavType.StringType }),
         ) {
             LocationPageScreen(
-                vm = appViewModel { c, saved -> LocationPageViewModel(c.locationPageRepository, saved) },
+                vm = appViewModel { c, saved -> LocationPageViewModel(c.locationPageRepository, saved, c.handicapRepository) },
                 onBack = { nav.popBackStack() },
                 onOpenMyRound = { id -> nav.navigate(scorecardRoute(id)) },
                 onOpenFriendRound = { f, r -> nav.navigate("friendCard/${f.archerId}/${f.username}/${r.roundId}") },
@@ -110,6 +113,20 @@ fun FieldArcheryNavHost() {
                 onBack = { nav.popBackStack() },
                 onLocations = { nav.navigate("adminLocations") },
                 onDuplicates = { nav.navigate("adminDuplicates") },
+                onHandicap = { nav.navigate("adminHandicap") },
+            )
+        }
+        composable("adminHandicap") {
+            AdminHandicapScreen(
+                vm = appViewModel { c, _ -> AdminHandicapViewModel(c.handicapRepository, c.accountStore) },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        // Handicap calculator (2.2.05): a score as every bow style and class.
+        composable("handicap") {
+            HandicapCalculatorScreen(
+                vm = appViewModel { c, _ -> HandicapCalculatorViewModel(c.profileRepository, c.handicapRepository) },
+                onBack = { nav.popBackStack() },
             )
         }
         composable("adminDuplicates") {
@@ -157,7 +174,7 @@ fun FieldArcheryNavHost() {
             val archerId = entry.arguments?.getString("archerId").orEmpty()
             val username = entry.arguments?.getString("username").orEmpty()
             FriendRoundsScreen(
-                vm = appViewModel { c, saved -> FriendRoundsViewModel(c.friendsRepository, saved) },
+                vm = appViewModel { c, saved -> FriendRoundsViewModel(c.friendsRepository, saved, c.handicapRepository) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { r -> nav.navigate("friendCard/$archerId/$username/${r.roundId}") },
             )
@@ -224,7 +241,7 @@ fun FieldArcheryNavHost() {
         // Personal bests, trends and seasons; each round opens its scorecard.
         composable("stats") {
             StatsScreen(
-                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository) },
+                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository, c.handicapRepository) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { id -> nav.navigate(scorecardRoute(id)) },
             )

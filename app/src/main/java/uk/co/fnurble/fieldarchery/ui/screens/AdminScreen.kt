@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
@@ -54,7 +55,7 @@ import java.time.ZoneId
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit, onDuplicates: () -> Unit) {
+fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit, onDuplicates: () -> Unit, onHandicap: () -> Unit = {}) {
     val role by vm.role.collectAsStateWithLifecycle()
     val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
     val archers by vm.archers.collectAsStateWithLifecycle()
@@ -128,6 +129,22 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit,
                             Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
                                 Text("Shoot locations", style = MaterialTheme.typography.titleMedium)
                                 Text("Rename, make private or public, merge", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                        }
+                    }
+                }
+                item(key = "handicap") {
+                    Card(
+                        onClick = onHandicap,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Info, contentDescription = null)
+                            Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                Text("Handicap", style = MaterialTheme.typography.titleMedium)
+                                Text("NFAS results, targets per day, models", style = MaterialTheme.typography.bodySmall)
                             }
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         }

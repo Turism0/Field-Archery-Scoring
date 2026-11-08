@@ -45,6 +45,9 @@ import uk.co.fnurble.fieldarchery.data.BowStyleStats
 import uk.co.fnurble.fieldarchery.data.FriendRoundSummary
 import uk.co.fnurble.fieldarchery.data.LocationFriend
 import uk.co.fnurble.fieldarchery.domain.BowStyle
+import uk.co.fnurble.fieldarchery.domain.AgeGroup
+import uk.co.fnurble.fieldarchery.domain.ArcherClass
+import uk.co.fnurble.fieldarchery.domain.HandicapModel
 import uk.co.fnurble.fieldarchery.domain.RoundType
 import uk.co.fnurble.fieldarchery.ui.Load
 import uk.co.fnurble.fieldarchery.ui.LocationPageViewModel
@@ -64,6 +67,7 @@ fun LocationPageScreen(
     onOpenFriendRound: (friend: LocationFriend, round: FriendRoundSummary) -> Unit,
 ) {
     val page by vm.page.collectAsStateWithLifecycle()
+    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val title = (page as? Load.Ready)?.value?.location?.name ?: "Shoot location"
 
@@ -135,14 +139,16 @@ fun LocationPageScreen(
                                             if (data.bowStyles.any { it.roundType != type }) {
                                                 Text(typeName(type), style = MaterialTheme.typography.labelLarge)
                                             }
-                                            BowStyleTable(rows)
+                                            BowStyleTable(rows, if (type == "BIG_GAME") handicap else null)
                                         }
                                     }
                                 }
                                 item(key = "allNote") {
                                     Muted("Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, " +
                                         "a fan as its animals); Woodsman is per target, out of 30. Avg 36 and Avg 40 are that " +
-                                        "average over a whole 36- or 40-target round, so rounds of any length compare fairly.")
+                                        "average over a whole 36- or 40-target round, so rounds of any length compare fairly." +
+                                        (if (handicap != null) " ≈ UL is Avg 40 as an Unlimited Gents score (the handicap, taking each bow as Gents), " +
+                                            "so bow styles compare directly; All bows is their average, by rounds." else ""))
                                 }
                             }
                         }
@@ -237,7 +243,14 @@ private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> U
 }
 
 @Composable
-private fun BowStyleTable(rows: List<BowStyleStats>) {
+private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = null) {
+    // Unlimited Gents equivalent of each bow's 40-target average (location stats aren't split by class).
+    fun ul(b: BowStyleStats): Double? {
+        val m = handicap ?: return null
+        val bow = BowStyle.fromCode(b.bowStyle) ?: return null
+        val avg = b.average40 ?: return null
+        return m.convert(avg, 960.0, HandicapModel.Archer(bow, ArcherClass.GENTS, AgeGroup.ADULT), m.dataThroughYear)
+    }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(vertical = 8.dp)) {
             Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -249,6 +262,7 @@ private fun BowStyleTable(rows: List<BowStyleStats>) {
                 Cell("Avg 36", header = true)
                 Cell("Avg 40", header = true)
                 Cell("Per animal", weight = 1.2f, header = true)
+                if (handicap != null) Cell("≈ UL", header = true)
             }
             rows.forEach { b ->
                 HorizontalDivider()
@@ -260,6 +274,19 @@ private fun BowStyleTable(rows: List<BowStyleStats>) {
                     Cell(b.average36?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
                     Cell(b.average40?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
                     Cell(b.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–", weight = 1.2f)
+                    if (handicap != null) Cell(ul(b)?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
+                }
+            }
+            // All bow styles together, as Unlimited Gents (weighted by rounds).
+            val withUl = rows.mapNotNull { b -> ul(b)?.let { it to b.rounds } }
+            if (handicap != null && withUl.size > 1) {
+                HorizontalDivider()
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Cell("All bows", weight = 1.6f, start = true)
+                    Cell("${rows.sumOf { it.archers }}")
+                    Cell("${rows.sumOf { it.rounds }}")
+                    Cell(""); Cell(""); Cell(""); Cell("", weight = 1.2f)
+                    Cell(String.format(Locale.UK, "%.0f", withUl.sumOf { it.first * it.second } / withUl.sumOf { it.second }))
                 }
             }
         }

@@ -226,6 +226,24 @@ class FieldArcheryApi(
         request("POST", "/api/offers/$roundId/decline", body = null, token = token)
     }
 
+    // ---- Handicap (server 2.2.01) ----
+
+    /** The active handicap model (no sign-in needed). 404 no_handicap until the server has fitted one. */
+    suspend fun handicap(): JSONObject = request("GET", "/api/handicap", body = null)
+
+    /** Admin → Handicap: championships, models, job runs. */
+    suspend fun adminHandicap(token: String): JSONObject = request("GET", "/api/admin/handicap", body = null, token = token)
+
+    /** Targets per day for a championship (36 / 40), or null to let the server job work it out. */
+    suspend fun setHandicapTargets(token: String, champs: String, year: Int, targetsPerDay: Int?): JSONObject =
+        request("PUT", "/api/admin/handicap/events/$champs/$year",
+            JSONObject().put("targetsPerDay", targetsPerDay ?: JSONObject.NULL), token)
+
+    suspend fun requestHandicapFetch(token: String): JSONObject = request("POST", "/api/admin/handicap/fetch", JSONObject(), token)
+
+    suspend fun activateHandicapModel(token: String, modelId: Int): JSONObject =
+        request("POST", "/api/admin/handicap/models/$modelId/activate", JSONObject(), token)
+
     private fun credentials(username: String, password: String, deviceName: String) =
         JSONObject().put("username", username).put("password", password).put("deviceName", deviceName)
 

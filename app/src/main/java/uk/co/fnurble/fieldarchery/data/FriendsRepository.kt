@@ -7,6 +7,8 @@ import uk.co.fnurble.fieldarchery.data.sync.toRoundData
 import uk.co.fnurble.fieldarchery.domain.AgeGroup
 import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
+import uk.co.fnurble.fieldarchery.domain.HandicapModel
+import uk.co.fnurble.fieldarchery.domain.HandicapRound
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.targetsDescription
 import java.time.LocalDate
@@ -40,6 +42,30 @@ data class FriendRoundSummary(
     val locationName: String? = null,
     /** "36 targets · 37 animals (1 predator/prey)" (servers before 2.0.02 just give the number of targets). */
     val targetsLine: String = "$targetCount targets",
+    // For the handicap (2.2.05): Big Game rounds only.
+    val isBigGame: Boolean = true,
+    val archerClass: ArcherClass? = null,
+    val ageGroup: AgeGroup? = null,
+    val bowStyle: BowStyle? = null,
+    /** Animals in the round (predator/prey = 2, fan = n); 0 if the server didn't say (then targets are used). */
+    val animalCount: Int = 0,
+) {
+    /** The handicap's view of this round, or null for Woodsman / unknown bow. */
+    fun handicapRound(): HandicapRound? {
+        if (!isBigGame) return null
+        val archer = HandicapModel.Archer(bowStyle ?: return null, archerClass ?: return null, ageGroup ?: return null)
+        val max = 24 * (if (animalCount > 0) animalCount else targetCount)
+        return HandicapRound(shootDate, totalPoints, max, archer)
+    }
+}
+
+/** Extra fields for the handicap from a server round summary. */
+internal fun FriendRoundSummary.withHandicapFields(r: JSONObject): FriendRoundSummary = copy(
+    isBigGame = r.optString("roundType", "BIG_GAME") != "WOODSMAN",
+    archerClass = if (r.optString("archerClass") == "L") ArcherClass.LADIES else ArcherClass.GENTS,
+    ageGroup = runCatching { AgeGroup.valueOf(r.getString("ageGroup")) }.getOrNull(),
+    bowStyle = BowStyle.fromCode(r.optString("bowStyle")),
+    animalCount = r.optInt("animalCount", 0),
 )
 
 /** "36 targets · 37 animals (1 predator/prey)" from a server round summary. */
@@ -164,7 +190,7 @@ class FriendsRepository(
                 totalPoints = r.getInt("totalPoints"),
                 locationName = r.stringOrNull("locationName"),
                 targetsLine = r.targetsLine(),
-            )
+            ).withHandicapFields(r)
         }
     }
 

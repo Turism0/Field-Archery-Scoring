@@ -69,6 +69,21 @@ bow × ladies terms were no better.
 Missing factors are 0. A round's equivalent is the sum over its days (or the formula on the whole round with its
 total targets). It isn't a flat percentage: e.g. in 2026 a Longbow day of 480 / 600 / 720 is about 811 / 864 / 904.
 
+## In the app (2.2.05)
+
+- The model is downloaded from `GET /api/handicap` (no sign-in) at most once a day and kept on the phone.
+- **Paper faces and 3D targets are averaged** (Pete): half of each bow's BOW3D term is always included, so there's one
+  handicap; it's at most about 5–8 points a day from either.
+- **Equivalent of a round:** its points and maximum (24 × animals on fully scored targets) through the formula, out of
+  the same maximum. Friends' rounds use their animal count (or targets) from the server.
+- **Rating:** the average equivalent share of your last 10 finished Big Game rounds × 24 × 40 (a 40-target Unlimited
+  Gents score); 3 rounds needed. Shown on Stats → Bests and the Stats tile; friends' ratings on their rounds page.
+- **Calculator tile:** a score, targets, bow and class → the Unlimited Gents score and a table for every bow style
+  (rows) and class (columns), using the latest year's factors.
+- **Location pages:** each bow's 40-target average as Unlimited Gents (the stats aren't split by class, so each is
+  taken as Gents) and an "All bows" average weighted by rounds.
+- Woodsman rounds have no handicap (the championships are Big Game).
+
 ## First results (Nov 2026, 2026 factors, Nationals, Gents, 40 targets: a 600 day as Unlimited Gents)
 
 Primitive 870, Longbow 864, American Flatbow 846, Hunting Tackle 840, Thumb Draw 831, Barebow 829, Traditional

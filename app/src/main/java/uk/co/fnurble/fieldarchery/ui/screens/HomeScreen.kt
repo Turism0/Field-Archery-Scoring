@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -65,10 +66,12 @@ fun HomeScreen(
     onHistory: () -> Unit,
     onStats: () -> Unit,
     onFriends: () -> Unit,
+    onHandicap: () -> Unit,
     onAdmin: () -> Unit,
     onMap: () -> Unit,
 ) {
     val summary by vm.summary.collectAsStateWithLifecycle()
+    val rating by vm.rating.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val username by vm.username.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
@@ -150,9 +153,18 @@ fun HomeScreen(
                 HomeTile(
                     icon = Icons.Filled.Star,
                     title = "Stats",
-                    subtitle = if (s?.finished == 0) "Personal bests, trends and seasons once you finish a round"
-                    else "Personal bests, trends and season summaries",
+                    subtitle = when {
+                        s?.finished == 0 -> "Personal bests, trends and seasons once you finish a round"
+                        rating != null -> "Handicap rating ${rating!!.rating} · bests, trends and seasons"
+                        else -> "Personal bests, trends and season summaries"
+                    },
                     onClick = onStats,
+                )
+                HomeTile(
+                    icon = Icons.Filled.Info,
+                    title = "Handicap calculator",
+                    subtitle = "A score with any bow and class, as every other bow and class",
+                    onClick = onHandicap,
                 )
                 HomeTile(
                     icon = Icons.Filled.Face,

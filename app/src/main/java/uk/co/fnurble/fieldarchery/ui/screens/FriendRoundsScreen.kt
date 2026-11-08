@@ -32,6 +32,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import uk.co.fnurble.fieldarchery.domain.HandicapStats
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ fun FriendRoundsScreen(
     onOpenRound: (FriendRoundSummary) -> Unit,
 ) {
     val rounds by vm.rounds.collectAsStateWithLifecycle()
+    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -125,6 +127,20 @@ fun FriendRoundsScreen(
                             )
                         }
                     }
+                    // Their handicap rating (last 10 Big Game rounds as Unlimited Gents on 40 targets).
+                    val model = handicap
+                    val rating = model?.let { m -> HandicapStats.rating(m, r.value.mapNotNull { it.handicapRound() }) }
+                    if (rating != null) item(key = "rating") {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Handicap rating", style = MaterialTheme.typography.titleMedium)
+                                    Text("Last ${rating.rounds} Big Game rounds as Unlimited Gents on 40 targets", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("${rating.rating}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                     items(r.value, key = { it.roundId }) { round ->
                         Card(
                             onClick = { onOpenRound(round) },
@@ -148,6 +164,10 @@ fun FriendRoundsScreen(
                                     Text("${round.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                     Text("points", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    // Unlimited Gents equivalent, so rounds with different bows compare.
+                                    val eq = model?.let { m -> round.handicapRound()?.let { HandicapStats.equivalent(m, it) } }
+                                    if (eq != null) Text("≈ $eq UL Gents", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }

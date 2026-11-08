@@ -32,6 +32,7 @@ import uk.co.fnurble.fieldarchery.data.FriendRequest
 import uk.co.fnurble.fieldarchery.data.FriendRoundSummary
 import uk.co.fnurble.fieldarchery.data.FriendsOverview
 import uk.co.fnurble.fieldarchery.data.FriendsRepository
+import uk.co.fnurble.fieldarchery.data.HandicapRepository
 import uk.co.fnurble.fieldarchery.data.GroupMember
 import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
 import uk.co.fnurble.fieldarchery.data.LiveGroupState
@@ -61,6 +62,10 @@ import uk.co.fnurble.fieldarchery.domain.AnimalResult
 import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
 import uk.co.fnurble.fieldarchery.domain.NearbyLocation
+import uk.co.fnurble.fieldarchery.domain.HandicapModel
+import uk.co.fnurble.fieldarchery.domain.HandicapRating
+import uk.co.fnurble.fieldarchery.domain.HandicapStats
+import uk.co.fnurble.fieldarchery.domain.handicapRound
 import uk.co.fnurble.fieldarchery.domain.BestAverage
 import uk.co.fnurble.fieldarchery.domain.PersonalBest
 import uk.co.fnurble.fieldarchery.domain.PersonalStats
@@ -154,7 +159,14 @@ class HomeViewModel(
     accountStore: AccountStore,
     network: NetworkStatus,
     private val serverCheck: suspend () -> Unit,
+    handicap: HandicapRepository? = null,
 ) : SyncingViewModel(syncer, accountStore, accounts) {
+    /** Your handicap rating, for the Stats tile (null until there's a model and 3+ Big Game rounds). */
+    val rating: StateFlow<HandicapRating?> = handicap?.let { h ->
+        combine(roundRepo.finishedRounds, h.model) { rounds, m -> m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    } ?: MutableStateFlow(null)
+
     /** For the "Device offline" / "Server unavailable" notices. */
     val online: StateFlow<Boolean> = network.online
     val server: StateFlow<ServerState> = network.server
@@ -182,6 +194,8 @@ class HomeViewModel(
     init {
         // Guests' scores in group rounds are only kept for 30 days.
         viewModelScope.launch { roundRepo.deleteOldGuests() }
+        // The handicap model: downloaded when there's signal, at most daily (works offline after that).
+        handicap?.let { viewModelScope.launch { it.refreshIfStale() } }
     }
 }
 
@@ -248,7 +262,21 @@ class HistoryViewModel(
 }
 
 /** Stats (2.2): personal bests, trends and season summaries from your finished rounds. */
-class StatsViewModel(roundRepo: RoundRepository) : ViewModel() {
+class StatsViewModel(roundRepo: RoundRepository, handicap: HandicapRepository? = null) : ViewModel() {
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
+    /** Your rating: average Unlimited-Gents equivalent of your last 10 Big Game rounds, as a 40-target score. */
+    val rating: StateFlow<HandicapRating?> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
+        m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Your latest Big Game rounds with their equivalents (what the rating is made of). */
+    val ratingRounds: StateFlow<List<Pair<Round, Int>>> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
+        if (m == null) emptyList()
+        else rounds.mapNotNull { r -> r.handicapRound()?.let { h -> r to HandicapStats.equivalent(m, h) } }
+            .sortedByDescending { it.first.shootDate }.take(HandicapModel.RATING_ROUNDS)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val rounds: StateFlow<List<Round>?> = roundRepo.finishedRounds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -597,7 +625,10 @@ class LocationMapViewModel(
 }
 
 /** One location: your rounds there, friends' rounds and stats there, all-archer stats per bow style. Nav arg "locationId". */
-class LocationPageViewModel(private val repo: LocationPageRepository, saved: SavedStateHandle) : ViewModel() {
+class LocationPageViewModel(private val repo: LocationPageRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
+    /** For Unlimited-Gents equivalents of each bow style's averages (null until downloaded). */
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
     private val locationId: String = checkNotNull(saved["locationId"])
 
     private val _page = MutableStateFlow<Load<LocationPage>>(Load.Loading)
@@ -745,7 +776,10 @@ class FriendsViewModel(private val friends: FriendsRepository, accounts: Account
 }
 
 /** A friend's finished rounds, newest first. */
-class FriendRoundsViewModel(private val friends: FriendsRepository, saved: SavedStateHandle) : ViewModel() {
+class FriendRoundsViewModel(private val friends: FriendsRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
+    /** For Unlimited-Gents equivalents and the friend's rating (null until downloaded). */
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
     val archerId: String = checkNotNull(saved["archerId"])
     val username: String = checkNotNull(saved["username"])
 
