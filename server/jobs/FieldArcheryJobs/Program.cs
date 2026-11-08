@@ -1,8 +1,11 @@
-// Field Archery Scoring – server jobs (2.2.01). Run by Windows Task Scheduler on Odin every 15 minutes:
+// Field Archery Scoring – server jobs (2.2.02). Run by Windows Task Scheduler on Odin once a week (Monday 03:23) as
+// "FieldArcheryJobs.exe fetch":
 //
-//   FieldArcheryJobs.exe            (run)  does work only when it's due: a "Fetch now" from the Admin menu, the weekly
-//                                          check of nfas.net, or a target count an Admin changed. Otherwise exits at once.
-//   FieldArcheryJobs.exe fetch            read nfas.net now (then refit if anything changed)
+//   FieldArcheryJobs.exe fetch            read nfas.net now, then refit if anything changed (results, a target count an
+//                                          Admin set, or no model yet). "Fetch now" requests from the Admin menu are
+//                                          picked up by the next weekly run (or run this by hand).
+//   FieldArcheryJobs.exe            (run)  only does what's due: a waiting request, nfas.net not read for 7 days, or a
+//                                          target count an Admin changed. Otherwise exits at once.
 //   FieldArcheryJobs.exe fit              refit the handicap now
 //   FieldArcheryJobs.exe verify           check the fit against the Python reference (Verify\*), no database needed
 //

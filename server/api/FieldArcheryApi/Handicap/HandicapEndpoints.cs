@@ -14,8 +14,8 @@ namespace FieldArcheryApi.Handicap;
 ///   GET  /api/admin/handicap                 Admins and Owner → { events, models, runs }
 ///   PUT  /api/admin/handicap/events/{champs}/{year}  { targetsPerDay: 36 | 40 | null }
 ///                                            Admins and Owner: set by hand (null = back to the job's own count).
-///                                            The job refits within 15 minutes.
-///   POST /api/admin/handicap/fetch           Admins and Owner: read nfas.net now (the job picks it up within 15 min).
+///                                            The job refits on its next weekly run.
+///   POST /api/admin/handicap/fetch           Admins and Owner: read nfas.net now (the job's next weekly run picks it up).
 ///   POST /api/admin/handicap/models/{id}/activate  Owner only: use a model the job left waiting.
 ///
 /// Errors: 403 not_admin / not_owner; 400 invalid_targets; 404 no_such_event / no_such_model; 409 already_requested.
@@ -132,7 +132,7 @@ public static class HandicapEndpoints
         var id = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
             "INSERT dbo.HandicapJobRequest (Kind, RequestedById) OUTPUT inserted.RequestId VALUES ('FETCH', @by);",
             new { by = user.ArcherId() }, cancellationToken: ct));
-        return Results.Accepted(value: new { requestId = id, message = "The server job reads nfas.net within 15 minutes (the first full read takes about 10)." });
+        return Results.Accepted(value: new { requestId = id, message = "The server job reads nfas.net on its next weekly run (Monday night), or run FieldArcheryJobs.exe fetch on Odin to do it now." });
     }
 
     private static async Task<IResult> Activate(int modelId, ClaimsPrincipal user, Db db, CancellationToken ct)

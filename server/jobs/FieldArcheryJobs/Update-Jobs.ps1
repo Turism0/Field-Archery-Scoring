@@ -4,7 +4,7 @@
       1. dotnet publish into C:\FieldArcheryJobs (appsettings.Production.json there is left alone)
       2. checks appsettings.Production.json is there and filled in (first time: copies the example for you to fill in)
       3. runs "verify": the C# handicap fit must match the Python reference
-      4. creates or updates the scheduled task "FieldArchery jobs" (every 15 minutes, as SYSTEM, one copy at a time)
+      4. creates or updates the scheduled task "FieldArchery jobs" (weekly, Monday 03:23, as SYSTEM, one copy at a time)
 
     Run in Windows PowerShell 5.1 as Administrator, after copying server\jobs\FieldArcheryJobs into C:\zScripts\FieldArcheryJobs:
 
@@ -61,13 +61,13 @@ Write-Host 'Checking the handicap fit against the reference (about a minute)...'
 if ($LASTEXITCODE -ne 0) { Problem 'The handicap fit does not match the reference (see above). The scheduled task was not changed.'; exit 1 }
 
 # --- 4. Scheduled task -----------------------------------------------------------------------------
-$action   = New-ScheduledTaskAction -Execute (Join-Path $Output 'FieldArcheryJobs.exe') -WorkingDirectory $Output
-$trigger  = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 15)
+$action   = New-ScheduledTaskAction -Execute (Join-Path $Output 'FieldArcheryJobs.exe') -Argument 'fetch' -WorkingDirectory $Output
+$trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At '03:23'
 $settingsTask = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 2) -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName $Task -Action $action -Trigger $trigger -Settings $settingsTask -Principal $principal `
-    -Description 'Field Archery Scoring: weekly NFAS results check and handicap fit; Admin "Fetch now" within 15 minutes.' -Force | Out-Null
-Ok "scheduled task '$Task' runs every 15 minutes (does nothing unless something is due)"
+    -Description 'Field Archery Scoring: weekly NFAS results check and handicap fit (Admin "Fetch now" and target changes are picked up here).' -Force | Out-Null
+Ok "scheduled task '$Task' runs every Monday at 03:23 (missed runs start when Odin is next on)"
 
 Write-Host ''
 Write-Host "Done: server jobs $version installed." -ForegroundColor Green
