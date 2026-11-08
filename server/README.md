@@ -40,7 +40,7 @@ First time, in this order:
    C:\zScripts\FieldArcheryJobs\Update-Jobs.ps1
    ```
 
-   The first time it creates `C:\FieldArcheryJobs\appsettings.Production.json` and stops: fill in the API login's password (same as the API's) and a long random `NameKeySecret` (it prints a command that makes one), then run it again. **Never change the secret afterwards**: archers are matched across years by it. The script publishes into `C:\FieldArcheryJobs`, checks the C# handicap fit matches the Python reference (`verify`), and creates the scheduled task **FieldArchery jobs** (every Monday at 03:23 as `FieldArcheryJobs.exe fetch`, as SYSTEM, one copy at a time; a missed run starts when Odin is next on).
+   The job takes the database connection from the API's own `C:\inetpub\fieldarchery-api\appsettings.Production.json` (one copy of the password, 2.2.03). The first time it also makes `C:\FieldArcheryJobs\appsettings.Production.json` holding only a random `NameKeySecret`: **back that file up and never change the secret**, as archers are matched across years by it. Both files are then locked so only Administrators, SYSTEM (the task) and the API's app pool (`IIS AppPool\FieldArcheryApi`) can read them; run the script again after any change to the API's settings file. The script publishes into `C:\FieldArcheryJobs`, checks the C# handicap fit matches the Python reference (`verify`), and creates the scheduled task **FieldArchery jobs** (every Monday at 03:23 as `FieldArcheryJobs.exe fetch`, as SYSTEM, one copy at a time; a missed run starts when Odin is next on).
 4. **Read nfas.net and fit the first model now** (about 10–15 minutes; every bow style page for every year, half a second apart):
 
    ```powershell

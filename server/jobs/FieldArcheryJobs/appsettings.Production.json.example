@@ -1,7 +1,4 @@
 {
-  "ConnectionStrings": {
-    "FieldArchery": "Server=sql.fnurble.co.uk;Database=FieldArcheryScoring;User ID=fieldarchery_api;Password=PUT_THE_API_LOGIN_PASSWORD_HERE;Encrypt=True;TrustServerCertificate=False;Application Name=FieldArcheryJobs"
-  },
   "Handicap": {
     "NameKeySecret": "PUT_A_LONG_RANDOM_SECRET_HERE (never change it once results are stored: archers are matched by it)"
   }

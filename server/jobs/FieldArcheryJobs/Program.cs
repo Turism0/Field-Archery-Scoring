@@ -9,7 +9,8 @@
 //   FieldArcheryJobs.exe fit              refit the handicap now
 //   FieldArcheryJobs.exe verify           check the fit against the Python reference (Verify\*), no database needed
 //
-// Settings: appsettings.json, and appsettings.Production.json next to the exe (connection string, NameKeySecret).
+// Settings: appsettings.json; the database connection from the API's own appsettings.Production.json (one copy of the
+// password, 2.2.03; path in Api:SettingsFile); and appsettings.Production.json next to the exe (NameKeySecret).
 // Exit code 0 = fine, 1 = a problem (shown in red, and recorded in the Admin menu for scheduled runs).
 
 using System.Diagnostics;
@@ -18,9 +19,12 @@ using System.Text.Json;
 using FieldArcheryJobs;
 using Microsoft.Extensions.Configuration;
 
+var baseConfig = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory).AddJsonFile("appsettings.json", optional: false).Build();
+var apiSettings = baseConfig["Api:SettingsFile"] ?? @"C:\inetpub\fieldarchery-api\appsettings.Production.json";
 var config = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile(apiSettings, optional: true)                 // ConnectionStrings:FieldArchery, as the API uses it
     .AddJsonFile("appsettings.Production.json", optional: true)
     .Build();
 var mode = args.FirstOrDefault()?.ToLowerInvariant() ?? "run";
@@ -34,9 +38,19 @@ void Info(string text) => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {text}");
 
 if (mode == "verify") return Verify.Run(Path.Combine(AppContext.BaseDirectory, "Verify"), Ok, Problem, Info);
 
+// Files from before the rename call the connection "Nfas", like the API accepts.
 var connection = config.GetConnectionString("FieldArchery");
+if (string.IsNullOrWhiteSpace(connection)) connection = config.GetConnectionString("Nfas");
 var secret = config["Handicap:NameKeySecret"];
-if (string.IsNullOrWhiteSpace(connection) || connection.Contains("PUT_THE_")) { Problem("The connection string is missing: copy appsettings.Production.json.example to appsettings.Production.json and fill it in."); return 1; }
+if (string.IsNullOrWhiteSpace(connection) || connection.Contains("PUT_THE_"))
+{
+    Problem(File.Exists(apiSettings)
+        ? $"No connection string in {apiSettings} (the API's settings), or it can't be read: run as Administrator or SYSTEM."
+        : $"Can't find the API's settings at {apiSettings}: the database connection comes from there (Api:SettingsFile in appsettings.json).");
+    return 1;
+}
+// Tell the database which program is connecting.
+connection = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connection) { ApplicationName = "FieldArcheryJobs" }.ConnectionString;
 if (string.IsNullOrWhiteSpace(secret) || secret.StartsWith("PUT_A_")) { Problem("Handicap:NameKeySecret is missing from appsettings.Production.json (a long random string, never changed afterwards)."); return 1; }
 
 var store = new Store(connection);

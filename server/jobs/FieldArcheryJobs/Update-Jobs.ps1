@@ -2,7 +2,9 @@
 <#
     Builds the server jobs (FieldArcheryJobs: NFAS results and the handicap) on Odin and schedules them:
       1. dotnet publish into C:\FieldArcheryJobs (appsettings.Production.json there is left alone)
-      2. checks appsettings.Production.json is there and filled in (first time: copies the example for you to fill in)
+      2. settings: the database connection is read from the API's appsettings.Production.json (one copy of the password);
+         C:\FieldArcheryJobs\appsettings.Production.json holds only the NameKeySecret (made the first time). Both files
+         are locked to Administrators, SYSTEM and the API's app pool.
       3. runs "verify": the C# handicap fit must match the Python reference
       4. creates or updates the scheduled task "FieldArchery jobs" (weekly, Monday 03:23, as SYSTEM, one copy at a time)
 
@@ -41,19 +43,41 @@ if ($LASTEXITCODE -ne 0) { Problem 'dotnet publish failed (see the errors above)
 Ok "published to $Output"
 
 # --- 2. Settings (server only, never in Git) ---------------------------------------------------------
+# The database connection comes from the API's own settings file (one copy of the password); the job's file only
+# holds the NameKeySecret. Both are locked so only Administrators, SYSTEM (the task) and the API's app pool can read them.
+$apiSettings = 'C:\inetpub\fieldarchery-api\appsettings.Production.json'
+if (-not (Test-Path $apiSettings)) { Problem "Can't find the API's settings at $apiSettings (the job takes the database connection from there)."; exit 1 }
+$api = Get-Content $apiSettings -Raw | ConvertFrom-Json
+if (-not ($api.ConnectionStrings.FieldArchery -or $api.ConnectionStrings.Nfas)) { Problem "$apiSettings has no FieldArchery connection string."; exit 1 }
+Ok "database connection taken from the API's settings ($apiSettings)"
+
 $settings = Join-Path $Output 'appsettings.Production.json'
-if (-not (Test-Path $settings)) {
-    Copy-Item (Join-Path $Project 'appsettings.Production.json.example') $settings
-    Problem "Created $settings from the example. Fill in the password (the same as the API's) and a long random NameKeySecret, then run this script again."
-    Write-Host '  A random secret:  [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))'
-    exit 1
+$job = if (Test-Path $settings) { Get-Content $settings -Raw | ConvertFrom-Json } else { $null }
+$secret = "$($job.Handicap.NameKeySecret)"
+if (-not $secret -or $secret -match '^PUT_A_') {
+    # A new secret, made once. Never change it afterwards: archers are matched across years by it.
+    $bytes = New-Object byte[] 48
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $secret = [Convert]::ToBase64String($bytes)
+    Ok "made a new NameKeySecret in $settings"
+    Write-Host "  Back up $settings somewhere safe: if the secret is lost, every archer looks new and the results must be read again." -ForegroundColor Yellow
+} elseif ($job.ConnectionStrings) {
+    Ok "removed the copy of the database password from $settings (kept the NameKeySecret)"
+} else {
+    Ok "NameKeySecret kept ($settings)"
 }
-$json = Get-Content $settings -Raw | ConvertFrom-Json
-if ("$($json.ConnectionStrings.FieldArchery)" -match 'PUT_THE_' -or "$($json.Handicap.NameKeySecret)" -match '^PUT_A_' -or -not $json.Handicap.NameKeySecret) {
-    Problem "$settings still has a placeholder: fill in the password and NameKeySecret."
-    exit 1
+[ordered]@{ Handicap = [ordered]@{ NameKeySecret = $secret } } | ConvertTo-Json -Depth 5 | Set-Content $settings -Encoding UTF8
+
+# Only Administrators (full), SYSTEM and, for the API's file, its app pool may read them. SIDs, so any Windows language works.
+function Lock-File([string]$Path, [string[]]$Readers) {
+    $grants = @('*S-1-5-32-544:(F)', '*S-1-5-18:(R)')
+    foreach ($r in $Readers) { $grants += "${r}:(R)" }
+    & icacls $Path /inheritance:r /grant:r @grants | Out-Null
+    if ($LASTEXITCODE -ne 0) { Problem "Couldn't set the permissions on $Path (icacls)."; exit 1 }
 }
-Ok 'appsettings.Production.json is filled in'
+Lock-File $settings @()
+Lock-File $apiSettings @('IIS AppPool\FieldArcheryApi')
+Ok 'settings files readable only by Administrators, SYSTEM and the API (IIS AppPool\FieldArcheryApi)'
 
 # --- 3. Verify the fit against the Python reference ---------------------------------------------------
 Write-Host 'Checking the handicap fit against the reference (about a minute)...'
