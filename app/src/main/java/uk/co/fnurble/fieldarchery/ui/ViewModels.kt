@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -32,6 +33,10 @@ import uk.co.fnurble.fieldarchery.data.FriendRoundSummary
 import uk.co.fnurble.fieldarchery.data.FriendsOverview
 import uk.co.fnurble.fieldarchery.data.FriendsRepository
 import uk.co.fnurble.fieldarchery.data.GroupMember
+import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
+import uk.co.fnurble.fieldarchery.data.LiveGroupState
+import uk.co.fnurble.fieldarchery.data.LiveMethod
+import uk.co.fnurble.fieldarchery.data.LivePoll
 import uk.co.fnurble.fieldarchery.data.NewGroupMember
 import uk.co.fnurble.fieldarchery.data.RoundOffer
 import uk.co.fnurble.fieldarchery.data.CachedFriend
@@ -56,6 +61,9 @@ import uk.co.fnurble.fieldarchery.domain.AnimalResult
 import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
 import uk.co.fnurble.fieldarchery.domain.NearbyLocation
+import uk.co.fnurble.fieldarchery.domain.BestAverage
+import uk.co.fnurble.fieldarchery.domain.PersonalBest
+import uk.co.fnurble.fieldarchery.domain.PersonalStats
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
 import uk.co.fnurble.fieldarchery.domain.RoundType
@@ -177,16 +185,112 @@ class HomeViewModel(
     }
 }
 
-/** Score history: finished rounds only, newest first. */
+/** History filters (2.2): null = any. */
+data class HistoryFilter(
+    val type: RoundType? = null,
+    val bowStyle: BowStyle? = null,
+    /** Location name as shown on the round. */
+    val location: String? = null,
+    val period: PersonalStats.Period = PersonalStats.Period.All,
+) {
+    val isActive: Boolean get() = this != HistoryFilter()
+
+    fun matches(r: RoundSummary, today: LocalDate): Boolean =
+        (type == null || r.roundType == type) &&
+            (bowStyle == null || r.bowStyle == bowStyle) &&
+            (location == null || r.locationName == location) &&
+            period.contains(r.shootDate, today)
+}
+
+/** What the history filters can offer: only things that are in your rounds. */
+data class HistoryChoices(
+    val types: List<RoundType> = emptyList(),
+    val bowStyles: List<BowStyle> = emptyList(),
+    val locations: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+)
+
+/** Score history: finished rounds only, newest first, with filters and personal-best marks. */
 class HistoryViewModel(
     roundRepo: RoundRepository,
     accounts: AccountRepository,
     syncer: RoundSyncer,
     accountStore: AccountStore,
 ) : SyncingViewModel(syncer, accountStore, accounts) {
-    val rounds: StateFlow<List<RoundSummary>?> = roundRepo.rounds
-        .map { list -> list.filter { it.status == RoundStatus.COMPLETED } }
+    private val finished = roundRepo.rounds.map { list -> list.filter { it.status == RoundStatus.COMPLETED } }
+
+    private val _filter = MutableStateFlow(HistoryFilter())
+    val filter: StateFlow<HistoryFilter> = _filter.asStateFlow()
+    fun setFilter(change: (HistoryFilter) -> HistoryFilter) = _filter.update(change)
+    fun clearFilter() { _filter.value = HistoryFilter() }
+
+    /** Finished rounds matching the filters. */
+    val rounds: StateFlow<List<RoundSummary>?> = combine(finished, _filter) { list, f ->
+        val today = LocalDate.now()
+        list.filter { f.matches(it, today) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** How many finished rounds there are before filtering. */
+    val totalCount: StateFlow<Int> = finished.map { it.size }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    val choices: StateFlow<HistoryChoices> = finished.map { list ->
+        HistoryChoices(
+            types = list.map { it.roundType }.distinct().sortedBy { it.ordinal },
+            bowStyles = list.mapNotNull { it.bowStyle }.distinct().sortedBy { it.ordinal },
+            locations = list.mapNotNull { it.locationName?.takeIf { n -> n.isNotBlank() } }.distinct().sortedBy { it.lowercase() },
+            years = PersonalStats.years(list.map { it.shootDate }),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryChoices())
+
+    /** Rounds that were a new personal best when shot (marked "PB"). */
+    val personalBests: StateFlow<Set<String>> = roundRepo.finishedRounds.map { PersonalStats.personalBestIds(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+}
+
+/** Stats (2.2): personal bests, trends and season summaries from your finished rounds. */
+class StatsViewModel(roundRepo: RoundRepository) : ViewModel() {
+    val rounds: StateFlow<List<Round>?> = roundRepo.finishedRounds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val bests: StateFlow<List<PersonalBest>> = roundRepo.finishedRounds.map { PersonalStats.bests(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val bestAverages: StateFlow<List<BestAverage>> = roundRepo.finishedRounds.map { PersonalStats.bestAverages(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val seasons: StateFlow<List<PersonalStats.Season>> = roundRepo.finishedRounds.map { PersonalStats.seasons(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ---- Trend chart: one round type, one bow style (or all) ----
+
+    private val _trendType = MutableStateFlow<RoundType?>(null)
+    private val _trendBow = MutableStateFlow<BowStyle?>(null)
+    private val _trendBowChosen = MutableStateFlow(false)
+
+    /** The round type on the chart: chosen, else the one you've shot most. */
+    val trendType: StateFlow<RoundType> = combine(rounds, _trendType) { list, chosen ->
+        chosen ?: list.orEmpty().groupingBy { it.type }.eachCount().maxByOrNull { it.value }?.key ?: RoundType.BIG_GAME
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoundType.BIG_GAME)
+
+    /** Bow style on the chart: chosen (null = all), else the one you shoot most with this type. */
+    val trendBow: StateFlow<BowStyle?> = combine(rounds, trendType, _trendBow, _trendBowChosen) { list, type, chosen, wasChosen ->
+        if (wasChosen) chosen
+        else list.orEmpty().filter { it.type == type }.groupingBy { it.bowStyle }.eachCount().maxByOrNull { it.value }?.key
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val trend: StateFlow<List<PersonalStats.TrendPoint>> = combine(rounds, trendType, trendBow) { list, type, bow ->
+        PersonalStats.trend(list.orEmpty(), type, bow)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun chooseTrendType(type: RoundType) {
+        _trendType.value = type
+        _trendBowChosen.value = false
+    }
+
+    fun chooseTrendBow(bow: BowStyle?) {
+        _trendBow.value = bow
+        _trendBowChosen.value = true
+    }
 }
 
 /** Score a round: continue an unfinished round or start a new one. */
@@ -760,6 +864,107 @@ class OfferViewModel(private val friends: FriendsRepository, saved: SavedStateHa
     }
 }
 
+// ---------------- Live groups (2.1) ----------------
+
+/**
+ * The lobby of a live group: the join code and QR, who's joined, and (host) Start. Nav arg "groupId".
+ * Follows the group every few seconds; when the host starts, every phone goes to scoring.
+ */
+class LobbyViewModel(
+    private val live: LiveGroupRepository,
+    private val rounds: RoundRepository,
+    saved: SavedStateHandle,
+) : ViewModel() {
+    val groupId: String = checkNotNull(saved["groupId"])
+
+    val poll: StateFlow<LivePoll?> = live.poll(groupId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun messageShown() { _message.value = null }
+
+    /** This phone's round in the group (scoring opens on it). */
+    val myRoundId: String? get() = live.myMemberId(groupId)
+
+    fun start() = act { live.start(groupId) }
+
+    /** Host: close the group and delete it here. A joined archer: leave it and delete the copy here. */
+    fun cancel(onDone: () -> Unit) = act {
+        val mine = myRoundId
+        if (poll.value?.state?.isHost == true) live.close(groupId) else live.leave(groupId)
+        mine?.let { rounds.deleteGroup(it) }
+        onDone()
+    }
+
+    private fun act(block: suspend () -> Unit) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: ApiException) {
+                _message.value = e.message
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+}
+
+data class JoinForm(
+    val code: String = "",
+    val archerClass: ArcherClass? = null,
+    val ageGroup: AgeGroup? = null,
+    val bowStyle: BowStyle? = null,
+    val busy: Boolean = false,
+    val error: String? = null,
+) {
+    val isValid: Boolean get() = code.length == 6 && archerClass != null && ageGroup != null && bowStyle != null
+}
+
+/** Join a live group: type or scan the code, check class / age group / bow, join. */
+class JoinViewModel(profiles: ProfileRepository, private val live: LiveGroupRepository) : ViewModel() {
+    private val _form = MutableStateFlow(JoinForm())
+    val form: StateFlow<JoinForm> = _form.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val p = profiles.get()
+            _form.update {
+                it.copy(
+                    archerClass = it.archerClass ?: p.archerClass,
+                    ageGroup = it.ageGroup ?: resolveAgeGroup(p.ageGroupManual, p.dateOfBirth, LocalDate.now()),
+                    bowStyle = it.bowStyle ?: p.mainBowStyle,
+                )
+            }
+        }
+    }
+
+    fun update(change: (JoinForm) -> JoinForm) = _form.update(change)
+
+    /** Typed or scanned text: keeps the code characters (a scanned QR holds more than the code). */
+    fun onCode(text: String) = _form.update { it.copy(code = LiveGroupRepository.cleanCode(text), error = null) }
+
+    fun join(onJoined: (String) -> Unit) {
+        val f = _form.value
+        if (!f.isValid || f.busy) return
+        _form.update { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val groupId = live.join(f.code, f.archerClass!!, f.ageGroup!!, f.bowStyle!!)
+                _form.update { it.copy(busy = false) }
+                onJoined(groupId)
+            } catch (e: ApiException) {
+                _form.update { it.copy(busy = false, error = e.message) }
+            }
+        }
+    }
+}
+
 // ---------------- Profile ----------------
 
 class ProfileViewModel(
@@ -910,6 +1115,11 @@ data class NewRoundForm(
     /** Group round scored on this phone (app 2.0): you plus [members]. */
     val group: Boolean = false,
     val members: List<GroupMemberDraft> = emptyList(),
+    /** Live group (app 2.1): others join on their own phones with a code; needs signal. */
+    val live: Boolean = false,
+    val liveMethod: LiveMethod = LiveMethod.SINGLE,
+    val starting: Boolean = false,
+    val error: String? = null,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
 
@@ -932,7 +1142,7 @@ data class NewRoundForm(
 
     val isValid: Boolean
         get() = targetCount != null && archerClass != null && ageGroup != null && bowStyle != null &&
-            (!group || members.isNotEmpty())
+            (!group || live || members.isNotEmpty())
 }
 
 /** Someone being added to a group round: a friend (from your friends list) or a guest (name only). */
@@ -952,6 +1162,7 @@ class NewRoundViewModel(
     private val locations: LocationRepository,
     private val type: RoundType = RoundType.BIG_GAME,
     private val accountStore: AccountStore? = null,
+    private val live: LiveGroupRepository? = null,
 ) : ViewModel() {
     private val _form = MutableStateFlow<NewRoundForm?>(null)
     val form: StateFlow<NewRoundForm?> = _form.asStateFlow()
@@ -997,6 +1208,34 @@ class NewRoundViewModel(
     }
 
     fun update(change: (NewRoundForm) -> NewRoundForm) = _form.update { it?.let(change) }
+
+    /**
+     * Live group: makes the group on this phone and on the server (with a join code), then [onLive] opens the lobby.
+     * Nothing is kept if the server can't be reached.
+     */
+    fun startLive(onLive: (String) -> Unit) {
+        val f = _form.value ?: return
+        val repo = live ?: return
+        if (!f.isValid || f.starting) return
+        update { it.copy(starting = true, error = null) }
+        viewModelScope.launch {
+            val groupId = java.util.UUID.randomUUID().toString()
+            val ownId = rounds.createGroupRound(
+                f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
+                f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
+                groupId = groupId, live = true,
+            )
+            try {
+                repo.create(groupId, f.liveMethod)
+                locations.captureFor(ownId)
+                update { it.copy(starting = false) }
+                onLive(groupId)
+            } catch (e: ApiException) {
+                rounds.deleteGroup(ownId)
+                update { it.copy(starting = false, error = e.message) }
+            }
+        }
+    }
 
     fun start(onCreated: (String) -> Unit) {
         val f = _form.value ?: return
@@ -1177,6 +1416,7 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
 class ScoringViewModel(
     private val rounds: RoundRepository,
     private val saved: SavedStateHandle,
+    private val liveRepo: LiveGroupRepository? = null,
 ) : ViewModel() {
     /** The round opened from the nav route (in a group, whoever was tapped; usually the scorer's own round). */
     val startRoundId: String = checkNotNull(saved["roundId"])
@@ -1185,19 +1425,110 @@ class ScoringViewModel(
     private val _roundId = MutableStateFlow(saved.get<String>(KEY_CURRENT) ?: startRoundId)
     val roundId: StateFlow<String> = _roundId.asStateFlow()
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val round: StateFlow<Round?> = _roundId.flatMapLatest { rounds.round(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     /** Everyone in the group, in scoring order (empty when it's not a group round). */
     val group: StateFlow<List<GroupMember>> = rounds.group(startRoundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ---- Live groups (2.1): scores go to the server, other phones' scores come back every few seconds ----
+
+    private var liveGroupId: String? = null
+    private val _live = MutableStateFlow<LivePoll?>(null)
+    /** The live group, if this is one (null otherwise). */
+    val live: StateFlow<LivePoll?> = _live.asStateFlow()
+
+    /** Double / 3+ scorers: this phone's own entries by (target, card), shown until both scorers match. */
+    private val _mineHere = MutableStateFlow<Map<Pair<Int, String>, TargetScore>>(emptyMap())
+
+    /**
+     * The round on screen. Double / 3+ scorers: for a card this phone scores, its own entries are shown on top of the
+     * saved (matched) scores, so you see what you entered while waiting for the other scorer.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val round: StateFlow<Round?> = combine(_roundId.flatMapLatest { rounds.round(it) }, _mineHere, _live) { r, mine, poll ->
+        val s = poll?.state
+        if (r == null || s == null || !s.checked || !s.canScore(r.id)) return@combine r
+        val entered = mine.filterKeys { it.second == r.id }.mapKeys { it.key.first }
+        if (entered.isEmpty()) r
+        else r.copy(targets = (r.targets.associateBy { it.targetNo } + entered).values.sortedBy { it.targetNo })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Double / 3+ scorers: where the card on screen has got to on this target (waiting, doesn't match, saved). */
+    fun checkText(): String? {
+        val s = _live.value?.state ?: return null
+        val n = _targetNo.value
+        val id = _roundId.value
+        return s.checkText(n, id, iEntered = s.canScore(id) && _mineHere.value.containsKey(n to id))
+    }
+
+    /** True when the two scorers' entries for the card on screen differ. */
+    fun checkMismatch(): Boolean = _live.value?.state?.cells?.get(_targetNo.value to _roundId.value) == "MISMATCH"
+
+    private val _message = MutableStateFlow<String?>(null)
+    /** One-off note, e.g. "Dave is scoring this card". */
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun messageShown() { _message.value = null }
+
+    /** Was the target on screen scored the last time the group changed? (A change to scored moves everyone on.) */
+    private var viewedWasComplete: Boolean? = null
+
+    /**
+     * Live groups move on automatically: when the archer on screen has just been scored on this target, go to the next
+     * one still to score (by target, then scoring order), on every phone.
+     */
+    private fun followGroup(members: List<GroupMember>) {
+        val viewing = members.firstOrNull { it.roundId == _roundId.value } ?: return
+        val n = _targetNo.value
+        if (n == 0) return
+        val complete = viewing.round.target(n).isComplete
+        val justScored = viewedWasComplete == false && complete
+        viewedWasComplete = complete
+        if (!justScored) return
+        val targets = members.maxOfOrNull { it.round.targetCount } ?: return
+        for (t in 1..targets) {
+            val next = members.firstOrNull { t <= it.round.targetCount && !it.round.target(t).isComplete } ?: continue
+            setRound(next.roundId)
+            setTarget(t)
+            viewedWasComplete = false
+            return
+        }
+    }
+
+    /** In a live group: can this phone score the card on screen? (Always true otherwise.) */
+    fun canScoreHere(): Boolean {
+        val s = _live.value?.state ?: return liveGroupId == null
+        return s.canScore(_roundId.value)
+    }
+
+    /** Why this card can't be scored here, for the banner. */
+    fun whyNotHere(): String? {
+        if (liveGroupId == null) return null
+        val s = _live.value?.state ?: return "Connecting to the group…"
+        return when {
+            s.closed -> "The group is closed."
+            !s.started -> "Waiting for the host to start."
+            s.canScore(_roundId.value) -> null
+            else -> s.scorerNames(_roundId.value).takeIf { it.isNotEmpty() }?.joinToString(" and ")
+                ?.let { "$it ${if (it.contains(" and ")) "score" else "scores"} this card." } ?: "Someone else scores this card."
+        }
+    }
 
     /** Restored target, else the one asked for in the nav route (e.g. "Edit target 7" on the scorecard). */
     private val _targetNo = MutableStateFlow(saved.get<Int>(KEY_TARGET) ?: saved.get<Int>(ARG_START_TARGET) ?: 0)
 
     /** Current target number; 0 until the round has loaded and we pick the first unscored target. */
     val targetNo: StateFlow<Int> = _targetNo.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val gid = rounds.groupIdOf(startRoundId)
+            if (liveRepo?.isLive(gid) != true) return@launch
+            liveGroupId = gid
+            launch { liveRepo.poll(gid!!).collect { _live.value = it } }
+            launch { liveRepo.myEntries(gid).collect { _mineHere.value = it } }
+            group.collect { members -> followGroup(members) }
+        }
+    }
+
 
     fun ensureTargetSelected(r: Round) {
         if (_targetNo.value == 0 || !r.canGoTo(_targetNo.value)) {
@@ -1266,15 +1597,27 @@ class ScoringViewModel(
     private fun edit(change: (TargetScore) -> TargetScore) {
         val r = round.value ?: return
         val id = _roundId.value
+        if (!canScoreHere()) {
+            _message.value = whyNotHere()
+            return
+        }
         val current = r.target(_targetNo.value)
         val updated = runCatching { change(current) }.getOrNull() ?: return
-        viewModelScope.launch { rounds.saveTarget(id, updated) }
+        // Double / 3+ scorers: the round only gets the score once both scorers match (the poll copies it in).
+        val checked = _live.value?.state?.checked == true
+        viewModelScope.launch {
+            if (!checked) rounds.saveTarget(id, updated)
+            liveGroupId?.let { liveRepo?.send(it, id, updated) }
+        }
     }
 
     /** In a group, everyone not yet scored on this target gets the same target type. */
     fun setType(type: TargetType, fanAnimals: Int = TargetScore.MIN_FAN) {
         edit { it.withType(type, fanAnimals) }
-        if (group.value.size > 1) {
+        // Live groups only copy the type to others when this phone scores everyone (one scorer).
+        val s = _live.value?.state
+        val scoresAll = s == null || (!s.checked && s.members.all { s.canScore(it.memberId) })
+        if (group.value.size > 1 && scoresAll && canScoreHere()) {
             val id = _roundId.value
             val n = _targetNo.value
             viewModelScope.launch { rounds.setTypeForGroup(id, n, type, fanAnimals) }
@@ -1297,8 +1640,16 @@ class ScoringViewModel(
 
     fun clearTarget() = edit { it.cleared() }
 
-    /** Finishes the round (in a group, everyone's). */
+    /** Finishes the round (in a group, everyone's). A live group's host also closes it for every phone. */
     fun finish(onDone: () -> Unit) = viewModelScope.launch {
+        val gid = liveGroupId
+        if (gid != null && _live.value?.state?.isHost == true) {
+            try {
+                liveRepo?.close(gid)
+            } catch (e: ApiException) {
+                _message.value = "Couldn't close the group on the server (${e.message}). Your rounds are finished here."
+            }
+        }
         rounds.setGroupStatus(_roundId.value, RoundStatus.COMPLETED)
         onDone()
     }
@@ -1334,6 +1685,13 @@ class ScorecardViewModel(
     /** Everyone in the group, for the group scorecard (empty when it's not a group round). */
     val group: StateFlow<List<GroupMember>> = rounds.group(roundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** A new personal best (your own finished rounds only): this round and the one it beat. */
+    val personalBest: StateFlow<Pair<Round, Round>?> = rounds.finishedRounds.map { all ->
+        val me = all.firstOrNull { it.id == roundId } ?: return@map null
+        if (me.id !in PersonalStats.personalBestIds(all)) return@map null
+        PersonalStats.previousBest(me, all)?.let { me to it }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun reopen() = viewModelScope.launch { rounds.setGroupStatus(roundId, RoundStatus.IN_PROGRESS) }
 

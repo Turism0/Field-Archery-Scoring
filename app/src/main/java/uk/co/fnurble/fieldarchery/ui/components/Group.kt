@@ -54,6 +54,7 @@ fun GroupRole.label(): String = when (this) {
     GroupRole.SCORER -> "You"
     GroupRole.FRIEND -> "Friend"
     GroupRole.GUEST -> "Guest"
+    GroupRole.MIRROR -> "Own phone"
 }
 
 /**
@@ -140,6 +141,7 @@ private fun MemberStatus(m: GroupMember) {
     val (icon, text, colour) = when (m.role) {
         GroupRole.SCORER -> return
         GroupRole.GUEST -> Triple(null, "Guest · kept on this phone for 30 days", scheme.onSurfaceVariant)
+        GroupRole.MIRROR -> Triple(null, "Scoring on their own phone · their round is theirs", scheme.onSurfaceVariant)
         GroupRole.FRIEND -> when {
             !finished -> Triple(null, "Friend · sent to them as a request when the round is finished", scheme.onSurfaceVariant)
             m.syncState == SyncState.SYNCED -> Triple(Icons.Filled.Check, "Sent to ${m.name} to accept", scheme.primary)

@@ -18,6 +18,8 @@ import uk.co.fnurble.fieldarchery.ui.screens.FriendScorecardScreen
 import uk.co.fnurble.fieldarchery.ui.screens.FriendsScreen
 import uk.co.fnurble.fieldarchery.ui.screens.HistoryScreen
 import uk.co.fnurble.fieldarchery.ui.screens.HomeScreen
+import uk.co.fnurble.fieldarchery.ui.screens.JoinScreen
+import uk.co.fnurble.fieldarchery.ui.screens.LobbyScreen
 import uk.co.fnurble.fieldarchery.ui.screens.LocationMapScreen
 import uk.co.fnurble.fieldarchery.ui.screens.LocationPageScreen
 import uk.co.fnurble.fieldarchery.ui.screens.NewRoundScreen
@@ -27,6 +29,7 @@ import uk.co.fnurble.fieldarchery.ui.screens.RoundTypeScreen
 import uk.co.fnurble.fieldarchery.ui.screens.ScoreRoundScreen
 import uk.co.fnurble.fieldarchery.ui.screens.ScorecardScreen
 import uk.co.fnurble.fieldarchery.ui.screens.ScoringScreen
+import uk.co.fnurble.fieldarchery.ui.screens.StatsScreen
 
 private const val ROUTE_SCORING = "round/{roundId}?${ScoringViewModel.ARG_START_TARGET}={${ScoringViewModel.ARG_START_TARGET}}"
 private const val ROUTE_SCORECARD = "card/{roundId}"
@@ -47,6 +50,7 @@ fun FieldArcheryNavHost() {
                 onProfile = { nav.navigate("profile") },
                 onScoreRound = { nav.navigate("scoreRound") },
                 onHistory = { nav.navigate("history") },
+                onStats = { nav.navigate("stats") },
                 onFriends = { nav.navigate("friends") },
                 onAdmin = { nav.navigate("admin") },
                 onMap = { nav.navigate("map") },
@@ -179,6 +183,26 @@ fun FieldArcheryNavHost() {
                 onContinue = { r -> nav.navigate(scoringRoute(r.id)) },
                 onStartNew = { nav.navigate("roundType") },
                 onProfile = { nav.navigate("profile") },
+                onJoin = { nav.navigate("join") },
+            )
+        }
+        // Live groups (2.1): join with a code or QR → the group's lobby → scoring once the host starts.
+        composable("join") {
+            JoinScreen(
+                vm = appViewModel { c, _ -> JoinViewModel(c.profileRepository, c.liveGroupRepository) },
+                onBack = { nav.popBackStack() },
+                onJoined = { id -> nav.navigate("lobby/$id") { popUpTo("home") } },
+            )
+        }
+        composable(
+            "lobby/{groupId}",
+            arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
+        ) {
+            LobbyScreen(
+                vm = appViewModel { c, saved -> LobbyViewModel(c.liveGroupRepository, c.roundRepository, saved) },
+                onBack = { nav.popBackStack() },
+                onStarted = { id -> nav.navigate(scoringRoute(id)) { popUpTo("home") } },
+                onGone = { nav.popBackStack("home", inclusive = false) },
             )
         }
         composable("roundType") {
@@ -195,6 +219,14 @@ fun FieldArcheryNavHost() {
                 onOpenRound = { r ->
                     nav.navigate(if (r.status == RoundStatus.COMPLETED) scorecardRoute(r.id) else scoringRoute(r.id))
                 },
+            )
+        }
+        // Personal bests, trends and seasons; each round opens its scorecard.
+        composable("stats") {
+            StatsScreen(
+                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository) },
+                onBack = { nav.popBackStack() },
+                onOpenRound = { id -> nav.navigate(scorecardRoute(id)) },
             )
         }
         composable("profile") {
@@ -217,13 +249,14 @@ fun FieldArcheryNavHost() {
             val roundType = entry.arguments?.getString("roundType")
                 ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
-                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType, c.accountStore) },
+                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType, c.accountStore, c.liveGroupRepository) },
                 roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },
                 onStarted = { id ->
                     nav.navigate(scoringRoute(id)) { popUpTo("home") }
                 },
+                onLive = { groupId -> nav.navigate("lobby/$groupId") { popUpTo("home") } },
             )
         }
         composable(
@@ -235,7 +268,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScoringScreen(
-                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved) },
+                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved, c.liveGroupRepository) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.
@@ -243,6 +276,7 @@ fun FieldArcheryNavHost() {
                 onPickLocation = { nav.navigate("pickLocation/$roundId") },
                 // In a group, the archer being scored now.
                 onEditDetails = { id -> nav.navigate("editRound/$id") },
+                onLobby = { groupId -> nav.navigate("lobby/$groupId") { popUpTo("home") } },
             )
         }
         composable(

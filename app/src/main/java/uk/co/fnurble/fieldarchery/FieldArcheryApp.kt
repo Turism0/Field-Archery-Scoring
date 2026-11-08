@@ -5,6 +5,7 @@ import uk.co.fnurble.fieldarchery.data.AccountRepository
 import uk.co.fnurble.fieldarchery.data.AccountStore
 import uk.co.fnurble.fieldarchery.data.AdminRepository
 import uk.co.fnurble.fieldarchery.data.FriendsRepository
+import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
 import uk.co.fnurble.fieldarchery.data.LocationPageRepository
 import uk.co.fnurble.fieldarchery.data.LocationRepository
 import uk.co.fnurble.fieldarchery.data.NetworkStatus
@@ -32,6 +33,8 @@ class AppContainer(app: Application) {
     val friendsRepository = FriendsRepository(api, accountStore, onAccepted = { syncScheduler.request() })
     val adminRepository = AdminRepository(api, accountStore)
     val locationPageRepository = LocationPageRepository(api, accountStore)
+    /** Live groups: one round scored on several phones through the server (2.1). */
+    val liveGroupRepository = LiveGroupRepository(app, api, accountStore, roundRepository)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
     suspend fun checkServer() {
         runCatching { api.health() }

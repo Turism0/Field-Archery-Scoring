@@ -53,6 +53,31 @@ abstract class RoundDao {
     )
     abstract fun observeRounds(): Flow<List<RoundWithGroupSize>>
 
+    // ---- History and stats (app 2.2): every finished round of your own, with targets and animals ----
+
+    @Query("SELECT * FROM round WHERE $OWN_FINISHED")
+    abstract fun observeOwnFinished(): Flow<List<RoundEntity>>
+
+    @Query("SELECT * FROM round WHERE $OWN_FINISHED")
+    abstract suspend fun ownFinishedRounds(): List<RoundEntity>
+
+    @Query("SELECT t.* FROM target t JOIN round r ON r.id = t.round_id WHERE $OWN_FINISHED_R ORDER BY t.round_id, t.target_no")
+    abstract suspend fun ownFinishedTargets(): List<TargetEntity>
+
+    @Query(
+        "SELECT a.* FROM animal a JOIN round r ON r.id = a.round_id WHERE $OWN_FINISHED_R " +
+            "ORDER BY a.round_id, a.target_no, a.animal_index",
+    )
+    abstract suspend fun ownFinishedAnimals(): List<AnimalEntity>
+
+    /** All your finished rounds in three queries (not three per round), read together so they're consistent. */
+    @Transaction
+    open suspend fun loadOwnFinished(): List<RoundData> {
+        val targets = ownFinishedTargets().groupBy { it.roundId }
+        val animals = ownFinishedAnimals().groupBy { it.roundId }
+        return ownFinishedRounds().map { RoundData(it, targets[it.id].orEmpty(), animals[it.id].orEmpty()) }
+    }
+
     // ---- Groups scored on this phone (database v4) ----
 
     @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
@@ -61,6 +86,10 @@ abstract class RoundDao {
     @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
     abstract suspend fun getGroup(groupId: String): List<RoundEntity>
 
+    /** Live groups: a member's role or place in the order changed (e.g. a friend joined on their own phone). */
+    @Query("UPDATE round SET group_role = :role, group_name = :name, group_order = :order WHERE id = :id")
+    abstract suspend fun setGroupMember(id: String, role: String, name: String?, order: Int)
+
     /** Friends' rounds to send as requests (finished) or withdraw (deleted). */
     @Query(
         "SELECT id FROM round WHERE group_role = 'FRIEND' AND sync_state = 'PENDING' " +
@@ -68,8 +97,8 @@ abstract class RoundDao {
     )
     abstract suspend fun pendingOfferIds(): List<String>
 
-    /** Guests' scores are temporary: gone 30 days after the round was started. */
-    @Query("DELETE FROM round WHERE group_role = 'GUEST' AND created_at < :cutoffMillis")
+    /** Guests' scores and copies of other phones' cards (live groups) are temporary: gone 30 days after the round started. */
+    @Query("DELETE FROM round WHERE group_role IN ('GUEST', 'MIRROR') AND created_at < :cutoffMillis")
     abstract suspend fun deleteGuestsBefore(cutoffMillis: Long): Int
 
     /** Starts a group round: everyone's round with all its targets, in one go. */
@@ -277,3 +306,7 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
         }
     }
 }
+
+/** Your own finished rounds (not friends' or guests' in a group, nor copies of other phones' cards). */
+private const val OWN_FINISHED = "deleted = 0 AND status = 'COMPLETED' AND (group_role IS NULL OR group_role = 'SCORER')"
+private const val OWN_FINISHED_R = "r.deleted = 0 AND r.status = 'COMPLETED' AND (r.group_role IS NULL OR r.group_role = 'SCORER')"

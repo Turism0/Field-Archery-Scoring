@@ -53,6 +53,7 @@ import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.ui.components.LocationSheet
 import uk.co.fnurble.fieldarchery.ui.components.label
 import uk.co.fnurble.fieldarchery.ui.components.RunningStats
+import uk.co.fnurble.fieldarchery.ui.components.UkDate
 import uk.co.fnurble.fieldarchery.ui.components.UkDateLong
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -75,6 +76,7 @@ fun ScorecardScreen(
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
+    val personalBest by vm.personalBest.collectAsStateWithLifecycle()
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == vm.roundId }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -141,6 +143,7 @@ fun ScorecardScreen(
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     RoundHeader(r)
+                    personalBest?.let { (me, beat) -> PersonalBestCard(me, beat) }
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
                     RunningStats(r.stats)
@@ -253,5 +256,26 @@ private fun RowScope.PercentStat(label: String, value: Double?) {
             fontWeight = FontWeight.SemiBold,
         )
         Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Shown on a round that was a new personal best: what it beat. */
+@Composable
+private fun PersonalBestCard(me: Round, beat: Round) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("New personal best", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "${me.totalPoints} beats your previous best of ${beat.totalPoints} (${beat.shootDate.format(UkDate)}) for " +
+                    "${me.targetCount}-target ${me.type.displayName}, ${me.bowStyle.displayName}. " +
+                    "+${me.totalPoints - beat.totalPoints} points.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
 }

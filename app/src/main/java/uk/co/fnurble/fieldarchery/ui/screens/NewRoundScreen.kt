@@ -32,6 +32,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.selection.selectable
+import uk.co.fnurble.fieldarchery.data.LiveMethod
 import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.ui.GroupMemberDraft
 import uk.co.fnurble.fieldarchery.ui.components.GroupMemberDialog
@@ -64,20 +68,21 @@ fun NewRoundScreen(
     onBack: () -> Unit,
     onEditProfile: () -> Unit,
     onStarted: (String) -> Unit,
+    /** Live group made: open its lobby. */
+    onLive: (groupId: String) -> Unit = {},
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
     // Add / edit a friend or guest in a group round.
     var memberDialog by remember { mutableStateOf<Pair<GroupRole, GroupMemberDraft?>?>(null) }
     // Ask for location when starting (Android only shows the prompt until it's been refused twice).
     // Either answer starts the round; without permission the round simply has no location.
-    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        vm.start(onStarted)
-    }
+    fun go() { if (form?.live == true) vm.startLive(onLive) else vm.start(onStarted) }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { go() }
     val context = LocalContext.current
     fun startRound() {
         val granted = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
             .any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        if (granted) vm.start(onStarted)
+        if (granted) go()
         else askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
@@ -101,8 +106,12 @@ fun NewRoundScreen(
         },
         bottomBar = {
             BottomActionBar(
-                text = if (form?.group == true) "Start group round" else "Start round",
-                enabled = form?.isValid == true,
+                text = when {
+                    form?.live == true -> if (form?.starting == true) "Creating…" else "Create live group"
+                    form?.group == true -> "Start group round"
+                    else -> "Start round"
+                },
+                enabled = form?.isValid == true && form?.starting != true,
             ) { startRound() }
         },
     ) { padding ->
@@ -116,16 +125,50 @@ fun NewRoundScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             SectionCard(title = "Who's scoring") {
-                SegmentedChoice(listOf(false, true), f.group, { if (it) "Group" else "Just me" }) { g ->
-                    vm.update { it.copy(group = g) }
+                val mode = when { f.live -> 2; f.group -> 1; else -> 0 }
+                SegmentedChoice(listOf(0, 1, 2), mode, { when (it) { 1 -> "Group"; 2 -> "Live group"; else -> "Just me" } }) { m ->
+                    vm.update { it.copy(group = m > 0, live = m == 2, error = null) }
                 }
-                if (f.group) {
-                    Text(
+                when (mode) {
+                    1 -> Text(
                         "You score everyone on this phone, archer by archer on each target.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    2 -> {
+                        Text(
+                            "Others join on their own phones with a code or QR. Needs signal and signing in.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (!vm.signedIn) {
+                            Text("Sign in (Profile) to make a live group.", color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall)
+                        }
+                        LiveMethod.entries.forEach { m ->
+                            Row(
+                                Modifier.fillMaxWidth().selectable(selected = f.liveMethod == m, onClick = { vm.update { it.copy(liveMethod = m) } }),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = f.liveMethod == m, onClick = { vm.update { it.copy(liveMethod = m) } })
+                                Column {
+                                    Text(m.displayName, style = MaterialTheme.typography.bodyLarge)
+                                    Text(m.description, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        if (f.liveMethod.checked) {
+                            Text(
+                                "Go through the group archer by archer: they call their score and both their scorers enter it. " +
+                                    "Everyone moves on once the two match.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
+                f.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             }
 
             SectionCard(title = "Shoot") {
@@ -180,7 +223,8 @@ fun NewRoundScreen(
             if (f.group) {
                 SectionCard(
                     title = "Group",
-                    subtitle = "In scoring order. You're first; up to ${RoundRepository.MAX_GROUP} archers.",
+                    subtitle = if (f.live) "Friends and guests you add are scored on your phone (optional: others can join with the code)."
+                    else "In scoring order. You're first; up to ${RoundRepository.MAX_GROUP} archers.",
                 ) {
                     Text("You", style = MaterialTheme.typography.titleSmall)
                     f.members.forEachIndexed { i, m ->
@@ -218,7 +262,7 @@ fun NewRoundScreen(
 
             if (!f.isValid) {
                 Text(
-                    if (f.group && f.members.isEmpty()) "Add at least one friend or guest to the group."
+                    if (f.group && !f.live && f.members.isEmpty()) "Add at least one friend or guest to the group."
                     else "Fill in the number of targets, class, age group and bow style to start.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

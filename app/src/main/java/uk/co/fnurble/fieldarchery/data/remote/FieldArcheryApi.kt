@@ -3,6 +3,7 @@ package uk.co.fnurble.fieldarchery.data.remote
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONException
+import org.json.JSONArray
 import org.json.JSONObject
 import uk.co.fnurble.fieldarchery.data.NetworkStatus
 import java.io.IOException
@@ -176,6 +177,27 @@ class FieldArcheryApi(
     /** One of a friend's finished rounds, same shape as the download list. */
     suspend fun friendRound(token: String, archerId: String, roundId: String): JSONObject =
         request("GET", "/api/friends/$archerId/rounds/$roundId", body = null, token = token)
+
+    // ---- Live groups (several phones; app 2.1) ----
+
+    /** Host: create or update the group (id and code made by this phone). 409 code_taken if the code is in use. */
+    suspend fun putGroup(token: String, groupId: String, group: JSONObject): JSONObject =
+        request("PUT", "/api/groups/$groupId", group, token)
+
+    /** Join with a code: { code, memberId, archerClass, ageGroup, bowStyle, roundId }. 404 no_such_group. */
+    suspend fun joinGroup(token: String, body: JSONObject): JSONObject = request("POST", "/api/groups/join", body, token)
+
+    /** The group as this archer sees it: members, scorers, entries, cells (waiting / matched / mismatch), totals. */
+    suspend fun group(token: String, groupId: String): JSONObject = request("GET", "/api/groups/$groupId", body = null, token = token)
+
+    /** This phone's scores: { entries: [{ targetNo, cardMemberId, scorerMemberId, target, enteredUtc }] }. */
+    suspend fun putEntries(token: String, groupId: String, entries: JSONArray): JSONObject =
+        request("PUT", "/api/groups/$groupId/entries", JSONObject().put("entries", entries), token)
+
+    /** Leave the group (a joined archer), or the host removes someone. */
+    suspend fun removeGroupMember(token: String, groupId: String, memberId: String) {
+        request("DELETE", "/api/groups/$groupId/members/$memberId", body = null, token = token)
+    }
 
     // ---- Rounds scored for a friend (requests they accept or decline) ----
 

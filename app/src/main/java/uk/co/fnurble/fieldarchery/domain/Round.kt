@@ -30,6 +30,8 @@ data class Round(
     val targets: List<TargetScore>,
     val location: RoundLocation = RoundLocation(),
     val type: RoundType = RoundType.BIG_GAME,
+    /** When the round was started on the phone (orders rounds shot on the same day). */
+    val createdAtMillis: Long = 0,
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
     val targetsComplete: Int get() = targets.count { it.isComplete }

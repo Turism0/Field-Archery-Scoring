@@ -43,6 +43,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -71,6 +73,8 @@ import uk.co.fnurble.fieldarchery.domain.WoodsmanArrow
 import uk.co.fnurble.fieldarchery.domain.ordinal
 import uk.co.fnurble.fieldarchery.ui.ScoringViewModel
 import uk.co.fnurble.fieldarchery.data.GroupMember
+import uk.co.fnurble.fieldarchery.data.LiveMethod
+import uk.co.fnurble.fieldarchery.data.LivePoll
 import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundLocation
@@ -93,6 +97,8 @@ fun ScoringScreen(
     onPickLocation: () -> Unit,
     /** Round details for the round being scored (in a group, the current archer's). */
     onEditDetails: (roundId: String) -> Unit,
+    /** Live group not started yet: back to its lobby (code, QR, Start). */
+    onLobby: (groupId: String) -> Unit = {},
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
@@ -108,6 +114,12 @@ fun ScoringScreen(
     var showLocation by rememberSaveable { mutableStateOf(false) }
     var askedForName by rememberSaveable { mutableStateOf(false) }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
+    val live by vm.live.collectAsStateWithLifecycle()
+    val message by vm.message.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        message?.let { snackbar.showSnackbar(it); vm.messageShown() }
+    }
 
     val r = round
     // Also when moving to another archer in a group.
@@ -123,6 +135,7 @@ fun ScoringScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             Column {
                 TopAppBar(
@@ -180,6 +193,7 @@ fun ScoringScreen(
                     if (inGroup && targetNo > 0) {
                         GroupStrip(group, currentId, targetNo) { vm.selectMember(it) }
                     }
+                    live?.let { p -> LiveBanner(p, vm.whyNotHere(), vm.checkText(), vm.checkMismatch()) { p.state?.groupId?.let(onLobby) } }
                 }
             }
         },
@@ -719,3 +733,56 @@ private fun OverrideDialog(initial: Int, onDismiss: () -> Unit, onSave: (Int) ->
 /** In a group everyone is at the same location; the scorer's round has it (and the GPS position). */
 private fun shownLocation(group: List<GroupMember>, r: Round): RoundLocation =
     group.firstOrNull { it.role == GroupRole.SCORER }?.round?.location ?: r.location
+
+/** Live group: the code, what's happening, and why this phone can't score the card on screen (if it can't). */
+@Composable
+private fun LiveBanner(poll: LivePoll, whyNot: String?, check: String?, mismatch: Boolean, onLobby: () -> Unit) {
+    val s = poll.state
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+            Text(
+                buildString {
+                    append("Live group")
+                    if (s != null) {
+                        append(" · ${s.code} · ")
+                        append(
+                            when {
+                                s.closed -> "finished"
+                                s.started -> LiveMethod.fromCode(s.method)?.displayName ?: "scoring"
+                                else -> "waiting to start"
+                            },
+                        )
+                    }
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            poll.problem?.let {
+                Text("Can't reach the server ($it). Scores are kept and sent when it's back.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+            whyNot?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+            }
+            // 3+ scorers: whose cards this phone scores.
+            if (s != null && s.started && s.method == LiveMethod.MULTI.code) {
+                val mine = s.members.sortedBy { it.sortOrder }.filter { s.canScore(it.memberId) }.map { it.name }
+                if (mine.isNotEmpty()) {
+                    Text("You score: ${mine.joinToString(", ")}", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+            // Double / 3+ scorers: waiting for the other scorer, doesn't match (re-enter), or saved.
+            check?.let {
+                Text(
+                    it,
+                    style = if (mismatch) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+                    fontWeight = if (mismatch) FontWeight.Bold else null,
+                    color = if (mismatch) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            if (s != null && !s.started && !s.closed) {
+                TextButton(onClick = onLobby) { Text(if (s.isHost) "Show code and start" else "Show the group") }
+            }
+        }
+    }
+}

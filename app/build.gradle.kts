@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fnurble.fieldarchery"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "2.0.18"
+        versionCode = 32
+        versionName = "2.2"
     }
 
     buildTypes {
@@ -56,6 +56,9 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     // OpenStreetMap map of shoot locations (no API key needed)
     implementation(libs.osmdroid.android)
+    // Live groups: draw the join QR code (no permissions) and read one with Google's scanner (no camera permission)
+    implementation(libs.zxing.core)
+    implementation(libs.play.services.code.scanner)
 
     debugImplementation(libs.androidx.ui.tooling)
 

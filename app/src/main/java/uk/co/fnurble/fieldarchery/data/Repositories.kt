@@ -88,6 +88,10 @@ data class RoundSummary(
     val groupSize: Int = 0,
     /** "36 targets · 37 animals (1 predator/prey)". */
     val targetsLine: String = "$targetCount targets",
+    // For the history filters (2.2).
+    val locationId: String? = null,
+    val roundType: RoundType = RoundType.BIG_GAME,
+    val bowStyle: BowStyle? = null,
 )
 
 /** Someone being added to a group round on this phone: a friend (account) or a guest (name only). */
@@ -131,6 +135,9 @@ class RoundRepository(
                 status = it.status,
                 syncState = it.syncState,
                 locationName = it.locationName,
+                locationId = it.locationId,
+                roundType = it.type(),
+                bowStyle = it.bowStyle,
                 groupSize = row.groupSize,
                 targetsLine = if (it.type() == RoundType.WOODSMAN) targetsDescription(it.targetCount, it.targetCount, 0, 0)
                 else targetsDescription(it.targetCount, row.animalCount, row.predatorPreyCount, row.fanCount),
@@ -146,6 +153,19 @@ class RoundRepository(
     fun round(id: String): Flow<Round?> = dao.observeRound(id).mapLatest {
         dao.loadRound(id)?.takeUnless { it.round.deleted }?.let { d -> d.round.toDomain(d.targets, d.animals) }
     }
+
+    /** Every finished round of your own, in full (for history filters, personal bests, trends and seasons). */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val finishedRounds: Flow<List<Round>> = dao.observeOwnFinished().mapLatest {
+        dao.loadOwnFinished().map { it.toDomain() }
+    }
+
+    /** The group a round is in, or null. */
+    suspend fun groupIdOf(roundId: String): String? = dao.getRound(roundId)?.groupId
+
+    /** The round as it is now (not a flow), or null if it's gone. */
+    suspend fun get(id: String): Round? =
+        dao.loadRound(id)?.takeUnless { it.round.deleted }?.let { d -> d.round.toDomain(d.targets, d.animals) }
 
     /** Creates a round with every target set up as a Standard target. Returns the new id. */
     suspend fun createRound(
@@ -192,11 +212,13 @@ class RoundRepository(
         bowStyle: BowStyle,
         type: RoundType,
         others: List<NewGroupMember>,
+        /** Live groups make the group id first (it's also the server's); others may be empty (people join later). */
+        groupId: String = UUID.randomUUID().toString(),
+        live: Boolean = false,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
-        require(others.isNotEmpty()) { "A group needs someone else" }
+        require(live || others.isNotEmpty()) { "A group needs someone else" }
         val now = Instant.now(clock)
-        val groupId = UUID.randomUUID().toString()
         fun make(order: Int, role: GroupRole, name: String?, archerId: String?, cls: ArcherClass, age: AgeGroup, bow: BowStyle): RoundData {
             val id = UUID.randomUUID().toString()
             val targets = (1..targetCount).map { newTarget(type, it) }
@@ -227,6 +249,60 @@ class RoundRepository(
         dao.createRounds(listOf(mine) + rest)
         return mine.round.id
     }
+
+    /**
+     * Live groups: a round on this phone for someone in the group – this archer's own (SCORER, after joining) or a copy of
+     * someone else's card (MIRROR). [id] is their member id in the group. Does nothing if it's already here.
+     */
+    suspend fun addGroupRound(
+        groupId: String,
+        id: String,
+        role: GroupRole,
+        name: String?,
+        order: Int,
+        shootDate: LocalDate,
+        targetCount: Int,
+        type: RoundType,
+        archerClass: ArcherClass,
+        ageGroup: AgeGroup,
+        bowStyle: BowStyle,
+        locationId: String?,
+        locationName: String?,
+    ) {
+        if (dao.getRound(id) != null) return
+        val now = Instant.now(clock)
+        val targets = (1..targetCount).map { newTarget(type, it) }
+        dao.createRound(
+            round = RoundEntity(
+                id = id,
+                shootDate = shootDate,
+                targetCount = targetCount,
+                archerClass = archerClass,
+                ageGroup = ageGroup,
+                bowStyle = bowStyle,
+                status = RoundStatus.IN_PROGRESS,
+                createdAt = now,
+                updatedAt = now,
+                roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
+                groupId = groupId,
+                groupRole = role,
+                groupName = name,
+                groupOrder = order,
+                locationId = locationId,
+                locationName = locationName,
+                locationState = if (locationId != null) uk.co.fnurble.fieldarchery.data.local.LocationState.SET else null,
+            ),
+            targets = targets.map { it.toEntity(id, now) },
+            animals = targets.flatMap { it.toAnimalEntities(id) },
+        )
+    }
+
+    /** Live groups: a member's role, name or order changed on the server. */
+    suspend fun setGroupMember(id: String, role: GroupRole, name: String?, order: Int) =
+        dao.setGroupMember(id, role.name, name, order)
+
+    /** The rows of a group on this phone (live groups use them to match members). */
+    suspend fun groupRounds(groupId: String): List<RoundEntity> = dao.getGroup(groupId)
 
     /** Everyone in the round's group, in scoring order; empty when it isn't a group round. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -382,6 +458,7 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         bowStyle = bowStyle,
         status = status,
         type = type(),
+        createdAtMillis = createdAt.toEpochMilli(),
         location = RoundLocation(
             status = when (locationState) {
                 null -> LocationStatus.NONE

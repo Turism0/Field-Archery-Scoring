@@ -24,9 +24,10 @@ enum class AnimalState { PENDING, MISSED, SCORED }
  * A round's place in a group scored on this phone (database v4). Null = an ordinary round.
  * SCORER = this archer's own round in the group (in history and synced as normal); FRIEND = scored for a friend
  * (sent to them as a request, never in this archer's history); GUEST = scored for a guest (phone only, deleted
- * after 30 days).
+ * after 30 days). MIRROR (app 2.1, live groups) = someone with the group on their own phone: this phone keeps a copy of
+ * their card to show and score it, but it's theirs (never in this archer's history, never uploaded; deleted after 30 days).
  */
-enum class GroupRole { SCORER, FRIEND, GUEST }
+enum class GroupRole { SCORER, FRIEND, GUEST, MIRROR }
 
 /** Phone-side progress of a round's shoot location (null = no position). */
 enum class LocationState { PENDING_LOOKUP, NEEDS_NAME, SET }

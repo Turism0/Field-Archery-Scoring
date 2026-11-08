@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter
 
 /** A round in a list: date, class line, total; "in progress" badge or upload state. */
 @Composable
-fun RoundCard(r: RoundSummary, showSync: Boolean, onClick: () -> Unit) {
+fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false, onClick: () -> Unit) {
     val inProgress = r.status == RoundStatus.IN_PROGRESS
     val scheme = MaterialTheme.colorScheme
     Card(
@@ -53,7 +53,11 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, onClick: () -> Unit) {
                         )
                     }
                 }
-                Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleMedium)
+                    // A new personal best when it was shot (beat every earlier round of the same kind).
+                    if (personalBest) PbBadge()
+                }
                 Text(
                     "${r.classLine} · ${r.targetsLine}" + if (r.groupSize > 1) " · group of ${r.groupSize}" else "",
                     style = MaterialTheme.typography.bodyMedium,
@@ -104,4 +108,14 @@ fun syncStatusText(lastSync: Instant?): String {
     val local = lastSync.atZone(ZoneId.systemDefault())
     val pattern = if (local.toLocalDate() == LocalDate.now()) "HH:mm" else "d MMM HH:mm"
     return "Last synced ${local.format(DateTimeFormatter.ofPattern(pattern))} · pull down to sync"
+}
+
+/** "PB": a round that was a new personal best when it was shot. */
+@Composable
+fun PbBadge(text: String = "PB") {
+    val scheme = MaterialTheme.colorScheme
+    Surface(shape = MaterialTheme.shapes.small, color = scheme.tertiary, contentColor = scheme.onTertiary) {
+        Text(text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp))
+    }
 }

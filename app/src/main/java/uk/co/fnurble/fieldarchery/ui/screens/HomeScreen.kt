@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -52,7 +53,7 @@ import uk.co.fnurble.fieldarchery.ui.HomeViewModel
 import uk.co.fnurble.fieldarchery.ui.components.syncStatusText
 
 /**
- * Home: account / sync status and three tiles – Score a round, Score history, Friends – plus an
+ * Home: account / sync status and tiles – Score a round, Score history, Stats, Friends, Shoot locations – plus an
  * Admin tile for Admins and the Owner. Pull down to sync now.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,6 +63,7 @@ fun HomeScreen(
     onProfile: () -> Unit,
     onScoreRound: () -> Unit,
     onHistory: () -> Unit,
+    onStats: () -> Unit,
     onFriends: () -> Unit,
     onAdmin: () -> Unit,
     onMap: () -> Unit,
@@ -144,6 +146,13 @@ fun HomeScreen(
                             (s.best?.let { " · best $it" } ?: "")
                     },
                     onClick = onHistory,
+                )
+                HomeTile(
+                    icon = Icons.Filled.Star,
+                    title = "Stats",
+                    subtitle = if (s?.finished == 0) "Personal bests, trends and seasons once you finish a round"
+                    else "Personal bests, trends and season summaries",
+                    onClick = onStats,
                 )
                 HomeTile(
                     icon = Icons.Filled.Face,

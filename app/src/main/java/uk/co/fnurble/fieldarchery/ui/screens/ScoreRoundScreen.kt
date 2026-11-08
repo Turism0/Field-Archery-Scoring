@@ -22,6 +22,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -44,6 +45,8 @@ fun ScoreRoundScreen(
     onContinue: (RoundSummary) -> Unit,
     onStartNew: () -> Unit,
     onProfile: () -> Unit,
+    /** Join someone else's live group (code or QR). */
+    onJoin: () -> Unit = {},
 ) {
     val inProgress by vm.inProgress.collectAsStateWithLifecycle()
     val profileReady by vm.profileReady.collectAsStateWithLifecycle()
@@ -88,6 +91,11 @@ fun ScoreRoundScreen(
                             FilledTonalButton(onClick = onProfile) { Text("Set up profile") }
                         }
                     }
+                }
+            }
+            if (profileReady) {
+                item(key = "join") {
+                    OutlinedButton(onClick = onJoin, modifier = Modifier.fillMaxWidth()) { Text("Join a live group") }
                 }
             }
             if (list.isNotEmpty()) {
