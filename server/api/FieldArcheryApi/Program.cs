@@ -14,6 +14,7 @@ using FieldArcheryApi.Auth;
 using FieldArcheryApi.Data;
 using FieldArcheryApi.Friends;
 using FieldArcheryApi.Groups;
+using FieldArcheryApi.Handicap;
 using FieldArcheryApi.Locations;
 using FieldArcheryApi.Offers;
 using FieldArcheryApi.Rounds;
@@ -121,10 +122,11 @@ app.MapLocationEndpoints();
 app.MapLocationPageEndpoints();
 app.MapGroupEndpoints();
 app.MapOfferEndpoints();
+app.MapHandicapEndpoints();
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.0.17";
+    public const string Version = "2.2.01";
 }

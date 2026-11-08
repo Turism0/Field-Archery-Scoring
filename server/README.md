@@ -2,6 +2,7 @@
 
 - `sql/`: database scripts for SQL Server 2025 on Mimir (step 1, done). See `../docs/DESIGN.md`.
 - `api/FieldArcheryApi/`: ASP.NET Core (.NET 10) API on Odin under IIS, published at **https://fieldarchery.fnurble.co.uk** through Nginx Proxy Manager.
+- `jobs/FieldArcheryJobs/`: console program on Odin, run by Task Scheduler every 15 minutes (2.2.01): reads the NFAS Nationals and 3D Championships results from nfas.net weekly (or on Admin → Handicap → Fetch now) and fits the handicap. See `../docs/HANDICAP.md`.
 
 The app only ever talks to the API; the API is the only thing that talks to SQL Server.
 
@@ -26,6 +27,33 @@ cd C:\zScripts\FieldArcheryApi
 dotnet publish -c Release -o C:\inetpub\fieldarchery-api
 Start-WebAppPool FieldArcheryApi                 # press Enter: a pasted last line doesn't run by itself
 ```
+
+## Server jobs: NFAS results and the handicap (2.2.01)
+
+First time, in this order:
+
+1. **SSMS on Mimir (as an administrator):** run `sql/011_handicap.sql` (schema version 7).
+2. **The API:** copy `api/FieldArcheryApi` into `C:\zScripts\FieldArcheryApi` and run `Update-Api.ps1` as usual (2.2.01).
+3. **The jobs:** copy `jobs/FieldArcheryJobs` (with its `Verify` folder) into `C:\zScripts\FieldArcheryJobs`, then in **Windows PowerShell 5.1 as Administrator**:
+
+   ```powershell
+   C:\zScripts\FieldArcheryJobs\Update-Jobs.ps1
+   ```
+
+   The first time it creates `C:\FieldArcheryJobs\appsettings.Production.json` and stops: fill in the API login's password (same as the API's) and a long random `NameKeySecret` (it prints a command that makes one), then run it again. **Never change the secret afterwards**: archers are matched across years by it. The script publishes into `C:\FieldArcheryJobs`, checks the C# handicap fit matches the Python reference (`verify`), and creates the scheduled task **FieldArchery jobs** (every 15 minutes, as SYSTEM, one copy at a time).
+4. **Read nfas.net and fit the first model now** (about 10–15 minutes; every bow style page for every year, half a second apart):
+
+   ```powershell
+   C:\FieldArcheryJobs\FieldArcheryJobs.exe fetch
+   ```
+
+5. **Test:** `tests\Test-Handicap.ps1 -Username Turismo` (also in `Run-AllTests.ps1`).
+
+Later updates to the jobs: copy the changed files into `C:\zScripts\FieldArcheryJobs` and run `Update-Jobs.ps1` again.
+
+What the scheduled task does each time: nothing, unless (a) an Admin pressed **Fetch now**, (b) nfas.net hasn't been read for 7 days, or (c) an Admin changed a target count. Reading nfas.net covers new years and the last two every time, years with no results monthly, everything else yearly; results are only replaced when they've changed. Target counts are then worked out again (ones set by hand are kept), and if the data changed the handicap is refitted (about 5 minutes). The new model goes live by itself if its tests are no worse than the current one's; otherwise it waits in Admin → Handicap for the Owner. Every run's outcome is shown there too.
+
+By hand: `FieldArcheryJobs.exe fetch` (read now), `FieldArcheryJobs.exe fit` (refit now), `FieldArcheryJobs.exe verify` (check the fit; no database needed).
 
 ### Moving to the FieldArcheryApi project (2.0.14, once)
 
@@ -93,6 +121,11 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
 | PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` (also for someone else's private location); 403 `not_creator` if making someone else's location private |
 | POST | `/api/admin/locations/{locationId}/merge` | Admin or Owner; `{ intoId }` | `{ locationId, name, roundsMoved }`: the duplicate's rounds move to `intoId`; 400 `same_location`; 404 if either is missing or already merged |
+| GET | `/api/handicap` | (no sign-in) | 2.2.01: the active handicap model for the app: `{ modelId, fittedUtc, dataThroughYear, reference, scale: "logit", maxPerTarget: 24, yearZero: 2014, factors: [{ kind, code, value, low, high }] }` (kinds BOW, SLOPE, BOW3D, CLASS, BOWSEX); 404 `no_handicap` until the job has fitted one. Formula in `docs/HANDICAP.md` |
+| GET | `/api/admin/handicap` | Admins and Owner | `{ events, models, runs }`: every championship (status, targets per day and where that came from), the last 20 models with their test results, the last 10 job runs |
+| PUT | `/api/admin/handicap/events/{NATIONALS\|3DS}/{year}` | Admins and Owner; `{ targetsPerDay: 36 \| 40 \| null }` | Sets the target count by hand (`null` = back to the job's); the job refits within 15 minutes. 400 `invalid_targets`, 404 `no_such_event` |
+| POST | `/api/admin/handicap/fetch` | Admins and Owner | 202: the job reads nfas.net within 15 minutes; 409 `already_requested` |
+| POST | `/api/admin/handicap/models/{id}/activate` | Owner only | Uses a model the job left waiting; 403 `not_owner`, 404 `no_such_model` |
 
 Errors are JSON `{ error, message }`; `message` is written to show to the archer.
 Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); passwords 8–128 characters;
@@ -158,7 +191,17 @@ Three test accounts: requests (unknown user, yourself, twice), who can accept, b
 .\Run-AllTests.ps1 -Username Turismo
 ```
 
-Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, which each ask for the password) and prints a summary. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
+Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, Handicap, which each ask for the password) and prints a summary. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
+
+## Testing the handicap (2.2.01)
+
+After the job has read nfas.net and fitted a model (see *Server jobs* above):
+
+```powershell
+.\Test-Handicap.ps1 -Username Turismo
+```
+
+The download the app uses (no sign-in, factors for every bow style with 90% ranges), that only Admins and the Owner can use Admin → Handicap, that stored championships have target counts (Nationals 2019 = 40, 2020 none), one active model, and bad requests refused. It doesn't change anything. Tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing course averages and round make-up (2.0.05)
 

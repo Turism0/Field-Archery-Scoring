@@ -6,8 +6,8 @@
         .\Run-AllTests.ps1                      # skips the three that need the Owner account
         .\Run-AllTests.ps1 -BaseUrl http://localhost:8085
 
-    -Username is the Owner (or an Admin) account: Test-Roles, Test-Locations and Test-LocationReview use it for the
-    admin checks and each asks for its password. Without it those three are skipped.
+    -Username is the Owner (or an Admin) account: Test-Roles, Test-Locations, Test-LocationReview and Test-Handicap use it for the
+    admin checks and each asks for its password. Without it those four are skipped.
     Not included (they need you to look at the phone): Test-Download.ps1 and Test-FriendView.ps1.
     Every test makes throwaway zz_test_ accounts: run server/sql/900_delete_test_accounts.sql afterwards.
 #>
@@ -18,7 +18,7 @@ param(
 
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
          'Test-Groups', 'Test-Offers'
-$owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview'
+$owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap'
 
 $results = @()
 foreach ($name in $plain + $owner) {
