@@ -137,11 +137,12 @@ fun HandicapCalculatorScreen(vm: HandicapCalculatorViewModel, onBack: () -> Unit
             if (from != null && score != null && targets != null && f.scoreProblem == null) {
                 val max = 24.0 * targets
                 val year = m.dataThroughYear
-                val ul = m.convert(score.toDouble(), max, from, year)
+                val hp = m.handicapPoints(score.toDouble(), max, from, year)
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("${ul.roundToInt()}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                        Text("as an Unlimited Gents score on $targets targets", style = MaterialTheme.typography.bodyMedium)
+                        Text("Handicap ${hp.roundToInt()}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                        Text("out of 1000 – the same for the same performance with any bow and class", style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center)
                     }
                 }
                 Text("The same performance with every bow style and class", style = MaterialTheme.typography.titleMedium,
@@ -176,9 +177,7 @@ private fun EquivalentTable(m: HandicapModel, score: Double, max: Double, from: 
                             val to = HandicapModel.Archer(b, ca.first, ca.second)
                             val v = m.convert(score, max, from, year, to = to).roundToInt()
                             val mine = to == from
-                            val reference = to == HandicapModel.Archer.REFERENCE
-                            TableCell("$v", 76, bold = mine || reference,
-                                highlight = if (mine) MaterialTheme.colorScheme.tertiaryContainer else if (reference) MaterialTheme.colorScheme.primaryContainer else null)
+                            TableCell("$v", 76, bold = mine, highlight = if (mine) MaterialTheme.colorScheme.tertiaryContainer else null)
                         }
                     }
                 }

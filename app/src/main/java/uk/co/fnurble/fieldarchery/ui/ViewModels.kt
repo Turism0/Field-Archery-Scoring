@@ -265,7 +265,7 @@ class HistoryViewModel(
 class StatsViewModel(roundRepo: RoundRepository, handicap: HandicapRepository? = null) : ViewModel() {
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
-    /** Your rating: average Unlimited-Gents equivalent of your last 10 Big Game rounds, as a 40-target score. */
+    /** Your rating: average handicap points (out of 1000) of your last 10 Big Game rounds. */
     val rating: StateFlow<HandicapRating?> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
         m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -273,7 +273,7 @@ class StatsViewModel(roundRepo: RoundRepository, handicap: HandicapRepository? =
     /** Your latest Big Game rounds with their equivalents (what the rating is made of). */
     val ratingRounds: StateFlow<List<Pair<Round, Int>>> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
         if (m == null) emptyList()
-        else rounds.mapNotNull { r -> r.handicapRound()?.let { h -> r to HandicapStats.equivalent(m, h) } }
+        else rounds.mapNotNull { r -> r.handicapRound()?.let { h -> r to HandicapStats.points(m, h) } }
             .sortedByDescending { it.first.shootDate }.take(HandicapModel.RATING_ROUNDS)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -626,7 +626,7 @@ class LocationMapViewModel(
 
 /** One location: your rounds there, friends' rounds and stats there, all-archer stats per bow style. Nav arg "locationId". */
 class LocationPageViewModel(private val repo: LocationPageRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
-    /** For Unlimited-Gents equivalents of each bow style's averages (null until downloaded). */
+    /** For handicap points of each bow style's averages (null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
     private val locationId: String = checkNotNull(saved["locationId"])
@@ -777,7 +777,7 @@ class FriendsViewModel(private val friends: FriendsRepository, accounts: Account
 
 /** A friend's finished rounds, newest first. */
 class FriendRoundsViewModel(private val friends: FriendsRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
-    /** For Unlimited-Gents equivalents and the friend's rating (null until downloaded). */
+    /** For handicap points and the friend's rating (null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
     val archerId: String = checkNotNull(saved["archerId"])

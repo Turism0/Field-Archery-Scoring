@@ -6,8 +6,12 @@ import kotlin.math.roundToInt
 
 /**
  * The handicap (app 2.2.05; model fitted on the server from the NFAS Nationals and 3D Championships, see
- * docs/HANDICAP.md). Turns a score with any bow style and class into the same performance for another, normally
- * Unlimited Gents (adult), the reference.
+ * docs/HANDICAP.md). Turns a score with any bow style and class into the same performance for another, and into
+ * **handicap points** (2.2.06): out of 1000, the same for the same performance whatever the bow or class. No bow
+ * style is the yardstick: the scale is set at the middle (median) of all bow styles and classes, so traditional and
+ * compound archers are measured on the same neutral scale (Pete: not "compared with Unlimited").
+ *
+ * (Inside the model Unlimited Gents has zero offsets, but that's only the fit's arithmetic and is never shown.)
  *
  * A score is used as its share of the maximum (24 an animal), on a logit scale; each bow style and class has an
  * offset from Unlimited Gents, which changes over the years. Paper faces and 3D targets are averaged (Pete, Nov 2026):
@@ -49,6 +53,22 @@ data class HandicapModel(
         return maxPoints / (1 + exp(-z))
     }
 
+    /** The middle of all bow styles and classes in [year]: what handicap points are measured against. */
+    fun neutralOffset(year: Int): Double {
+        val all = BowStyle.entries.flatMap { b ->
+            ArcherClass.entries.flatMap { c -> AgeGroup.entries.map { a -> offset(b, c, a, year) } }
+        }.sorted()
+        return (all[(all.size - 1) / 2] + all[all.size / 2]) / 2
+    }
+
+    /** Handicap points (0–1000) for [points] out of [maxPoints] with this bow and class in [year]. */
+    fun handicapPoints(points: Double, maxPoints: Double, from: Archer, year: Int): Double {
+        if (maxPoints <= 0) return 0.0
+        val p = (points / maxPoints).coerceIn(0.01, 0.99)
+        val z = ln(p / (1 - p)) - offset(from.bowStyle, from.archerClass, from.ageGroup, year) + neutralOffset(year)
+        return 1000 / (1 + exp(-z))
+    }
+
     /** A bow style and class. */
     data class Archer(val bowStyle: BowStyle, val archerClass: ArcherClass, val ageGroup: AgeGroup) {
         companion object {
@@ -60,9 +80,6 @@ data class HandicapModel(
         /** The server's class codes: M-ADULT, F-JUNIOR, M-CUB … */
         fun classCode(archerClass: ArcherClass, ageGroup: AgeGroup) =
             (if (archerClass == ArcherClass.LADIES) "F" else "M") + "-" + ageGroup.name
-
-        /** Ratings and equivalents are shown as a 40-target round. */
-        const val RATING_TARGETS = 40
 
         /** Rating: the average of this many of your latest finished Big Game rounds. */
         const val RATING_ROUNDS = 10
@@ -81,20 +98,20 @@ data class HandicapRound(
     val archer: HandicapModel.Archer,
 )
 
-/** Your rating: average Unlimited-Gents-equivalent of your latest rounds, as a 40-target score. */
+/** Your rating: average handicap points (0–1000) of your latest rounds. */
 data class HandicapRating(val rating: Int, val rounds: Int)
 
 object HandicapStats {
-    /** Unlimited Gents equivalent of a round, out of its own maximum. */
-    fun equivalent(model: HandicapModel, r: HandicapRound): Int =
-        model.convert(r.points.toDouble(), r.maxPoints.toDouble(), r.archer, r.shootDate.year).roundToInt()
+    /** Handicap points (0–1000) for a round. */
+    fun points(model: HandicapModel, r: HandicapRound): Int =
+        model.handicapPoints(r.points.toDouble(), r.maxPoints.toDouble(), r.archer, r.shootDate.year).roundToInt()
 
-    /** Average of the latest [HandicapModel.RATING_ROUNDS] rounds' equivalent shares × 40 targets × 24; null if too few. */
+    /** Average handicap points of the latest [HandicapModel.RATING_ROUNDS] rounds; null if fewer than the minimum. */
     fun rating(model: HandicapModel, rounds: List<HandicapRound>): HandicapRating? {
         val latest = rounds.filter { it.maxPoints > 0 }.sortedByDescending { it.shootDate }.take(HandicapModel.RATING_ROUNDS)
         if (latest.size < HandicapModel.RATING_MIN_ROUNDS) return null
-        val share = latest.map { model.convert(it.points.toDouble(), it.maxPoints.toDouble(), it.archer, it.shootDate.year) / it.maxPoints }.average()
-        return HandicapRating((share * 24 * HandicapModel.RATING_TARGETS).roundToInt(), latest.size)
+        val avg = latest.map { model.handicapPoints(it.points.toDouble(), it.maxPoints.toDouble(), it.archer, it.shootDate.year) }.average()
+        return HandicapRating(avg.roundToInt(), latest.size)
     }
 }
 

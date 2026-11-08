@@ -69,7 +69,14 @@ bow × ladies terms were no better.
 Missing factors are 0. A round's equivalent is the sum over its days (or the formula on the whole round with its
 total targets). It isn't a flat percentage: e.g. in 2026 a Longbow day of 480 / 600 / 720 is about 811 / 864 / 904.
 
-## In the app (2.2.05)
+## In the app (2.2.05; handicap points from 2.2.06)
+
+- **Handicap points (2.2.06):** what's shown is never "as Unlimited Gents" (Pete: traditional archers don't want to be
+  measured against Unlimited). Handicap points = 1000 / (1 + e^−(logit(p) − off[bow, class] + neutral)), where
+  neutral is the median offset over every bow style × class × age group in that year: a neutral yardstick in the
+  middle of all of them. Out of 1000; the same for the same performance with any bow and class. The rating is the
+  average handicap points of the last 10 Big Game rounds. (Unlimited Gents being zero in the model is only the fit's
+  arithmetic.)
 
 - The model is downloaded from `GET /api/handicap` (no sign-in) at most once a day and kept on the phone.
 - **Paper faces and 3D targets are averaged** (Pete): half of each bow's BOW3D term is always included, so there's one

@@ -163,7 +163,7 @@ fun HomeScreen(
                 HomeTile(
                     icon = Icons.Filled.Info,
                     title = "Handicap calculator",
-                    subtitle = "A score with any bow and class, as every other bow and class",
+                    subtitle = "Handicap out of 1000, and a score as every other bow and class",
                     onClick = onHandicap,
                 )
                 HomeTile(

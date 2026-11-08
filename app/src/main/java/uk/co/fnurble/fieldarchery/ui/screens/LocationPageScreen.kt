@@ -147,8 +147,8 @@ fun LocationPageScreen(
                                     Muted("Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, " +
                                         "a fan as its animals); Woodsman is per target, out of 30. Avg 36 and Avg 40 are that " +
                                         "average over a whole 36- or 40-target round, so rounds of any length compare fairly." +
-                                        (if (handicap != null) " ≈ UL is Avg 40 as an Unlimited Gents score (the handicap, taking each bow as Gents), " +
-                                            "so bow styles compare directly; All bows is their average, by rounds." else ""))
+                                        (if (handicap != null) " Handicap is Avg 40 in handicap points (out of 1000, the same for the same performance with any bow; " +
+                                            "each bow taken as Gents), so bow styles compare directly; All bows is their average, by rounds." else ""))
                                 }
                             }
                         }
@@ -244,12 +244,12 @@ private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> U
 
 @Composable
 private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = null) {
-    // Unlimited Gents equivalent of each bow's 40-target average (location stats aren't split by class).
+    // Handicap points of each bow's 40-target average (location stats aren't split by class: taken as Gents).
     fun ul(b: BowStyleStats): Double? {
         val m = handicap ?: return null
         val bow = BowStyle.fromCode(b.bowStyle) ?: return null
         val avg = b.average40 ?: return null
-        return m.convert(avg, 960.0, HandicapModel.Archer(bow, ArcherClass.GENTS, AgeGroup.ADULT), m.dataThroughYear)
+        return m.handicapPoints(avg, 960.0, HandicapModel.Archer(bow, ArcherClass.GENTS, AgeGroup.ADULT), m.dataThroughYear)
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(vertical = 8.dp)) {
@@ -262,7 +262,7 @@ private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = 
                 Cell("Avg 36", header = true)
                 Cell("Avg 40", header = true)
                 Cell("Per animal", weight = 1.2f, header = true)
-                if (handicap != null) Cell("≈ UL", header = true)
+                if (handicap != null) Cell("Handicap", weight = 1.2f, header = true)
             }
             rows.forEach { b ->
                 HorizontalDivider()
@@ -274,10 +274,10 @@ private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = 
                     Cell(b.average36?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
                     Cell(b.average40?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
                     Cell(b.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–", weight = 1.2f)
-                    if (handicap != null) Cell(ul(b)?.let { String.format(Locale.UK, "%.0f", it) } ?: "–")
+                    if (handicap != null) Cell(ul(b)?.let { String.format(Locale.UK, "%.0f", it) } ?: "–", weight = 1.2f)
                 }
             }
-            // All bow styles together, as Unlimited Gents (weighted by rounds).
+            // All bow styles together (handicap points, weighted by rounds).
             val withUl = rows.mapNotNull { b -> ul(b)?.let { it to b.rounds } }
             if (handicap != null && withUl.size > 1) {
                 HorizontalDivider()
@@ -286,7 +286,7 @@ private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = 
                     Cell("${rows.sumOf { it.archers }}")
                     Cell("${rows.sumOf { it.rounds }}")
                     Cell(""); Cell(""); Cell(""); Cell("", weight = 1.2f)
-                    Cell(String.format(Locale.UK, "%.0f", withUl.sumOf { it.first * it.second } / withUl.sumOf { it.second }))
+                    Cell(String.format(Locale.UK, "%.0f", withUl.sumOf { it.first * it.second } / withUl.sumOf { it.second }), weight = 1.2f)
                 }
             }
         }

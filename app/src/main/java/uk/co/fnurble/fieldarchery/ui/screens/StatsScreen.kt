@@ -176,7 +176,7 @@ private fun BestsCard(type: RoundType, bow: BowStyle, list: List<PersonalBest>, 
     }
 }
 
-/** Handicap rating: average Unlimited-Gents equivalent of your last 10 Big Game rounds, as a 40-target score. */
+/** Handicap rating: average handicap points (out of 1000) of your last 10 Big Game rounds. */
 @Composable
 private fun RatingCard(rating: HandicapRating?, rounds: List<Pair<Round, Int>>, haveModel: Boolean, onOpenRound: (String) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -191,8 +191,8 @@ private fun RatingCard(rating: HandicapRating?, rounds: List<Pair<Round, Int>>, 
                 else -> {
                     Text("${rating.rating}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                     Text(
-                        "Your last ${rating.rounds} Big Game round${if (rating.rounds == 1) "" else "s"} as an Unlimited Gents score on 40 targets, " +
-                            "so it compares with anyone's, whatever their bow or class.",
+                        "Average handicap of your last ${rating.rounds} Big Game round${if (rating.rounds == 1) "" else "s"}, out of 1000: " +
+                            "the same for the same performance whatever the bow or class.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -202,7 +202,7 @@ private fun RatingCard(rating: HandicapRating?, rounds: List<Pair<Round, Int>>, 
                 rounds.forEach { (r, eq) ->
                     Row(Modifier.fillMaxWidth().clickable { onOpenRound(r.id) }.padding(vertical = 2.dp)) {
                         Text("${r.shootDate.format(UkDate)} · ${r.bowStyle.code} · ${r.totalPoints}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("≈ $eq UL", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        Text("Handicap $eq", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

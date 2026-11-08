@@ -127,7 +127,7 @@ fun FriendRoundsScreen(
                             )
                         }
                     }
-                    // Their handicap rating (last 10 Big Game rounds as Unlimited Gents on 40 targets).
+                    // Their handicap rating (average handicap points of their last 10 Big Game rounds).
                     val model = handicap
                     val rating = model?.let { m -> HandicapStats.rating(m, r.value.mapNotNull { it.handicapRound() }) }
                     if (rating != null) item(key = "rating") {
@@ -135,7 +135,7 @@ fun FriendRoundsScreen(
                             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Handicap rating", style = MaterialTheme.typography.titleMedium)
-                                    Text("Last ${rating.rounds} Big Game rounds as Unlimited Gents on 40 targets", style = MaterialTheme.typography.bodySmall)
+                                    Text("Average handicap of their last ${rating.rounds} Big Game rounds (out of 1000)", style = MaterialTheme.typography.bodySmall)
                                 }
                                 Text("${rating.rating}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                             }
@@ -164,9 +164,9 @@ fun FriendRoundsScreen(
                                     Text("${round.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                     Text("points", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    // Unlimited Gents equivalent, so rounds with different bows compare.
-                                    val eq = model?.let { m -> round.handicapRound()?.let { HandicapStats.equivalent(m, it) } }
-                                    if (eq != null) Text("≈ $eq UL Gents", style = MaterialTheme.typography.labelSmall,
+                                    // Handicap points, so rounds with different bows and classes compare.
+                                    val eq = model?.let { m -> round.handicapRound()?.let { HandicapStats.points(m, it) } }
+                                    if (eq != null) Text("Handicap $eq", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary)
                                 }
                             }

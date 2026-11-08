@@ -63,12 +63,34 @@ class HandicapTest {
     }
 
     @Test
+    fun handicapPointsAreTheSameForTheSamePerformance() {
+        // A Longbow score and its Unlimited equivalent get the same handicap points.
+        val asUl = model.convert(600.0, 960.0, lb, 2026)
+        assertEquals(model.handicapPoints(600.0, 960.0, lb, 2026), model.handicapPoints(asUl, 960.0, ul, 2026), 1e-6)
+        // Out of 1000, and higher for a better score.
+        val hp = model.handicapPoints(600.0, 960.0, lb, 2026)
+        assertTrue(hp > 0 && hp < 1000)
+        assertTrue(model.handicapPoints(700.0, 960.0, lb, 2026) > hp)
+    }
+
+    @Test
+    fun neutralIsTheMiddleOfAllBowsAndClasses() {
+        val all = BowStyle.entries.flatMap { b -> ArcherClass.entries.flatMap { c -> AgeGroup.entries.map { a -> model.offset(b, c, a, 2026) } } }.sorted()
+        val n = model.neutralOffset(2026)
+        assertTrue(all.count { it < n } <= all.size / 2 && all.count { it > n } <= all.size / 2)
+        // An archer exactly at the middle keeps their share: 50% → 500.
+        val unchanged = 1000 / (1 + exp(-(logit(0.5) - 0 + n)))
+        assertEquals(unchanged, model.handicapPoints(480.0, 960.0, ul, 2026), 1e-6)
+    }
+
+    @Test
     fun ratingAveragesTheLatestTen() {
-        val rounds = (1..12).map { HandicapRound(LocalDate.of(2026, 1, it), points = 480 + it, maxPoints = 960, archer = ul) }
+        val rounds = (1..12).map { HandicapRound(LocalDate.of(2026, 1, it), points = 480 + it, maxPoints = 960, archer = lb) }
         val r = HandicapStats.rating(model, rounds)!!
         assertEquals(10, r.rounds)
-        // Latest 10 = days 3..12: points 483..492, average 487.5 out of 960 → 40 targets.
-        assertEquals(488, r.rating)
+        // Latest 10 = days 3..12.
+        val expected = rounds.drop(2).map { model.handicapPoints(it.points.toDouble(), 960.0, lb, 2026) }.average()
+        assertEquals(Math.round(expected).toInt(), r.rating)
         assertNull(HandicapStats.rating(model, rounds.take(2)))
     }
 }
