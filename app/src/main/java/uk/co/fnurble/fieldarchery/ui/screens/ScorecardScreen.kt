@@ -53,6 +53,7 @@ import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.ui.components.LocationSheet
 import uk.co.fnurble.fieldarchery.ui.components.label
 import uk.co.fnurble.fieldarchery.ui.components.RunningStats
+import uk.co.fnurble.fieldarchery.ui.components.HandicapCard
 import uk.co.fnurble.fieldarchery.ui.components.UkDate
 import uk.co.fnurble.fieldarchery.ui.components.UkDateLong
 import java.util.Locale
@@ -77,6 +78,7 @@ fun ScorecardScreen(
     val round by vm.round.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
     val personalBest by vm.personalBest.collectAsStateWithLifecycle()
+    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == vm.roundId }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -147,6 +149,7 @@ fun ScorecardScreen(
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
                     RunningStats(r.stats)
+                    HandicapCard(r, handicap)
                     MoreStats(r.stats)
                     Text(
                         "Targets",

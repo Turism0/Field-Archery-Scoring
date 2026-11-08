@@ -188,7 +188,7 @@ fun FieldArcheryNavHost() {
             ),
         ) {
             FriendScorecardScreen(
-                vm = appViewModel { c, saved -> FriendScorecardViewModel(c.friendsRepository, saved) },
+                vm = appViewModel { c, saved -> FriendScorecardViewModel(c.friendsRepository, saved, c.handicapRepository) },
                 onBack = { nav.popBackStack() },
             )
         }
@@ -302,7 +302,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScorecardScreen(
-                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved) },
+                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved, c.handicapRepository) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },

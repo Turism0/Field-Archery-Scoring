@@ -18,6 +18,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import uk.co.fnurble.fieldarchery.domain.BigGameScoring
+import uk.co.fnurble.fieldarchery.domain.HandicapModel
+import uk.co.fnurble.fieldarchery.domain.HandicapStats
+import uk.co.fnurble.fieldarchery.domain.Round
+import uk.co.fnurble.fieldarchery.domain.RoundStatus
+import uk.co.fnurble.fieldarchery.domain.handicapRound
 import uk.co.fnurble.fieldarchery.domain.RoundStats
 import uk.co.fnurble.fieldarchery.domain.ordinal
 import java.util.Locale
@@ -79,3 +84,29 @@ private fun RowScope.SmallStat(label: String, value: Int, dimWhenZero: Boolean =
 /** Faded content colour for zero values that don't matter much. */
 private val fadedContent: Color
     @Composable get() = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+
+/**
+ * A finished Big Game round's handicap points (out of 1000, the same for the same performance with any bow or
+ * class). Nothing for Woodsman, unfinished rounds, or before the handicap has been downloaded.
+ */
+@Composable
+fun HandicapCard(round: Round, model: HandicapModel?, modifier: Modifier = Modifier) {
+    if (model == null || round.status != RoundStatus.COMPLETED) return
+    val h = round.handicapRound() ?: return
+    val points = HandicapStats.points(model, h)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Handicap", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Out of 1000: the same for the same performance with any bow or class",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text("$points", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}

@@ -824,7 +824,10 @@ class FriendRoundsViewModel(private val friends: FriendsRepository, saved: Saved
 }
 
 /** One of a friend's scorecards, read-only. */
-class FriendScorecardViewModel(private val friends: FriendsRepository, saved: SavedStateHandle) : ViewModel() {
+class FriendScorecardViewModel(private val friends: FriendsRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
+    /** For the round's handicap points (null until downloaded). */
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
     private val archerId: String = checkNotNull(saved["archerId"])
     private val roundId: String = checkNotNull(saved["roundId"])
     val username: String = checkNotNull(saved["username"])
@@ -1554,10 +1557,10 @@ class ScoringViewModel(
 
     init {
         viewModelScope.launch {
-            val gid = rounds.groupIdOf(startRoundId)
+            val gid = rounds.groupIdOf(startRoundId) ?: return@launch
             if (liveRepo?.isLive(gid) != true) return@launch
             liveGroupId = gid
-            launch { liveRepo.poll(gid!!).collect { _live.value = it } }
+            launch { liveRepo.poll(gid).collect { _live.value = it } }
             launch { liveRepo.myEntries(gid).collect { _mineHere.value = it } }
             group.collect { members -> followGroup(members) }
         }
@@ -1710,7 +1713,11 @@ class ScoringViewModel(
 class ScorecardViewModel(
     private val rounds: RoundRepository,
     saved: SavedStateHandle,
+    handicap: HandicapRepository? = null,
 ) : ViewModel() {
+    /** For the round's handicap points (null until downloaded). */
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
     val roundId: String = checkNotNull(saved["roundId"])
 
     val round: StateFlow<Round?> =

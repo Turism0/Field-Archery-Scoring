@@ -31,12 +31,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.ui.FriendScorecardViewModel
 import uk.co.fnurble.fieldarchery.ui.Load
 import uk.co.fnurble.fieldarchery.ui.components.RunningStats
+import uk.co.fnurble.fieldarchery.ui.components.HandicapCard
 
 /** A friend's scorecard: same layout as your own, but read-only (no edit button, no menu). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendScorecardScreen(vm: FriendScorecardViewModel, onBack: () -> Unit) {
     val round by vm.round.collectAsStateWithLifecycle()
+    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -76,6 +78,7 @@ fun FriendScorecardScreen(vm: FriendScorecardViewModel, onBack: () -> Unit) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             RoundHeader(r, showLocation = true)
                             RunningStats(r.stats)
+                            HandicapCard(r, handicap)
                             MoreStats(r.stats)
                             Text(
                                 "Targets",
