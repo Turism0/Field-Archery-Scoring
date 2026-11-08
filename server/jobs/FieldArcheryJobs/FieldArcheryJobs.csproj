@@ -8,8 +8,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FieldArcheryJobs</RootNamespace>
-    <Version>2.2.03</Version>
-    <InformationalVersion>2.2.03</InformationalVersion>
+    <Version>2.2.04</Version>
+    <InformationalVersion>2.2.04</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

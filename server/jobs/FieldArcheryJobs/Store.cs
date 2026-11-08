@@ -95,7 +95,9 @@ public sealed class Store(string connectionString)
                 foreach (var (r, k) in keyed)
                     table.Rows.Add(eventId, r.Style, r.Class, (short)r.Position, k, r.Club.Length > 100 ? r.Club[..100] : r.Club,
                                    (short)r.Day1, (short)r.Day2, (short)r.Total, r.Count24 is { } n ? (object)(short)n : DBNull.Value);
-                using var bulk = new SqlBulkCopy(c, SqlBulkCopyOptions.Default, tx) { DestinationTableName = "dbo.ChampResult" };
+                // CheckConstraints: checks the table's rules as it inserts, so the read/write login can do it (without the
+                // hint SQL Server wants ALTER TABLE permission, which fieldarchery_api deliberately doesn't have).
+                using var bulk = new SqlBulkCopy(c, SqlBulkCopyOptions.CheckConstraints, tx) { DestinationTableName = "dbo.ChampResult" };
                 foreach (DataColumn col in table.Columns) bulk.ColumnMappings.Add(col.ColumnName, col.ColumnName);
                 await bulk.WriteToServerAsync(table, ct);
             }
