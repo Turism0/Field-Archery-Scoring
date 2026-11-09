@@ -1247,8 +1247,8 @@ class NewRoundViewModel(
     fun update(change: (NewRoundForm) -> NewRoundForm) = _form.update { it?.let(change) }
 
     /**
-     * Live group: makes the group on this phone and on the server (with a join code), then [onLive] opens the lobby.
-     * Nothing is kept if the server can't be reached.
+     * Live group: makes the group on this phone (with a join code), then [onLive] opens the lobby. With no signal the
+     * others join phone to phone and the server is told later (2.3); nothing is kept if the server turns the group down.
      */
     fun startLive(onLive: (String) -> Unit) {
         val f = _form.value ?: return
@@ -1450,6 +1450,14 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
 
 // ---------------- Scoring ----------------
 
+/** A check by hand (2.3): five targets to compare aloud with the other scorer, card by card. */
+data class ManualCheck(val targets: List<Int>, val cards: List<Card>, val others: List<String>) {
+    /** [points] for each of [targets] (null: not entered here for this card). */
+    data class Card(val memberId: String, val name: String, val points: List<Int?>) {
+        val total: Int get() = points.sumOf { it ?: 0 }
+    }
+}
+
 class ScoringViewModel(
     private val rounds: RoundRepository,
     private val saved: SavedStateHandle,
@@ -1499,6 +1507,47 @@ class ScoringViewModel(
 
     /** True when the two scorers' entries for the card on screen differ. */
     fun checkMismatch(): Boolean = _live.value?.state?.cells?.get(_targetNo.value to _roundId.value) == "MISMATCH"
+
+    /** Targets put off with "Not now" (asked again once the next target is scored). */
+    private val _snoozed = MutableStateFlow<Pair<List<Int>, Int>?>(null)
+
+    /**
+     * Double / 3+ scorers with no way to the other scorer (2.3, Pete): every five targets entered here that haven't been
+     * compared, a prompt to compare them by hand. Null when none is due.
+     */
+    val manualCheck: StateFlow<ManualCheck?> = combine(_live, _snoozed) { poll, snoozed ->
+        val s = poll?.state ?: return@combine null
+        if (poll.inTouch) return@combine null
+        val mine = s.entries.count { it.scorerMemberId == s.myMemberId }
+        val due = s.dueManualCheck().takeIf { it.isNotEmpty() } ?: return@combine null
+        if (snoozed != null && snoozed.first == due && snoozed.second >= mine) return@combine null
+        val waiting = s.myWaiting(due)
+        if (waiting.isEmpty()) return@combine null
+        val cards = waiting.keys.map { it.second }.distinct().sortedBy { s.member(it)?.sortOrder ?: 0 }
+        ManualCheck(
+            targets = due,
+            cards = cards.map { card ->
+                val name = s.member(card)?.let { if (it.memberId == s.myMemberId) "${it.name} (you)" else it.name } ?: "?"
+                ManualCheck.Card(card, name, due.map { waiting[it to card] })
+            },
+            others = s.otherScorerNames(cards),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The scorers agree on the targets in the prompt: saved here (compared again when the other phone is back). */
+    fun manualCheckAgreed() {
+        val c = manualCheck.value ?: return
+        val gid = liveGroupId ?: return
+        val cells = c.cards.flatMap { card -> c.targets.filterIndexed { i, _ -> card.points[i] != null }.map { it to card.memberId } }.toSet()
+        viewModelScope.launch { liveRepo?.markChecked(gid, cells) }
+    }
+
+    /** "Not now": asked again after the next target. */
+    fun manualCheckLater() {
+        val c = manualCheck.value ?: return
+        val s = _live.value?.state ?: return
+        _snoozed.value = c.targets to s.entries.count { it.scorerMemberId == s.myMemberId }
+    }
 
     private val _message = MutableStateFlow<String?>(null)
     /** One-off note, e.g. "Dave is scoring this card". */
@@ -1684,7 +1733,7 @@ class ScoringViewModel(
             try {
                 liveRepo?.close(gid)
             } catch (e: ApiException) {
-                _message.value = "Couldn't close the group on the server (${e.message}). Your rounds are finished here."
+                _message.value = "Couldn't close the group (${e.message}). Your rounds are finished here."
             }
         }
         rounds.setGroupStatus(_roundId.value, RoundStatus.COMPLETED)

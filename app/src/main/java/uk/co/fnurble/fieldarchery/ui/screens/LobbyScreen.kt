@@ -51,6 +51,8 @@ import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
 import uk.co.fnurble.fieldarchery.data.LiveMember
 import uk.co.fnurble.fieldarchery.data.LiveMethod
 import uk.co.fnurble.fieldarchery.ui.LobbyViewModel
+import uk.co.fnurble.fieldarchery.ui.components.AskForNearby
+import uk.co.fnurble.fieldarchery.ui.components.LiveLinkNotes
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
 
 /**
@@ -73,6 +75,7 @@ fun LobbyScreen(
     val snackbar = remember { SnackbarHostState() }
     var confirmCancel by remember { mutableStateOf(false) }
     val s = poll?.state
+    AskForNearby()
 
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.messageShown() } }
     // Started (or finished while away): go straight to scoring, once.
@@ -98,7 +101,7 @@ fun LobbyScreen(
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator()
-                    poll?.problem?.let { Text("Can't reach the server: $it", color = MaterialTheme.colorScheme.error) }
+                    poll?.linkNote()?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
             return@Scaffold
@@ -113,7 +116,8 @@ fun LobbyScreen(
         ) {
             SectionCard(
                 title = "Join code",
-                subtitle = "Others tap Score a round → Join a live group, then scan this or type the code. Works for 24 hours.",
+                subtitle = "Others tap Score a round → Join a live group, then scan this or type the code. Works for 24 hours. " +
+                    "With no signal they can still join, near this phone (Bluetooth on).",
             ) {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
@@ -142,9 +146,8 @@ fun LobbyScreen(
             SectionCard(title = "In the group (${s.members.size})", subtitle = "In scoring order.") {
                 s.members.sortedBy { it.sortOrder }.forEach { m -> MemberLine(m, isMe = m.memberId == s.myMemberId) }
             }
-            poll?.problem?.let {
-                Text("Can't reach the server ($it). Trying again…", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-            }
+            // No signal: phone to phone instead; Bluetooth off etc. (2.3)
+            poll?.let { LiveLinkNotes(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (s.isHost) {
                 Button(
                     onClick = { vm.start() },

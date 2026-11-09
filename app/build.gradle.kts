@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fnurble.fieldarchery"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "2.2.08"
+        versionCode = 37
+        versionName = "2.3"
     }
 
     buildTypes {
@@ -59,6 +59,8 @@ dependencies {
     // Live groups: draw the join QR code (no permissions) and read one with Google's scanner (no camera permission)
     implementation(libs.zxing.core)
     implementation(libs.play.services.code.scanner)
+    // Live groups with no signal: phone to phone over Bluetooth / Wi-Fi (2.3).
+    implementation(libs.play.services.nearby)
 
     debugImplementation(libs.androidx.ui.tooling)
 

@@ -75,6 +75,8 @@ import uk.co.fnurble.fieldarchery.ui.ScoringViewModel
 import uk.co.fnurble.fieldarchery.data.GroupMember
 import uk.co.fnurble.fieldarchery.data.LiveMethod
 import uk.co.fnurble.fieldarchery.data.LivePoll
+import uk.co.fnurble.fieldarchery.ui.components.AskForNearby
+import uk.co.fnurble.fieldarchery.ui.components.LiveLinkNotes
 import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundLocation
@@ -115,7 +117,10 @@ fun ScoringScreen(
     var askedForName by rememberSaveable { mutableStateOf(false) }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
     val live by vm.live.collectAsStateWithLifecycle()
+    val manualCheck by vm.manualCheck.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    // Live groups: phone to phone needs Nearby devices (asked once).
+    if (live != null) AskForNearby()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
         message?.let { snackbar.showSnackbar(it); vm.messageShown() }
@@ -271,6 +276,9 @@ fun ScoringScreen(
             onFinish = { showCard = false; confirmFinish = true },
         )
     }
+
+    // Double / 3+ scorers with no signal and no phones in range (2.3): compare five targets by hand.
+    manualCheck?.let { c -> ManualCheckDialog(c, onAgree = vm::manualCheckAgreed, onLater = vm::manualCheckLater) }
 
     if (confirmFinish && r != null) {
         val unscored = r.targetCount - r.targetsComplete
@@ -734,6 +742,42 @@ private fun OverrideDialog(initial: Int, onDismiss: () -> Unit, onSave: (Int) ->
 private fun shownLocation(group: List<GroupMember>, r: Round): RoundLocation =
     group.firstOrNull { it.role == GroupRole.SCORER }?.round?.location ?: r.location
 
+/** Five targets to compare aloud with the other scorer when the phones can't reach each other (2.3, Pete). */
+@Composable
+private fun ManualCheckDialog(c: uk.co.fnurble.fieldarchery.ui.ManualCheck, onAgree: () -> Unit, onLater: () -> Unit) {
+    val first = c.targets.first()
+    val last = c.targets.last()
+    val range = if (c.targets == (first..last).toList()) "targets $first–$last" else "targets " + c.targets.joinToString(", ")
+    val who = c.others.joinToString(" and ").ifEmpty { "the other scorer" }
+    AlertDialog(
+        onDismissRequest = onLater,
+        title = { Text("Check with $who") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "There's no signal and $who's phone isn't in range, so these haven't been compared. Read out your " +
+                        "scores for $range and check they agree.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                c.cards.forEach { card ->
+                    Text(
+                        "${card.name}: ${card.total} (" + card.points.joinToString(", ") { it?.toString() ?: "–" } + ")",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Text(
+                    "If one differs, agree it, put it right on that target, then check again. Agreed scores are saved " +
+                        "here and compared with $who's when the phones are back in touch.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onAgree) { Text("They agree") } },
+        dismissButton = { TextButton(onClick = onLater) { Text("Not now") } },
+    )
+}
+
 /** Live group: the code, what's happening, and why this phone can't score the card on screen (if it can't). */
 @Composable
 private fun LiveBanner(poll: LivePoll, whyNot: String?, check: String?, mismatch: Boolean, onLobby: () -> Unit) {
@@ -757,9 +801,8 @@ private fun LiveBanner(poll: LivePoll, whyNot: String?, check: String?, mismatch
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
-            poll.problem?.let {
-                Text("Can't reach the server ($it). Scores are kept and sent when it's back.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
+            // No signal: phone to phone, out of range of the host, Bluetooth off… (2.3)
+            LiveLinkNotes(poll)
             whyNot?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }

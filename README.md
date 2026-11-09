@@ -4,8 +4,9 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 35, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 2.2.08
+## Version 2.3
 
+- **2.3:** live groups work **with no signal**. Every phone keeps the whole group (who's in, who scores which card, every scorer's entries) and fills it two ways at once, with nothing to switch: **the server** whenever it has signal (as before; a future web app for iPhones would use only this), and **phone to phone** (Google Nearby Connections over Bluetooth / Wi-Fi, the host's phone as the hub). The host's phone makes the group, code and scorers itself (the server's rules, now also in the app), so a group can be made, joined (stand near the host's phone) and started with no signal; the server is told when someone has signal, and the host's phone passes on everyone's entries. Matching for double / 3+ scorers is worked out on every phone. A phone **out of range** of everyone keeps scoring ("Out of range of the host" in the banner) and catches up when it's back; the newest entry wins. **Checks by hand** (Pete): with double / 3+ scorers and no way to reach the other scorer, every 5 targets entered but not compared brings up "Check with Sue: targets 6–10, Dave 98 (20, 18, 24, 16, 20)…"; **They agree** saves them to the cards (compared again when the phones are back in touch; a mismatch then shows as usual), **Not now** asks again after the next target. The banner and lobby say when Bluetooth or Wi-Fi is off or Nearby devices isn't allowed, with a button to turn it on; the app asks for Nearby devices (and location) on the join, lobby and scoring screens. Works while the app is open. New library: Play services Nearby 19.3.0. No server changes.
 - **2.2.08:** finished Big Game scorecards (yours and friends') show the round's **handicap** (out of 1000) under the stats.
 - **2.2.07:** build fix: the live-group code (from 2.1.01) passed a group id that could be empty to the server polling; scoring now stops looking for a live group when the round isn't in a group. First successful build of 2.1 onwards.
 - **2.2.06:** handicapped scores are shown as **handicap points out of 1000** instead of Unlimited Gents scores (some traditional archers don't want to be measured against Unlimited). The scale is neutral: set at the middle (median) of all bow styles and classes, the same number for the same performance whatever the bow or class. Calculator: "Handicap 742" plus the same performance as every bow and class (no bow highlighted except yours); rating = average handicap points of your last 10 Big Game rounds; friends' rounds "Handicap 742"; location pages "Handicap" column and All bows row. No server change.
@@ -83,7 +84,7 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 Versioning: minor changes go 1.9.01, 1.9.02 … 1.9.99; major changes move to the next tenth (2.0). Numbers only ever go up: when a feature is split into server then app releases, the app release takes the next number after the server ones.
 
-## Status: online features, shoot locations and map, round types (Big Game, Woodsman), group scoring (one phone 2.0; live groups 2.1 / 2.1.01, to test with 2+ phones) and history and stats (2.2) done. Next: 2.3 group scoring with no signal (phone to phone); see `docs/DESIGN.md`
+## Status: online features, shoot locations and map, round types (Big Game, Woodsman), group scoring (one phone 2.0; live groups 2.1 / 2.1.01; no signal 2.3; to test with 2+ phones) and history and stats (2.2) done; see `docs/DESIGN.md`
 
 ### Screens
 

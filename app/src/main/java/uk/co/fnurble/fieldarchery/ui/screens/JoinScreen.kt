@@ -37,6 +37,7 @@ import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
 import uk.co.fnurble.fieldarchery.ui.JoinViewModel
 import uk.co.fnurble.fieldarchery.ui.components.BottomActionBar
+import uk.co.fnurble.fieldarchery.ui.components.AskForNearby
 import uk.co.fnurble.fieldarchery.ui.components.OptionDropdown
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
 import uk.co.fnurble.fieldarchery.ui.components.SegmentedChoice
@@ -53,6 +54,8 @@ fun JoinScreen(
     val f by vm.form.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var scanProblem by remember { mutableStateOf<String?>(null) }
+    // With no signal, joining is phone to phone: that needs Nearby devices.
+    AskForNearby()
 
     Scaffold(
         topBar = {
@@ -81,7 +84,8 @@ fun JoinScreen(
         ) {
             SectionCard(
                 title = "Group code",
-                subtitle = "Scan the QR on the host's phone, or type the 6-character code. You need to be signed in and have signal.",
+                subtitle = "Scan the QR on the host's phone, or type the 6-character code. You need to be signed in. With no " +
+                    "signal, stand near the host's phone with Bluetooth on.",
             ) {
                 FilledTonalButton(
                     onClick = {
@@ -118,6 +122,13 @@ fun JoinScreen(
                     selected = f.bowStyle,
                     optionLabel = { it.label },
                     onSelect = { b -> vm.update { it.copy(bowStyle = b) } },
+                )
+            }
+            if (f.busy) {
+                Text(
+                    "Looking for the group, on the server and phone to phone…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             f.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
