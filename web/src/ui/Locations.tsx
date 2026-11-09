@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Bar, Card, Dialog, Field, Loading, back, errorText, go, one, toast, ukDate, useData, useLoad } from './common'
+import { Bar, Card, Dialog, Field, Loading, back, errorText, go, one, toast, ukDate, useData, useDesktop, useLoad } from './common'
 import { getAccount } from '../data/account'
 import { getModel } from '../data/handicap'
 import { getRound } from '../data/db'
@@ -33,6 +33,7 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
   const [busy, setBusy] = useState(false)
   const [taken, setTaken] = useState<loc.NearbyLocation | null>(null)
   const hasFix = round?.fixLat != null
+  const desktop = useDesktop()
 
   useEffect(() => {
     if (!open || !round) return
@@ -63,7 +64,8 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
             <option value="">Pick a known location</option>
             {known.map(k => <option value={k.id}>{k.name}{k.isPrivate ? ' (private)' : ''}</option>)}
           </select></label>}
-        {!hasFix ? <>
+        {!hasFix && desktop ? <div class="sub">Pick a known location, or choose on the map: tap a pin to use it, or tap where the shoot is to name a new location.</div>
+        : !hasFix ? <>
           <div class="sub">This round has no GPS position. If you're at the shoot now, get your position to find or name the location.</div>
           <button class="filled" disabled={busy} onClick={() => run(async () => { if (!(await loc.captureNow(roundId))) toast("Couldn't get your position. Check location is allowed for this site in Settings.") })}>
             {busy ? 'Getting position…' : 'Get position now'}</button>

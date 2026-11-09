@@ -180,3 +180,15 @@ table.card-table.click tbody tr:hover { background: var(--surface-low); }
   .content main > label.field { max-width: 360px; }
   table.equiv { width: 100%; }
 }
+
+/* ---- 2.6.02: typing in a paper scorecard (desktop) ---- */
+.sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.sheet-table { background: var(--surface-c); border-radius: var(--radius); }
+.sheet-table td, .sheet-table th { padding: 4px 6px; vertical-align: middle; }
+.sheet-table th:first-child, .sheet-table td:first-child { padding-left: 12px; width: 28px; color: var(--muted); }
+.sheet-table tr.bad { background: var(--error-c); }
+.sheet .cells { display: flex; gap: 4px; flex-wrap: wrap; }
+input.cell { width: 52px; padding: 6px 4px; text-align: center; border-radius: 6px; font-variant-numeric: tabular-nums; }
+input.cell:disabled { opacity: .35; }
+select.kind { width: auto; padding: 5px 4px; font-size: 13px; border-radius: 6px; }
+.error.small { font-size: 12px; white-space: normal; }

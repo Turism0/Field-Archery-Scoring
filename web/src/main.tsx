@@ -2,7 +2,8 @@ import { render } from 'preact'
 import './styles.css'
 import { Toasts, useDesktop, useRoute } from './ui/common'
 import { Shell } from './ui/Shell'
-import { Dashboard } from './ui/Dashboard'
+import { Dashboard, PhoneOnly } from './ui/Dashboard'
+import { PaperEntry } from './ui/PaperEntry'
 import { Home } from './ui/Home'
 import { AccountScreen, ProfileScreen } from './ui/Account'
 import { History } from './ui/History'
@@ -25,11 +26,12 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
     case 'account': return <><AccountScreen /></>
     case 'profile': return <><ProfileScreen /></>
     case 'history': return <><History /></>
-    case 'new': return <><NewRound /></>
-    case 'score': return <><Scoring id={parts[1]} target={Number(q.get('t')) || undefined} /></>
+    case 'new': case 'add': return desktop ? <PaperEntry key="new" /> : <NewRound />
+    case 'grid': return desktop ? <PaperEntry key={parts[1]} id={parts[1]} /> : <Scoring id={parts[1]} />
+    case 'score': return desktop ? <PaperEntry key={parts[1]} id={parts[1]} /> : <Scoring id={parts[1]} target={Number(q.get('t')) || undefined} />
     case 'card': return <><Scorecard id={parts[1]} /></>
-    case 'join': return <><Join code={q.get('code') ?? ''} /></>
-    case 'lobby': return <><Lobby groupId={parts[1]} /></>
+    case 'join': return desktop ? <PhoneOnly /> : <Join code={q.get('code') ?? ''} />
+    case 'lobby': return desktop ? <PhoneOnly /> : <Lobby groupId={parts[1]} />
     case 'stats': return <><Stats /></>
     case 'handicap': return <><HandicapCalculator /></>
     case 'friends': return <><Friends /></>

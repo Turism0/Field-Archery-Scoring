@@ -55,7 +55,7 @@ export function useDesktop(): boolean {
 }
 
 /** Sections reached from the desktop sidebar: no back arrow there. */
-const TOP_LEVEL = ['/', '/new', '/join', '/history', '/stats', '/handicap', '/friends', '/map', '/admin', '/profile']
+const TOP_LEVEL = ['/', '/add', '/new', '/join', '/history', '/stats', '/handicap', '/friends', '/map', '/admin', '/profile']
 const isTopLevel = () => TOP_LEVEL.includes((location.hash.slice(1) || '/').split('?')[0])
 
 export function Bar({ title, onBack, children }: { title: string; onBack?: (() => void) | false; children?: ComponentChildren }) {

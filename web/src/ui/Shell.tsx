@@ -8,7 +8,7 @@ import { normalised, TILE_TITLES, type HomeLayout, type TileId } from '../domain
 import { useOnline } from './Home'
 
 const ROUTES: Record<TileId, { path: string; icon: string; match: string[] }> = {
-  SCORE: { path: '/new', icon: '＋', match: ['new', 'score', 'lobby'] },
+  SCORE: { path: '/add', icon: '＋', match: ['add', 'new', 'grid', 'score', 'join', 'lobby'] },
   JOIN: { path: '/join', icon: '👥', match: ['join'] },
   HISTORY: { path: '/history', icon: '☰', match: ['history', 'card', 'edit'] },
   STATS: { path: '/stats', icon: '★', match: ['stats'] },
@@ -29,7 +29,8 @@ export function Shell({ section, children }: { section: string; children: Compon
   const [syncing, setSyncing] = useState(false)
   const layout = normalised(stored)
   const admin = isAdmin(account)
-  const items = layout.order.filter(id => (id !== 'ADMIN' || admin) && !layout.hidden.includes(id))
+  // Desktop is for typing in paper rounds, not live scoring: no Join a live group (2.6.02).
+  const items = layout.order.filter(id => id !== 'JOIN' && (id !== 'ADMIN' || admin) && !layout.hidden.includes(id))
   const badge = (id: TileId) => (id === 'FRIENDS' && account ? offers : id === 'ADMIN' ? duplicates : 0)
 
   return (
@@ -41,13 +42,13 @@ export function Shell({ section, children }: { section: string; children: Compon
           const r = ROUTES[id]
           return (
             <button class={`sideitem ${r.match.includes(section) ? 'on' : ''}`} onClick={() => go(r.path)}>
-              <span class="si">{r.icon}</span><span class="grow">{id === 'SCORE' ? 'New round' : TILE_TITLES[id]}</span>
+              <span class="si">{r.icon}</span><span class="grow">{id === 'SCORE' ? 'Add a round' : TILE_TITLES[id]}</span>
               {badge(id) > 0 && <span class="badge">{badge(id)}</span>}
             </button>
           )
         })}
         <div class="grow" />
-        {!online ? <div class="sidenote">Device offline: scoring works, rounds back up later.</div>
+        {!online ? <div class="sidenote">Device offline: you can still add rounds; they back up when you're online.</div>
           : server === 'UNAVAILABLE' && <div class="sidenote bad">Server unavailable: rounds back up when it's back.</div>}
         <div class="sideaccount">
           <button class={`sideitem ${['profile', 'account'].includes(section) ? 'on' : ''}`} onClick={() => go(account ? '/profile' : '/account')}>
@@ -57,7 +58,7 @@ export function Shell({ section, children }: { section: string; children: Compon
           {account && <button class="tonal" disabled={syncing} onClick={async () => {
             setSyncing(true); const r = await syncNow(); setSyncing(false); toast(r.ok ? 'Up to date.' : r.message ?? "Couldn't sync.")
           }}>{syncing ? 'Syncing…' : 'Sync now'}</button>}
-          <div class="sub" style="text-align:center">Web app 2.6.01</div>
+          <div class="sub" style="text-align:center">Web app 2.6.02</div>
         </div>
       </nav>
       <div class="content">{children}</div>

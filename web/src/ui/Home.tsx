@@ -102,7 +102,7 @@ export function Home() {
           : <>
             {shown.filter(id => !layout.hidden.includes(id)).map(tile)}
             <button style="align-self:center" onClick={() => setEditing(layout)}>⇅ Arrange tiles</button>
-            <p class="sub" style="text-align:center">Web app 2.6.01</p>
+            <p class="sub" style="text-align:center">Web app 2.6.02</p>
           </>}
       </main>
     </>

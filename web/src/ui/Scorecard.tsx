@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks'
-import { Bar, Card, Dialog, go, replace, ukDate, useData } from './common'
+import { Bar, Card, Dialog, go, replace, ukDate, useData, useDesktop } from './common'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
@@ -21,6 +21,7 @@ export function Scorecard({ id }: { id: string }) {
   const mine = useData(finished) ?? []
   const model = useData(getModel)
   const account = useData(getAccount)
+  const desktop = useDesktop()
   const [locOpen, setLocOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   if (!round) return <Bar title="Scorecard" onBack={() => go('/')} />
@@ -52,14 +53,15 @@ export function Scorecard({ id }: { id: string }) {
           </Card>
         )}
         {round.groupRole !== 'MIRROR' && <div class="row">
-          {round.status === 'COMPLETED'
+          {desktop ? <button class="filled" onClick={() => go(`/grid/${round.id}`)}>Edit scores</button>
+            : round.status === 'COMPLETED'
             ? <button class="tonal" onClick={async () => { await setStatus(round, 'IN_PROGRESS'); go(`/score/${group[0]?.id ?? round.id}`) }}>Reopen to edit</button>
             : <button class="filled" onClick={() => go(`/score/${group[0]?.id ?? round.id}`)}>Carry on scoring</button>}
           <button class="outlined" onClick={() => go(`/edit/${round.id}`)}>Edit round details</button>
           <button class="danger" onClick={() => setConfirmDelete(true)}>Delete</button>
         </div>}
         </div><div>
-        <TargetTable round={round} onTarget={round.groupRole !== 'MIRROR' ? n => go(`/score/${group[0]?.id ?? round.id}?t=${n}`) : undefined} />
+        <TargetTable round={round} onTarget={round.groupRole === 'MIRROR' ? undefined : desktop ? () => go(`/grid/${round.id}`) : n => go(`/score/${group[0]?.id ?? round.id}?t=${n}`)} />
         </div></div>
       </main>
       <LocationSheet roundId={round.id} open={locOpen} onClose={() => setLocOpen(false)} />

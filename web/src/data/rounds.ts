@@ -234,3 +234,23 @@ export async function updateDetails(id: string, shootDate: string, targetCount: 
   changed.push(one(r, archerClass, ageGroup, bowStyle))
   await putRounds(changed)
 }
+
+/**
+ * A round typed in from paper on desktop (2.6.02), or new scores for an existing round. Details as given; location:
+ * {id,name} sets it, null clears it, undefined leaves it.
+ */
+export async function saveTypedRound(p: {
+  id?: string; type: RoundType; shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string
+  targets: TargetScore[]; finished: boolean; location?: { id: string; name: string } | null
+}): Promise<string> {
+  const base = p.id ? await getRound(p.id) : undefined
+  const r: Round = base ?? newRound({ shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle, type: p.type })
+  const loc = p.location === undefined ? {} : p.location === null ? { locationId: null, locationName: null, locationState: null }
+    : { locationId: p.location.id, locationName: p.location.name, locationState: null }
+  await putRound({
+    ...r, ...loc, shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle,
+    targets: p.targets, status: p.finished ? 'COMPLETED' : 'IN_PROGRESS', updatedUtc: nowUtc(), pending: true, failed: false,
+  })
+  if (p.finished) syncNow()
+  return r.id
+}
