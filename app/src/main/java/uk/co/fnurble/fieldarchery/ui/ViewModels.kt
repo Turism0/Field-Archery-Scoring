@@ -1276,6 +1276,8 @@ class AccountViewModel(
 data class NewRoundForm(
     val shootDate: LocalDate = LocalDate.now(),
     val targetCountText: String = "",
+    /** Optional (2.7): the target the archer starts on, e.g. 12 on a 36-target course. Just noted on the scorecard. */
+    val startTargetText: String = "",
     val archerClass: ArcherClass? = null,
     /** Manual choice for this round; null = use the profile (manual or from date of birth). */
     val ageGroupChoice: AgeGroup? = null,
@@ -1293,6 +1295,10 @@ data class NewRoundForm(
     val error: String? = null,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
+
+    /** The start target, if one was typed and it's a target on this round. */
+    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> targetCount?.let { n in 1..it } ?: false }
+    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && targetCount != null && startTarget == null
 
     /** At least you and whoever's been added here; at most the group limit. */
     val liveExpectedRange: IntRange get() = (members.size + 1)..RoundRepository.MAX_GROUP
@@ -1317,7 +1323,7 @@ data class NewRoundForm(
 
     val isValid: Boolean
         get() = targetCount != null && archerClass != null && ageGroup != null && bowStyle != null &&
-            (!group || live || members.isNotEmpty()) && (!live || liveExpected != null)
+            (!group || live || members.isNotEmpty()) && (!live || liveExpected != null) && !startTargetError
 }
 
 /** Someone being added to a group round: a friend (from your friends list) or a guest (name only). */
@@ -1398,7 +1404,7 @@ class NewRoundViewModel(
             val ownId = rounds.createGroupRound(
                 f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                 f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
-                groupId = groupId, live = true,
+                groupId = groupId, live = true, startTarget = f.startTarget,
             )
             try {
                 repo.create(groupId, f.liveMethod, f.liveExpected ?: 0)
@@ -1420,9 +1426,10 @@ class NewRoundViewModel(
                 rounds.createGroupRound(
                     f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                     f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
+                    startTarget = f.startTarget,
                 )
             } else {
-                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type)
+                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type, f.startTarget)
             }
             // GPS fix in the background (if allowed); scoring starts straight away.
             locations.captureFor(id)
@@ -1540,6 +1547,8 @@ data class EditRoundForm(
     val archerClass: ArcherClass,
     val ageGroup: AgeGroup,
     val bowStyle: BowStyle,
+    /** Optional (2.7): the target the round started on. */
+    val startTargetText: String = "",
     /** As the round is now, to warn about removing scored targets. */
     val original: Round,
     /** In a group: whose round this is ("You", a friend or a guest); null when it's not a group round. */
@@ -1554,9 +1563,12 @@ data class EditRoundForm(
     /** More targets on a finished round reopens it. */
     val reopens: Boolean get() = (targetCount ?: 0) > original.targetCount && original.status == RoundStatus.COMPLETED
 
+    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> targetCount?.let { n in 1..it } ?: false }
+    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && targetCount != null && startTarget == null
+
     val changed: Boolean
         get() = shootDate != original.shootDate || targetCount != original.targetCount || archerClass != original.archerClass ||
-            ageGroup != original.ageGroup || bowStyle != original.bowStyle
+            ageGroup != original.ageGroup || bowStyle != original.bowStyle || startTarget != original.startTarget
 }
 
 /** Edit a round's details: date, number of targets, class, age group, bow style. Nav arg "roundId". */
@@ -1570,7 +1582,8 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
         viewModelScope.launch {
             val r = rounds.round(roundId).first { it != null }!!
             val member = rounds.group(roundId).first().firstOrNull { it.roundId == roundId }
-            _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle, r, member?.name)
+            _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle,
+                r.startTarget?.toString().orEmpty(), r, member?.name)
         }
     }
 
@@ -1579,8 +1592,9 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
     fun save(onDone: () -> Unit) {
         val f = _form.value ?: return
         val count = f.targetCount ?: return
+        if (f.startTargetError) return
         viewModelScope.launch {
-            rounds.updateDetails(roundId, f.shootDate, count, f.archerClass, f.ageGroup, f.bowStyle)
+            rounds.updateDetails(roundId, f.shootDate, count, f.archerClass, f.ageGroup, f.bowStyle, f.startTarget)
             onDone()
         }
     }

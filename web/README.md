@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.6.03)
+# Field Archery Scoring – web app (2.7)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -21,6 +21,9 @@ two- or three-column pages (`.split`, `.grid2`, `.grid3` in `styles.css`; one co
 **In 2.6.02:** desktop is for catching up, not live scoring: **Add a round** types in a paper scorecard as a score sheet
 (`ui/PaperEntry.tsx`, rules in `domain/paper.ts` with `test/paper.test.ts`), and scorecards have **Edit scores** with the same
 sheet. Live groups aren't offered on desktop.
+
+**In 2.7:** an optional starting target on new rounds, Add a round and Round details, shown on the scorecard (`startTarget` in
+the round JSON; a live group's comes from the host).
 
 ## How it's built
 

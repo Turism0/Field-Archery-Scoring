@@ -104,7 +104,7 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | GET | `/api/friends/{archerId}/rounds/{roundId}` | Bearer token | One finished round with targets and animals (read-only) |
 | GET | `/api/rounds?since=&afterId=&limit=` | Bearer token | `{ rounds: [...], more }`: own rounds changed after the cursor, oldest change first, deleted ones included; full rounds with targets and animals. No `since` = everything. Page with the last round's `serverUpdatedUtc` + `roundId`. |
 
-| PUT | `/api/groups/{groupId}` | Host; `{ code, method, roundType, targetCount, shootDate, locationId, status, members, order?, scorers? }` | The group (as GET). The host's phone makes the id and the 6-character code (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`). `method`: `SINGLE` (one scorer, others watching), `DOUBLE` (two scorers, saved when both match), `MULTI` (3+ scorers, nobody scores their own card, two per card, shared evenly), `SELF`. `status`: `OPEN` → `STARTED` → `CLOSED`. `members`: the host (`HOST`), friends added by name (`FRIEND`, must be friends) and guests (`GUEST`, `guestName`), each `{ memberId, kind, archerId?, guestName?, archerClass, ageGroup, bowStyle, roundId? }`; archers who joined stay. `scorers`: `[{ cardMemberId, scorerMemberId }]`; left out when starting = the usual ones. 409 `code_taken` / `group_started` / `group_closed`; 400 `invalid_group` / `invalid_scorers` with `problems` |
+| PUT | `/api/groups/{groupId}` | Host; `{ code, method, roundType, targetCount, shootDate, locationId, status, members, order?, scorers?, startTarget? }` | The group (as GET). The host's phone makes the id and the 6-character code (`ABCDEFGHJKMNPQRSTUVWXYZ23456789`). `method`: `SINGLE` (one scorer, others watching), `DOUBLE` (two scorers, saved when both match), `MULTI` (3+ scorers, nobody scores their own card, two per card, shared evenly), `SELF`. `status`: `OPEN` → `STARTED` → `CLOSED`. `members`: the host (`HOST`), friends added by name (`FRIEND`, must be friends) and guests (`GUEST`, `guestName`), each `{ memberId, kind, archerId?, guestName?, archerClass, ageGroup, bowStyle, roundId? }`; archers who joined stay. `scorers`: `[{ cardMemberId, scorerMemberId }]`; left out when starting = the usual ones. 409 `code_taken` / `group_started` / `group_closed`; 400 `invalid_group` / `invalid_scorers` with `problems` |
 | POST | `/api/groups/join` | `{ code, groupId?, memberId, archerClass, ageGroup, bowStyle, roundId? }` | The group. Joining again updates your details; a friend the host added becomes a joined member. 404 `no_such_group` if no open group has the code (codes last 24 hours or until closed) |
 | GET | `/api/groups` | Bearer token | `{ groups: [...] }`: groups you're in, last 30 days, newest first |
 | GET | `/api/groups/{groupId}?since=` | Members only | `{ group fields, me, members: [{ memberId, kind, archerId, name, …, scorers }], entries, cells: [{ targetNo, cardMemberId, state, points }], totals: [{ memberId, points, targetsDone }], serverTimeUtc }`. `entries` changed after `since` (pass the last `serverTimeUtc`); `state` `WAITING` / `MATCHED` / `MISMATCH` |
@@ -151,6 +151,7 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
                  "animals": [ { "index": 0, "state": "SCORED", "arrowNo": 1, "hit": "KILL", "points": 20 } ] } ] }
 ```
 
+- `"startTarget"` (API 2.7, optional): the target the archer started on, 1 to `targetCount` (`null` when not given). Only noted on the scorecard: targets keep their own numbers.
 - `"roundType"`: `BIG_GAME` (default when missing) or `WOODSMAN`. A Woodsman round's targets are `"type": "WOODSMAN"` with `"animals": []` and `"arrows"`: the arrows in order, `W` wound (5), `K` kill (30 / 20 / 10 on arrow 1 / 2 / 3, shooting stops), `M` miss (0), e.g. `"WK"` = 25; an unfinished target has fewer than 3 and no K. Override 0–30. Big Game targets have no arrows.
 - Every score is checked against the Big Game rules (allowed hit per arrow and its points, predator/prey shared arrows, fan size, overrides, target and round totals). Anything wrong is refused with a list of problems.
 - Optional `"locationId"`: the shoot location. An id that was merged is stored as the location kept; an unknown id is stored as no location (the round is still saved). Downloads include `locationId` and `locationName`.
@@ -193,6 +194,16 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing the start target (2.7)
+
+Run `sql/013_start_target.sql` in SSMS first (schema 9), then publish API 2.7.
+
+```powershell
+.\Test-StartTarget.ps1
+```
+
+A round's `startTarget` is kept and comes back, can be left out, and must be 1 to the number of targets; a live group's is set by the host and can be cleared. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing password reset (2.4)
 

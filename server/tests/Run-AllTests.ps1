@@ -18,7 +18,7 @@ param(
 )
 
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
-         'Test-Groups', 'Test-Offers', 'Test-Delete'
+         'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget'
 $owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap', 'Test-Reset'
 
 $results = @()

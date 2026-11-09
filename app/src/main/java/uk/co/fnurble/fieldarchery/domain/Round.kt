@@ -32,6 +32,8 @@ data class Round(
     val type: RoundType = RoundType.BIG_GAME,
     /** When the round was started on the phone (orders rounds shot on the same day). */
     val createdAtMillis: Long = 0,
+    /** The target the archer started on (2.7), just noted on the scorecard; null = not given. */
+    val startTarget: Int? = null,
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
     val targetsComplete: Int get() = targets.count { it.isComplete }

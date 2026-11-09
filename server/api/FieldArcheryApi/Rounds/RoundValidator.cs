@@ -60,6 +60,7 @@ public static class RoundValidator
         if (r.ShootDate < new DateOnly(2000, 1, 1) || r.ShootDate > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
             problems.Add("Shoot date is out of range.");
         if (r.ClientUpdatedUtc < r.ClientCreatedUtc) problems.Add("Updated time is before created time.");
+        if (r.StartTarget is { } st && (st < 1 || st > r.TargetCount)) problems.Add($"Start target must be 1 to {r.TargetCount}.");
 
         var targets = r.Targets ?? [];
         var numbers = targets.Select(t => t.TargetNo).OrderBy(n => n).ToList();

@@ -69,7 +69,7 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
         },
         bottomBar = {
             val f = form
-            BottomActionBar(text = "Save", enabled = f != null && f.targetCount != null && f.changed) {
+            BottomActionBar(text = "Save", enabled = f != null && f.targetCount != null && f.changed && !f.startTargetError) {
                 if (f != null && f.scoredRemoved.isNotEmpty()) confirmRemove = true else vm.save(onBack)
             }
         },
@@ -105,6 +105,15 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
                         f.reopens -> "Adds unscored targets and reopens the round"
                         else -> null
                     },
+                )
+                val startError = f.startTargetError
+                NumberField(
+                    label = "Starting target (optional)",
+                    value = f.startTargetText,
+                    onValue = { v -> vm.update { it.copy(startTargetText = v) } },
+                    isError = startError,
+                    supportingText = if (startError) "1 to ${f.targetCount}"
+                    else if (f.groupName != null) "The same for everyone in the group." else "The first target shot, if not 1.",
                 )
             }
 

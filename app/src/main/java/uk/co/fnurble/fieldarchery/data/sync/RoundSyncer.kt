@@ -256,6 +256,7 @@ internal fun RoundData.toJson(): JSONObject {
         .put("locationId", round.locationId ?: JSONObject.NULL)
         .put("roundType", round.roundType ?: "BIG_GAME")
         .put("groupId", round.groupId ?: JSONObject.NULL)
+        .put("startTarget", round.startTarget ?: JSONObject.NULL)
         .put("targets", targetArray)
 }
 
@@ -281,6 +282,7 @@ internal fun JSONObject.toRoundData(): RoundData {
         locationState = if (optStringOrNull("locationId") != null) LocationState.SET else null,
         // Big Game is stored as null on the phone (as before round types).
         roundType = optStringOrNull("roundType")?.takeIf { it != "BIG_GAME" },
+        startTarget = if (has("startTarget") && !isNull("startTarget")) getInt("startTarget") else null,
     )
     val targets = mutableListOf<TargetEntity>()
     val animals = mutableListOf<AnimalEntity>()

@@ -21,6 +21,7 @@ export function NewRound() {
   const [mode, setMode] = useState<Mode>('solo')
   const [date, setDate] = useState(today())
   const [targets, setTargets] = useState('')
+  const [startText, setStartText] = useState('')
   const [cls, setCls] = useState<ArcherClass>()
   const [age, setAge] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
@@ -41,16 +42,19 @@ export function NewRound() {
 
   const count = Number(targets)
   const countOk = Number.isInteger(count) && count >= 1 && count <= MAX_TARGETS
+  const startN = Number(startText)
+  const startOk = !startText || (countOk && startN >= 1 && startN <= count)
   const exp = Number(expected)
   const expOk = mode !== 'live' || (Number.isInteger(exp) && exp >= members.length + 1 && exp <= MAX_GROUP)
-  const valid = countOk && cls && age && bow && (mode !== 'group' || members.length > 0) && expOk && (mode !== 'live' || !!account)
+  const valid = countOk && startOk && cls && age && bow && (mode !== 'group' || members.length > 0) && expOk && (mode !== 'live' || !!account)
 
   async function start() {
     if (!valid || busy) return
     setBusy(true); setError(null)
     try {
       const id = await startRound({ shootDate: date, targetCount: count, archerClass: cls!, ageGroup: age!, bowStyle: bow!, type,
-        members: mode === 'solo' ? [] : members, groupId: mode === 'live' ? crypto.randomUUID() : undefined })
+        members: mode === 'solo' ? [] : members, groupId: mode === 'live' ? crypto.randomUUID() : undefined,
+        startTarget: startText ? startN : null })
       captureFor(id)   // shoot location: one GPS position, looked up when there's signal
       if (mode === 'live') {
         const r = (await getRound(id))!
@@ -96,6 +100,9 @@ export function NewRound() {
           <Field label="Shoot date"><input type="date" value={date} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
           <Field label="Number of targets"><input inputMode="numeric" value={targets} onInput={e => setTargets((e.target as HTMLInputElement).value.replace(/\D/g, ''))} /></Field>
           <div class="row">{[20, 24, 30, 36, 40].map(n => <button class={`chip ${count === n ? 'on' : ''}`} onClick={() => setTargets(String(n))}>{n}</button>)}</div>
+          <Field label="Starting target (optional)" help={!startOk ? `1 to ${countOk ? count : '–'}` : 'The first target you shoot, if not 1. Just noted on the scorecard.'}>
+            <input inputMode="numeric" value={startText} onInput={e => setStartText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
+          </Field>
         </Card>
         <Card title={mode === 'solo' ? 'Archer' : 'You'} sub="From your profile. Changes here only affect this round.">
           <ArcherFields cls={cls} age={age} bow={bow} onChange={c => { if (c.cls) setCls(c.cls); if (c.age) setAge(c.age); if (c.bow) setBow(c.bow) }} />

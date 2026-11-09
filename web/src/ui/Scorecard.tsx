@@ -78,7 +78,8 @@ export function RoundHeader({ round }: { round: Round }) {
   return (
     <Card cls="hi">
       <div class="row between"><div><div class="big">{roundTotal(round)}</div><div>{ROUND_TYPE_NAMES[round.type]} · {targetsLine(round)}</div></div>
-        <div style="text-align:right"><div>{ukDate(round.shootDate)}</div><div>{classLine(round)}</div>{round.locationName && <div>{round.locationName}</div>}</div></div>
+        <div style="text-align:right"><div>{ukDate(round.shootDate)}</div><div>{classLine(round)}</div>{round.locationName && <div>{round.locationName}</div>}
+          {round.startTarget && <div>Started at target {round.startTarget}</div>}</div></div>
     </Card>
   )
 }

@@ -123,6 +123,8 @@ data class LiveGroupState(
     val expected: Int = 0,
     /** Hosts who were taken over from (2.3.01). */
     val formerHosts: Set<String> = emptySet(),
+    /** The target the group started on (2.7), set by the host; just noted on everyone's card. */
+    val startTarget: Int? = null,
 ) {
     val isHost: Boolean get() = myKind == "HOST"
     /** Everyone the host expects is in (or no number was given). */
@@ -337,6 +339,7 @@ class LiveGroupRepository(
             roundType = RoundType.entries.firstOrNull { it.name == mine.roundType } ?: RoundType.BIG_GAME,
             targetCount = mine.targetCount, shootDate = mine.shootDate, locationId = mine.locationId,
             locationName = mine.locationName, status = LiveRules.OPEN, members = members, expected = expected,
+            startTarget = mine.startTarget,
         )
         prefs.edit().putString(groupId, mine.id).putString("$groupId:code", code).putString("$groupId:method", method.code)
             .putBoolean("$groupId:host", true)
@@ -1093,6 +1096,7 @@ class LiveGroupRepository(
             manualChecks = r.manualChecks,
             expected = r.expected,
             formerHosts = r.formerHosts,
+            startTarget = r.startTarget,
         )
     }
 
@@ -1121,11 +1125,18 @@ class LiveGroupRepository(
             if (existing == null) {
                 rounds.addGroupRound(
                     s.groupId, m.memberId, role, if (isMe) null else m.name, m.sortOrder, s.shootDate, s.targetCount,
-                    s.roundType, m.archerClass, m.ageGroup, m.bowStyle, s.locationId, s.locationName,
+                    s.roundType, m.archerClass, m.ageGroup, m.bowStyle, s.locationId, s.locationName, s.startTarget,
                 )
             } else if (existing.groupRole != role || existing.groupOrder != m.sortOrder || (!isMe && existing.groupName != m.name)) {
                 rounds.setGroupMember(m.memberId, role, if (isMe) null else m.name, m.sortOrder)
             }
+        }
+        // Start target (2.7): the host's own round decides (changed with Round details); the others take the host's.
+        if (s.isHost) {
+            val mineStart = local[s.myMemberId]?.startTarget
+            if (mineStart != s.startTarget) lock.withLock { replicas.value[s.groupId]?.let { put(it.copy(startTarget = mineStart)) } }
+        } else {
+            rounds.setGroupStartTarget(s.groupId, s.startTarget)
         }
         for ((key, target) in savedTargets(s)) {
             val (targetNo, card) = key
@@ -1211,6 +1222,7 @@ class LiveGroupRepository(
         .put("shootDate", r.shootDate.toString())
         .put("locationId", r.locationId ?: JSONObject.NULL)
         .put("locationName", r.locationName ?: JSONObject.NULL)
+        .put("startTarget", r.startTarget ?: JSONObject.NULL)
         .put("status", r.status)
         // Phone to phone only (the server doesn't keep these): Start waits for this many (2.3.01); who's host, and since when.
         .put("expected", r.expected)
@@ -1244,6 +1256,8 @@ class LiveGroupRepository(
         expected = if (json.has("expected")) json.optInt("expected") else base?.expected ?: 0,
         hostTerm = maxOf(base?.hostTerm ?: 0, json.optInt("hostTerm", 0)),
         formerHosts = base?.formerHosts.orEmpty() + json.optJSONArray("formerHosts").strings(),
+        // Servers before 2.7 don't send it: keep what this phone had.
+        startTarget = if (!json.has("startTarget")) base?.startTarget else if (json.isNull("startTarget")) null else json.optInt("startTarget"),
     )
 
     /** The host's group for PUT /api/groups/{id}: you, friends and guests (archers on their own phones join themselves). */
@@ -1269,6 +1283,7 @@ class LiveGroupRepository(
             .put("targetCount", r.targetCount)
             .put("shootDate", r.shootDate.toString())
             .put("locationId", r.locationId ?: JSONObject.NULL)
+            .put("startTarget", r.startTarget ?: JSONObject.NULL)
             .put("status", status)
             .put("members", members)
             .apply {
@@ -1353,6 +1368,8 @@ internal data class LiveReplica(
     val hostTerm: Int = 0,
     /** Hosts who were taken over from (their cards aren't sent to them as friends' rounds). */
     val formerHosts: Set<String> = emptySet(),
+    /** The target the group started on (2.7), set by the host. */
+    val startTarget: Int? = null,
 ) {
     fun ruleMembers() = members.map { LiveRules.Member(it.memberId, it.kind, it.sortOrder) }
 }

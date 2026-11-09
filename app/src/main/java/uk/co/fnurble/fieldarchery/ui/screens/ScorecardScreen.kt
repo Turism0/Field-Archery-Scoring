@@ -215,6 +215,9 @@ internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = scheme.onSurfaceVariant,
             )
+            r.startTarget?.let {
+                Text("Started at target $it", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            }
             if (showLocation) {
                 r.location.label()?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)

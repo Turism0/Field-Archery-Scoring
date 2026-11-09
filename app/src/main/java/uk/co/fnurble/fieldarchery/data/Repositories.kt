@@ -175,6 +175,8 @@ class RoundRepository(
         ageGroup: AgeGroup,
         bowStyle: BowStyle,
         type: RoundType = RoundType.BIG_GAME,
+        /** The target the archer started on (2.7), or null. */
+        startTarget: Int? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val now = Instant.now(clock)
@@ -192,6 +194,7 @@ class RoundRepository(
                 createdAt = now,
                 updatedAt = now,
                 roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
+                startTarget = startTarget?.takeIf { it in 1..targetCount },
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -215,6 +218,8 @@ class RoundRepository(
         /** Live groups make the group id first (it's also the server's); others may be empty (people join later). */
         groupId: String = UUID.randomUUID().toString(),
         live: Boolean = false,
+        /** The target the group started on (2.7), the same on everyone's card, or null. */
+        startTarget: Int? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         require(live || others.isNotEmpty()) { "A group needs someone else" }
@@ -239,6 +244,7 @@ class RoundRepository(
                     groupName = name,
                     groupArcherId = archerId,
                     groupOrder = order,
+                    startTarget = startTarget?.takeIf { it in 1..targetCount },
                 ),
                 targets = targets.map { it.toEntity(id, now) },
                 animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -268,6 +274,7 @@ class RoundRepository(
         bowStyle: BowStyle,
         locationId: String?,
         locationName: String?,
+        startTarget: Int? = null,
     ) {
         if (dao.getRound(id) != null) return
         val now = Instant.now(clock)
@@ -291,6 +298,7 @@ class RoundRepository(
                 locationId = locationId,
                 locationName = locationName,
                 locationState = if (locationId != null) uk.co.fnurble.fieldarchery.data.local.LocationState.SET else null,
+                startTarget = startTarget?.takeIf { it in 1..targetCount },
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -380,16 +388,20 @@ class RoundRepository(
         archerClass: ArcherClass,
         ageGroup: AgeGroup,
         bowStyle: BowStyle,
+        /** The target the round started on (2.7; null = none); in a group it's the same for everyone. Default: unchanged. */
+        startTarget: Int? = KEEP_START,
     ) {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val r = dao.getRound(roundId) ?: return
-        // In a group, the date and number of targets are the same for everyone; class, age group and bow are per archer.
+        val start = (if (startTarget == KEEP_START) r.startTarget else startTarget)?.takeIf { it in 1..targetCount }
+        // In a group, the date, number of targets and start target are the same for everyone; class, age group and bow
+        // are per archer.
         for (other in groupRoundsOf(roundId)) {
-            if (other.id != roundId && (other.shootDate != shootDate || other.targetCount != targetCount)) {
-                updateOne(other, shootDate, targetCount, other.archerClass, other.ageGroup, other.bowStyle)
+            if (other.id != roundId && (other.shootDate != shootDate || other.targetCount != targetCount || other.startTarget != start)) {
+                updateOne(other, shootDate, targetCount, other.archerClass, other.ageGroup, other.bowStyle, start)
             }
         }
-        updateOne(r, shootDate, targetCount, archerClass, ageGroup, bowStyle)
+        updateOne(r, shootDate, targetCount, archerClass, ageGroup, bowStyle, start)
         onChanged()
     }
 
@@ -400,6 +412,7 @@ class RoundRepository(
         archerClass: ArcherClass,
         ageGroup: AgeGroup,
         bowStyle: BowStyle,
+        startTarget: Int?,
     ) {
         val roundId = r.id
         val now = Instant.now(clock)
@@ -411,6 +424,7 @@ class RoundRepository(
                 archerClass = archerClass,
                 ageGroup = ageGroup,
                 bowStyle = bowStyle,
+                startTarget = startTarget,
                 status = if (added.isNotEmpty()) RoundStatus.IN_PROGRESS else r.status,
                 updatedAt = now,
                 syncState = SyncState.PENDING,
@@ -422,6 +436,14 @@ class RoundRepository(
 
     suspend fun setStatus(roundId: String, status: RoundStatus) = touch(roundId) { it.copy(status = status) }
 
+    /** Live groups (2.7): the host's start target for every card in the group on this phone (only where it differs). */
+    suspend fun setGroupStartTarget(groupId: String, startTarget: Int?) {
+        for (r in dao.getGroup(groupId)) {
+            val start = startTarget?.takeIf { it in 1..r.targetCount }
+            if (r.startTarget != start) touch(r.id) { it.copy(startTarget = start) }
+        }
+    }
+
     suspend fun delete(roundId: String) = touch(roundId) { it.copy(deleted = true) }
 
     private suspend fun touch(roundId: String, change: (RoundEntity) -> RoundEntity) {
@@ -431,6 +453,8 @@ class RoundRepository(
     }
 
     companion object {
+        /** updateDetails: leave the start target as it is. */
+        const val KEEP_START = -1
         const val MAX_TARGETS = 100
         /** Group size limit, including the scorer. */
         const val MAX_GROUP = 8
@@ -459,6 +483,7 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         status = status,
         type = type(),
         createdAtMillis = createdAt.toEpochMilli(),
+        startTarget = startTarget,
         location = RoundLocation(
             status = when (locationState) {
                 null -> LocationStatus.NONE

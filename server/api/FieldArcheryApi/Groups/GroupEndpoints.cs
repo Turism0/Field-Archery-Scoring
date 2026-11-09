@@ -14,7 +14,8 @@ namespace FieldArcheryApi.Groups;
 /// Group scoring (API 1.9.06). All calls need "Authorization: Bearer &lt;token&gt;".
 ///   PUT    /api/groups/{groupId}                     host: create or update the group (id and code made by the host's phone)
 ///          { code, method, roundType, targetCount, shootDate, locationId, status, members: [HOST, FRIEND and GUEST members],
-///            order?: [every memberId in scoring order], scorers?: [{ cardMemberId, scorerMemberId }] }
+///            order?: [every memberId in scoring order], scorers?: [{ cardMemberId, scorerMemberId }],
+///            startTarget? (2.7: the target the group started on, just noted on the cards) }
 ///          → the group (as GET). 409 code_taken if another open group has the code.
 ///   POST   /api/groups/join  { code, groupId?, memberId, archerClass, ageGroup, bowStyle, roundId? }  → the group.
 ///          Joining again updates your details. A friend the host added who then joins becomes a joined member.
@@ -41,7 +42,7 @@ public static class GroupEndpoints
 
     public sealed record GroupIn(string? Code, string? Method, string? RoundType, int TargetCount, DateOnly ShootDate,
         Guid? LocationId, string? Status, IReadOnlyList<MemberIn>? Members, IReadOnlyList<Guid>? Order = null,
-        IReadOnlyList<ScorerIn>? Scorers = null);
+        IReadOnlyList<ScorerIn>? Scorers = null, int? StartTarget = null);
 
     public sealed record JoinIn(string? Code, Guid? GroupId, Guid MemberId, string ArcherClass, string AgeGroup, string BowStyle,
         Guid? RoundId = null);
@@ -51,7 +52,7 @@ public static class GroupEndpoints
     public sealed record EntriesIn(IReadOnlyList<EntryIn>? Entries);
 
     private sealed record GroupRow(Guid GroupId, string Code, Guid HostId, string Method, string RoundType, short TargetCount,
-        DateTime ShootDate, Guid? LocationId, string Status, DateTime CreatedUtc, DateTime UpdatedUtc);
+        DateTime ShootDate, Guid? LocationId, string Status, DateTime CreatedUtc, DateTime UpdatedUtc, short? StartTarget);
 
     private sealed record MemberRow(Guid MemberId, string Kind, Guid? ArcherId, string? GuestName, string? Username,
         string ArcherClass, string AgeGroup, string BowStyle, short SortOrder, Guid? RoundId);
@@ -94,6 +95,7 @@ public static class GroupEndpoints
         if (g.TargetCount is < 1 or > RoundValidator.MaxTargets) problems.Add($"Target count must be 1 to {RoundValidator.MaxTargets}.");
         if (g.ShootDate < new DateOnly(2000, 1, 1) || g.ShootDate > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
             problems.Add("Shoot date is out of range.");
+        if (g.StartTarget is { } st && (st < 1 || st > g.TargetCount)) problems.Add($"Start target must be 1 to {g.TargetCount}.");
         var sent = g.Members ?? [];
         foreach (var m in sent) problems.AddRange(MemberProblems(m.ArcherClass, m.AgeGroup, m.BowStyle));
         var kinds = sent.Select(m => m.Kind?.Trim().ToUpperInvariant()).ToList();
@@ -154,16 +156,17 @@ public static class GroupEndpoints
         }
 
         var p = new { groupId, code, me, method, roundType, targetCount = (short)g.TargetCount,
-            shootDate = g.ShootDate.ToDateTime(TimeOnly.MinValue), locationId, status };
+            shootDate = g.ShootDate.ToDateTime(TimeOnly.MinValue), locationId, status,
+            startTarget = g.StartTarget is { } stt ? (short?)stt : null };
         await conn.ExecuteAsync(new CommandDefinition(existing is null
             ? """
-              INSERT dbo.ScoreGroup (GroupId, Code, HostId, Method, RoundType, TargetCount, ShootDate, LocationId, Status)
-              VALUES (@groupId, @code, @me, @method, @roundType, @targetCount, @shootDate, @locationId, @status);
+              INSERT dbo.ScoreGroup (GroupId, Code, HostId, Method, RoundType, TargetCount, ShootDate, LocationId, Status, StartTarget)
+              VALUES (@groupId, @code, @me, @method, @roundType, @targetCount, @shootDate, @locationId, @status, @startTarget);
               """
             : """
               UPDATE dbo.ScoreGroup
               SET Code = @code, Method = @method, RoundType = @roundType, TargetCount = @targetCount, ShootDate = @shootDate,
-                  LocationId = @locationId, Status = @status, UpdatedUtc = SYSUTCDATETIME()
+                  LocationId = @locationId, Status = @status, StartTarget = @startTarget, UpdatedUtc = SYSUTCDATETIME()
               WHERE GroupId = @groupId;
               """, p, tx, cancellationToken: ct));
 
@@ -369,6 +372,7 @@ public static class GroupEndpoints
             group.Method,
             group.RoundType,
             targetCount = (int)group.TargetCount,
+            startTarget = group.StartTarget is { } gst ? (int?)gst : null,
             shootDate = DateOnly.FromDateTime(group.ShootDate),
             group.LocationId,
             locationName,
@@ -556,7 +560,7 @@ public static class GroupEndpoints
     // ---- Helpers ----------------------------------------------------------------------------------------------
 
     private const string GroupCols =
-        "GroupId, Code, HostId, Method, RoundType, TargetCount, CAST(ShootDate AS datetime2(3)) AS ShootDate, LocationId, Status, CreatedUtc, UpdatedUtc";
+        "GroupId, Code, HostId, Method, RoundType, TargetCount, CAST(ShootDate AS datetime2(3)) AS ShootDate, LocationId, Status, CreatedUtc, UpdatedUtc, StartTarget";
 
     private const string MembersSql = """
         SELECT m.MemberId, m.Kind, m.ArcherId, m.GuestName, a.Username, m.ArcherClass, m.AgeGroup, m.BowStyle, m.SortOrder, m.RoundId

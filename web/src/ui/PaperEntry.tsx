@@ -30,6 +30,7 @@ export function PaperEntry({ id }: { id?: string }) {
   const [age, setAge] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
   const [locId, setLocId] = useState<string>('')
+  const [start, setStart] = useState('')
   const [known, setKnown] = useState<MapLocation[]>([])
   const [rows, setRows] = useState<RowEntry[]>([])
   const [busy, setBusy] = useState(false)
@@ -39,7 +40,7 @@ export function PaperEntry({ id }: { id?: string }) {
     if (id) getRound(id).then(r => {
       if (!r) return
       setExisting(r); setType(r.type); setDate(r.shootDate); setCount(String(r.targetCount)); setCls(r.archerClass); setAge(r.ageGroup)
-      setBow(r.bowStyle); setLocId(r.locationId ?? '')
+      setBow(r.bowStyle); setLocId(r.locationId ?? ''); setStart(r.startTarget ? String(r.startTarget) : '')
       setRows(Array.from({ length: r.targetCount }, (_, i) => { const t = r.targets.find(x => x.targetNo === i + 1); return t ? targetToRow(t) : emptyRow(r.type) }))
       if (r.locationId && r.locationName) setKnown(k => k.some(x => x.id === r.locationId) ? k : [...k, { id: r.locationId!, name: r.locationName!, latitude: 0, longitude: 0, isPrivate: false, myRounds: 0, rounds: 0 }])
     })
@@ -63,7 +64,8 @@ export function PaperEntry({ id }: { id?: string }) {
   const targets = results.map(x => ('target' in x ? x.target : null))
   const scored = targets.filter(t => t && isComplete(t)).length
   const total = targets.reduce((s, t) => s + (t ? totalPoints(t) : 0), 0)
-  const valid = countOk && cls && age && bow && date && !errors && rows.length === n
+  const startOk = !start || (countOk && Number(start) >= 1 && Number(start) <= n)
+  const valid = countOk && startOk && cls && age && bow && date && !errors && rows.length === n
 
   const setCell = (i: number, j: number, v: string) => setRows(rs => rs.map((r, k) => k === i ? { ...r, cells: r.cells.map((c, m) => m === j ? v : c) } : r))
   const setKind = (i: number, v: string) => setRows(rs => rs.map((r, k) => {
@@ -87,7 +89,7 @@ export function PaperEntry({ id }: { id?: string }) {
       const rid = await saveTypedRound({
         id: existing?.id, type, shootDate: date, targetCount: n, archerClass: cls!, ageGroup: age!, bowStyle: bow!,
         targets: targets as TargetScore[],
-        finished, location: loc ? { id: loc.id, name: loc.name } : locId === '' ? null : undefined,
+        finished, startTarget: start ? Number(start) : null, location: loc ? { id: loc.id, name: loc.name } : locId === '' ? null : undefined,
       })
       toast(existing ? 'Saved.' : finished ? 'Round added.' : 'Saved as in progress.')
       existing ? back() : replace(`/card/${rid}`)
@@ -108,6 +110,9 @@ export function PaperEntry({ id }: { id?: string }) {
               <Field label="Shoot date"><input type="date" value={date} max={today()} disabled={!!existing?.groupId} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
               <Field label="Targets"><input inputMode="numeric" value={count} disabled={!!existing?.groupId} onInput={e => setCount((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></Field>
             </div>
+            <Field label="Starting target (optional)" help={!startOk ? `1 to ${countOk ? n : '–'}` : 'The first target shot, if not 1. Targets keep their numbers.'}>
+              <input inputMode="numeric" value={start} style="max-width:120px" onInput={e => setStart((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
+            </Field>
             {existing?.groupId && <div class="sub">A group round: change its date or number of targets with Edit round details (it changes everyone's).</div>}
             {!existing?.groupId && <div class="row">{[20, 24, 30, 36, 40].map(t => <button class={`chip ${n === t ? 'on' : ''}`} onClick={() => setCount(String(t))}>{t}</button>)}</div>}
             <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />

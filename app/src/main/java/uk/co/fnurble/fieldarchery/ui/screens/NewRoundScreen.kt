@@ -203,6 +203,14 @@ fun NewRoundScreen(
                         )
                     }
                 }
+                val startError = f.startTargetError
+                NumberField(
+                    label = "Starting target (optional)",
+                    value = f.startTargetText,
+                    onValue = { v -> vm.update { it.copy(startTargetText = v) } },
+                    isError = startError,
+                    supportingText = if (startError) "1 to ${f.targetCount}" else "The first target you shoot, if not 1. Just noted on the scorecard.",
+                )
             }
 
             SectionCard(

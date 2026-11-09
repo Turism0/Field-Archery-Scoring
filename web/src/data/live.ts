@@ -3,7 +3,7 @@
 import { getKv, groupRounds, setKv } from './db'
 import { ApiError, request } from './api'
 import { getAccount } from './account'
-import { addGroupRound, saveTarget, setGroupMember, setStatus, deleteRound } from './rounds'
+import { addGroupRound, saveTarget, setGroupMember, setGroupStartTarget, setStatus, deleteRound } from './rounds'
 import { getRound } from './db'
 import { targetFromJson, targetToJson, nowUtc, type AgeGroup, type ArcherClass, type GroupRole, type Round } from '../domain/round'
 import { isBlank, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
@@ -33,6 +33,8 @@ export interface LiveState {
   groupId: string; code: string; method: string; roundType: RoundType; targetCount: number; shootDate: string
   locationId: string | null; locationName: string | null; status: string; myMemberId: string; myKind: string
   members: LiveMember[]; entries: LiveEntry[]; cells: Record<string, string>   // "target|card" → WAITING / MATCHED / MISMATCH
+  /** The target the group started on (2.7), set by the host; undefined from servers before 2.7. */
+  startTarget?: number | null
 }
 
 /** What this device keeps about a live group. */
@@ -102,7 +104,7 @@ async function groupBody(gid: string, info: LiveInfo, status: string) {
   })
   return {
     code: info.code, method: info.method, roundType: mine.type, targetCount: mine.targetCount, shootDate: mine.shootDate,
-    locationId: mine.locationId ?? null, status, members,
+    locationId: mine.locationId ?? null, status, members, startTarget: mine.startTarget ?? null,
   }
 }
 
@@ -221,6 +223,7 @@ function parse(j: any): LiveState {
     groupId: j.groupId, code: j.code, method: j.method, roundType: j.roundType === 'WOODSMAN' ? 'WOODSMAN' : 'BIG_GAME',
     targetCount: j.targetCount, shootDate: String(j.shootDate).slice(0, 10), locationId: j.locationId ?? null,
     locationName: j.locationName ?? null, status: j.status, myMemberId: j.me.memberId, myKind: j.me.kind,
+    startTarget: j.startTarget === undefined ? undefined : j.startTarget ?? null,
     members: (j.members as any[]).map(m => ({
       memberId: m.memberId, kind: m.kind, archerId: m.archerId ?? null, name: m.name ?? '?',
       archerClass: (m.archerClass === 'L' ? 'LADIES' : 'GENTS') as ArcherClass, ageGroup: m.ageGroup, bowStyle: m.bowStyle,
@@ -250,12 +253,14 @@ async function apply(s: LiveState) {
       await addGroupRound({
         id: m.memberId, groupId: s.groupId, groupRole: role, groupName: isMe ? null : m.name, groupOrder: m.sortOrder,
         shootDate: s.shootDate, targetCount: s.targetCount, type: s.roundType, archerClass: m.archerClass, ageGroup: m.ageGroup,
-        bowStyle: m.bowStyle, locationId: s.locationId, locationName: s.locationName,
+        bowStyle: m.bowStyle, locationId: s.locationId, locationName: s.locationName, startTarget: s.startTarget ?? null,
       })
     } else if (existing.groupRole !== role || existing.groupOrder !== m.sortOrder || (!isMe && existing.groupName !== m.name)) {
       await setGroupMember(m.memberId, role, isMe ? null : m.name, m.sortOrder)
     }
   }
+  // Start target (2.7): the host's round decides (sent with the group); everyone else takes it.
+  if (!isHost(s) && s.startTarget !== undefined) await setGroupStartTarget(s.groupId, s.startTarget)
   // This device's own entries already on the server (e.g. after reloading).
   const mine = await myEntries(s.groupId)
   let added = false

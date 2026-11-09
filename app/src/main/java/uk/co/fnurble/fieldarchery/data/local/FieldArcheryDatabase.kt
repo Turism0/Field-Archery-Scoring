@@ -260,7 +260,7 @@ data class RoundData(
 
 @Database(
     entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -271,8 +271,15 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): FieldArcheryDatabase =
             Room.databaseBuilder(context, FieldArcheryDatabase::class.java, "fieldarchery.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
+
+        /** v5: the target a round started on (app 2.7). Existing rounds have none. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN start_target INTEGER")
+            }
+        }
 
         /** v4: groups scored on this phone (app 2.0). Existing rounds aren't in a group. */
         val MIGRATION_3_4 = object : Migration(3, 4) {

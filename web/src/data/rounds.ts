@@ -40,13 +40,14 @@ export interface MemberDraft {
 /** A round on your own, or a group scored on this device (you first, then the others in order). */
 export async function startRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
-  members?: MemberDraft[]; groupId?: string
+  members?: MemberDraft[]; groupId?: string; startTarget?: number | null
 }): Promise<string> {
   const groupId = p.members?.length || p.groupId ? (p.groupId ?? crypto.randomUUID()) : null
   const mine = newRound({ ...p, groupId, groupRole: groupId ? 'SCORER' : null, groupOrder: groupId ? 0 : null })
   const others = (p.members ?? []).map((m, i) => newRound({
     shootDate: p.shootDate, targetCount: p.targetCount, type: p.type, archerClass: m.archerClass, ageGroup: m.ageGroup,
     bowStyle: m.bowStyle, groupId, groupRole: m.role, groupName: m.name, groupArcherId: m.archerId ?? null, groupOrder: i + 1,
+    startTarget: p.startTarget,
   }))
   await putRounds([mine, ...others])
   return mine.id
@@ -216,20 +217,22 @@ export function startAutoSync() {
 }
 
 /** Round details (in a group the date and number of targets change for everyone; class, age and bow only this one). */
-export async function updateDetails(id: string, shootDate: string, targetCount: number, archerClass: ArcherClass, ageGroup: AgeGroup, bowStyle: string) {
+export async function updateDetails(id: string, shootDate: string, targetCount: number, archerClass: ArcherClass, ageGroup: AgeGroup, bowStyle: string,
+  startTarget: number | null = null) {
   const r = await getRound(id)
   if (!r) return
+  const start = startTarget != null && startTarget >= 1 && startTarget <= targetCount ? startTarget : null
   const one = (x: Round, c: ArcherClass, a: AgeGroup, b: string): Round => {
     const added = Array.from({ length: Math.max(0, targetCount - x.targetCount) }, (_, i) => newTarget(x.type, x.targetCount + i + 1))
     return {
-      ...x, shootDate, targetCount, archerClass: c, ageGroup: a, bowStyle: b,
+      ...x, shootDate, targetCount, archerClass: c, ageGroup: a, bowStyle: b, startTarget: start,
       targets: [...x.targets.filter(t => t.targetNo <= targetCount), ...added],
       status: added.length ? 'IN_PROGRESS' : x.status, updatedUtc: nowUtc(), pending: true, failed: false,
     }
   }
   const changed: Round[] = []
   for (const o of await groupOf(r)) {
-    if (o.id !== id && (o.shootDate !== shootDate || o.targetCount !== targetCount)) changed.push(one(o, o.archerClass, o.ageGroup, o.bowStyle))
+    if (o.id !== id && (o.shootDate !== shootDate || o.targetCount !== targetCount || (o.startTarget ?? null) !== start)) changed.push(one(o, o.archerClass, o.ageGroup, o.bowStyle))
   }
   changed.push(one(r, archerClass, ageGroup, bowStyle))
   await putRounds(changed)
@@ -241,7 +244,7 @@ export async function updateDetails(id: string, shootDate: string, targetCount: 
  */
 export async function saveTypedRound(p: {
   id?: string; type: RoundType; shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string
-  targets: TargetScore[]; finished: boolean; location?: { id: string; name: string } | null
+  targets: TargetScore[]; finished: boolean; location?: { id: string; name: string } | null; startTarget?: number | null
 }): Promise<string> {
   const base = p.id ? await getRound(p.id) : undefined
   const r: Round = base ?? newRound({ shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle, type: p.type })
@@ -250,7 +253,15 @@ export async function saveTypedRound(p: {
   await putRound({
     ...r, ...loc, shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle,
     targets: p.targets, status: p.finished ? 'COMPLETED' : 'IN_PROGRESS', updatedUtc: nowUtc(), pending: true, failed: false,
+    startTarget: p.startTarget != null && p.startTarget >= 1 && p.startTarget <= p.targetCount ? p.startTarget : null,
   })
   if (p.finished) syncNow()
   return r.id
+}
+
+/** Live groups (2.7): the host's start target on every card in the group here (only where it differs). */
+export async function setGroupStartTarget(groupId: string, startTarget: number | null) {
+  const changed = (await groupRounds(groupId)).filter(r => (r.startTarget ?? null) !== startTarget)
+    .map(r => ({ ...r, startTarget, updatedUtc: nowUtc(), pending: true }))
+  if (changed.length) await putRounds(changed)
 }

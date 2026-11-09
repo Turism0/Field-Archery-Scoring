@@ -68,6 +68,8 @@ export interface Round {
   groupName?: string | null      // someone else's name in a group
   groupArcherId?: string | null  // a friend's account
   groupOrder?: number | null
+  /** The target the archer started on (2.7): just noted on the scorecard; targets keep their numbers. */
+  startTarget?: number | null
 }
 
 export function target(r: Round, n: number): TargetScore {
@@ -173,7 +175,7 @@ export const nowUtc = () => new Date().toISOString()   // milliseconds, like the
 export function newRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
   id?: string; groupId?: string | null; groupRole?: GroupRole | null; groupName?: string | null; groupArcherId?: string | null
-  groupOrder?: number | null; locationId?: string | null; locationName?: string | null
+  groupOrder?: number | null; locationId?: string | null; locationName?: string | null; startTarget?: number | null
 }): Round {
   const now = nowUtc()
   return {
@@ -183,6 +185,7 @@ export function newRound(p: {
     createdUtc: now, updatedUtc: now, pending: true, groupId: p.groupId ?? null, groupRole: p.groupRole ?? null,
     groupName: p.groupName ?? null, groupArcherId: p.groupArcherId ?? null, groupOrder: p.groupOrder ?? null,
     locationId: p.locationId ?? null, locationName: p.locationName ?? null,
+    startTarget: p.startTarget != null && p.startTarget >= 1 && p.startTarget <= p.targetCount ? p.startTarget : null,
   }
 }
 
@@ -214,7 +217,7 @@ export function roundToJson(r: Round): Record<string, unknown> {
     shootDate: r.shootDate, targetCount: r.targetCount, archerClass: r.archerClass === 'LADIES' ? 'L' : 'G',
     ageGroup: r.ageGroup, bowStyle: r.bowStyle, status: r.status, totalPoints: roundTotal(r),
     clientCreatedUtc: r.createdUtc, clientUpdatedUtc: r.updatedUtc, locationId: r.locationId ?? null,
-    roundType: r.type, groupId: r.groupId ?? null,
+    roundType: r.type, groupId: r.groupId ?? null, startTarget: r.startTarget ?? null,
     targets: [...r.targets].sort((a, b) => a.targetNo - b.targetNo).map(targetToJson),
   }
 }
@@ -225,7 +228,7 @@ export function roundFromJson(j: any): Round {
     archerClass: j.archerClass === 'L' ? 'LADIES' : 'GENTS', ageGroup: j.ageGroup, bowStyle: j.bowStyle,
     status: j.status, type: j.roundType === 'WOODSMAN' ? 'WOODSMAN' : 'BIG_GAME',
     targets: (j.targets ?? []).map(targetFromJson), createdUtc: j.clientCreatedUtc, updatedUtc: j.clientUpdatedUtc,
-    pending: false, locationId: j.locationId ?? null, locationName: j.locationName ?? null,
+    pending: false, locationId: j.locationId ?? null, locationName: j.locationName ?? null, startTarget: j.startTarget ?? null,
   }
 }
 
