@@ -1,5 +1,25 @@
 package uk.co.fnurble.fieldarchery.ui.screens
 
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
+import uk.co.fnurble.fieldarchery.domain.HomeLayout
+import uk.co.fnurble.fieldarchery.domain.HomeTileId
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,8 +74,9 @@ import uk.co.fnurble.fieldarchery.ui.HomeViewModel
 import uk.co.fnurble.fieldarchery.ui.components.syncStatusText
 
 /**
- * Home: account / sync status and tiles – Score a round, Score history, Stats, Friends, Shoot locations – plus an
- * Admin tile for Admins and the Owner. Pull down to sync now.
+ * Home: account / sync status and tiles – Score a round, Score history, Stats, Handicap calculator, Friends, Shoot
+ * locations – plus an Admin tile for Admins and the Owner. Pull down to sync now. Arrange tiles (2.4.01): the order and
+ * which show are the archer's own, kept on the phone.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +103,8 @@ fun HomeScreen(
     val roundOffers by vm.roundOffers.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
+    val layout by vm.layout.collectAsStateWithLifecycle()
+    val editing by vm.editing.collectAsStateWithLifecycle()
 
     // Check the server when Home opens or the device comes back online; while it's down, every 30 s.
     LaunchedEffect(online) { if (online) vm.checkServer() }
@@ -107,7 +130,8 @@ fun HomeScreen(
             LargeTopAppBar(
                 title = { Text("Field Archery Scoring") },
                 actions = {
-                    IconButton(onClick = onProfile) { Icon(Icons.Filled.Person, contentDescription = "Profile") }
+                    if (editing != null) TextButton(onClick = vm::doneArranging) { Text("Done") }
+                    else IconButton(onClick = onProfile) { Icon(Icons.Filled.Person, contentDescription = "Profile") }
                 },
                 scrollBehavior = scroll,
             )
@@ -127,77 +151,188 @@ fun HomeScreen(
                 AccountStrip(signedIn, username, role, syncStatusText(lastSync), onProfile)
 
                 val s = summary
-                HomeTile(
-                    icon = Icons.Filled.Add,
-                    title = "Score a round",
-                    subtitle = when {
-                        s == null -> " "
-                        s.inProgress == 1 -> "1 round in progress · continue or start new"
-                        s.inProgress > 1 -> "${s.inProgress} rounds in progress · continue or start new"
-                        else -> "Start a new round"
-                    },
-                    highlighted = true,
-                    onClick = onScoreRound,
-                )
-                HomeTile(
-                    icon = Icons.AutoMirrored.Filled.List,
-                    title = "Score history",
-                    subtitle = when {
-                        s == null -> " "
-                        s.finished == 0 -> "No finished rounds yet"
-                        else -> "${s.finished} finished round${if (s.finished == 1) "" else "s"}" +
-                            (s.best?.let { " · best $it" } ?: "")
-                    },
-                    onClick = onHistory,
-                )
-                HomeTile(
-                    icon = Icons.Filled.Star,
-                    title = "Stats",
-                    subtitle = when {
-                        s?.finished == 0 -> "Personal bests, trends and seasons once you finish a round"
-                        rating != null -> "Handicap rating ${rating!!.rating} · bests, trends and seasons"
-                        else -> "Personal bests, trends and season summaries"
-                    },
-                    onClick = onStats,
-                )
-                HomeTile(
-                    icon = Icons.Filled.Info,
-                    title = "Handicap calculator",
-                    subtitle = "Handicap out of 1000, and a score as every other bow and class",
-                    onClick = onHandicap,
-                )
-                HomeTile(
-                    icon = Icons.Filled.Face,
-                    title = "Friends",
-                    subtitle = when {
-                        !signedIn -> "Sign in to see friends' scorecards"
-                        roundOffers > 0 -> "$roundOffers round${if (roundOffers == 1) "" else "s"} scored for you to accept"
-                        else -> "Friends' scorecards and stats, requests"
-                    },
-                    onClick = onFriends,
-                    badge = if (signedIn) roundOffers else 0,
-                )
-                HomeTile(
-                    icon = Icons.Filled.LocationOn,
-                    title = "Shoot locations",
-                    subtitle = if (signedIn) "Map of locations, your scorecards and stats at each" else "Sign in to see the map of shoot locations",
-                    onClick = onMap,
-                )
-                if (signedIn && role.isAdmin) {
-                    HomeTile(
-                        icon = Icons.Filled.Settings,
-                        title = "Admin",
-                        subtitle = when {
-                            duplicates > 0 -> "$duplicates possible duplicate location${if (duplicates == 1) "" else "s"} to check"
-                            role == AccountRole.OWNER -> "Accounts, admins and shoot locations"
-                            else -> "Accounts and shoot locations"
-                        },
-                        onClick = onAdmin,
-                        badge = duplicates,
+                // Admin only for admins; hidden tiles left out (except while arranging, 2.4.01).
+                val shown = HomeTileId.entries.filter { it != HomeTileId.ADMIN || (signedIn && role.isAdmin) }
+                val arranging = editing
+                if (arranging != null) {
+                    ArrangeTiles(
+                        layout = arranging,
+                        shown = shown,
+                        onMove = { id, by -> vm.moveTile(id, by, shown) },
+                        onHide = vm::setTileHidden,
+                        onReset = vm::resetTiles,
                     )
+                    return@Column
+                }
+                for (id in layout.order.filter { it in shown && it !in layout.hidden }) {
+                    key(id) {
+                        when (id) {
+                            HomeTileId.SCORE -> HomeTile(
+                                icon = Icons.Filled.Add,
+                                title = "Score a round",
+                                subtitle = when {
+                                    s == null -> " "
+                                    s.inProgress == 1 -> "1 round in progress · continue or start new"
+                                    s.inProgress > 1 -> "${s.inProgress} rounds in progress · continue or start new"
+                                    else -> "Start a new round"
+                                },
+                                highlighted = true,
+                                onClick = onScoreRound,
+                            )
+                            HomeTileId.HISTORY -> HomeTile(
+                                icon = Icons.AutoMirrored.Filled.List,
+                                title = "Score history",
+                                subtitle = when {
+                                    s == null -> " "
+                                    s.finished == 0 -> "No finished rounds yet"
+                                    else -> "${s.finished} finished round${if (s.finished == 1) "" else "s"}" +
+                                        (s.best?.let { " · best $it" } ?: "")
+                                },
+                                onClick = onHistory,
+                            )
+                            HomeTileId.STATS -> HomeTile(
+                                icon = Icons.Filled.Star,
+                                title = "Stats",
+                                subtitle = when {
+                                    s?.finished == 0 -> "Personal bests, trends and seasons once you finish a round"
+                                    rating != null -> "Handicap rating ${rating!!.rating} · bests, trends and seasons"
+                                    else -> "Personal bests, trends and season summaries"
+                                },
+                                onClick = onStats,
+                            )
+                            HomeTileId.HANDICAP -> HomeTile(
+                                icon = Icons.Filled.Info,
+                                title = "Handicap calculator",
+                                subtitle = "Handicap out of 1000, and a score as every other bow and class",
+                                onClick = onHandicap,
+                            )
+                            HomeTileId.FRIENDS -> HomeTile(
+                                icon = Icons.Filled.Face,
+                                title = "Friends",
+                                subtitle = when {
+                                    !signedIn -> "Sign in to see friends' scorecards"
+                                    roundOffers > 0 -> "$roundOffers round${if (roundOffers == 1) "" else "s"} scored for you to accept"
+                                    else -> "Friends' scorecards and stats, requests"
+                                },
+                                onClick = onFriends,
+                                badge = if (signedIn) roundOffers else 0,
+                            )
+                            HomeTileId.LOCATIONS -> HomeTile(
+                                icon = Icons.Filled.LocationOn,
+                                title = "Shoot locations",
+                                subtitle = if (signedIn) "Map of locations, your scorecards and stats at each" else "Sign in to see the map of shoot locations",
+                                onClick = onMap,
+                            )
+                            HomeTileId.ADMIN -> HomeTile(
+                                icon = Icons.Filled.Settings,
+                                title = "Admin",
+                                subtitle = when {
+                                    duplicates > 0 -> "$duplicates possible duplicate location${if (duplicates == 1) "" else "s"} to check"
+                                    role == AccountRole.OWNER -> "Accounts, admins and shoot locations"
+                                    else -> "Accounts and shoot locations"
+                                },
+                                onClick = onAdmin,
+                                badge = duplicates,
+                            )
+                        }
+                    }
+                }
+                TextButton(onClick = vm::startArranging, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("  Arrange tiles")
                 }
             }
         }
+    }
+}
+
+/**
+ * Arranging Home (2.4.01, Pete): drag a tile by its handle, or use the arrows; switch tiles off to hide them (Score a
+ * round always shows). Done (top bar) saves.
+ */
+@Composable
+private fun ArrangeTiles(
+    layout: HomeLayout,
+    shown: List<HomeTileId>,
+    onMove: (HomeTileId, Int) -> Unit,
+    onHide: (HomeTileId, Boolean) -> Unit,
+    onReset: () -> Unit,
+) {
+    val ids = layout.order.filter { it in shown }
+    val currentIds by rememberUpdatedState(ids)
+    val move by rememberUpdatedState(onMove)
+    var dragging by remember { mutableStateOf<HomeTileId?>(null) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val heights = remember { mutableStateMapOf<HomeTileId, Int>() }
+    val gap = with(LocalDensity.current) { 8.dp.toPx() }
+
+    Text(
+        "Drag a tile by ≡ or use the arrows. Switch a tile off to hide it. Tap Done at the top when you're finished.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ids.forEachIndexed { index, id ->
+            key(id) {
+                val isDragging = dragging == id
+                val hidden = id in layout.hidden
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .graphicsLayer { translationY = if (isDragging) dragOffset else 0f }
+                        .onSizeChanged { heights[id] = it.height },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isDragging) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Menu,
+                            contentDescription = "Drag to move ${id.title}",
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .pointerInput(id) {
+                                    detectDragGestures(
+                                        onDragStart = { dragging = id; dragOffset = 0f },
+                                        onDragEnd = { dragging = null; dragOffset = 0f },
+                                        onDragCancel = { dragging = null; dragOffset = 0f },
+                                    ) { change, amount ->
+                                        change.consume()
+                                        dragOffset += amount.y
+                                        val list = currentIds
+                                        val i = list.indexOf(id)
+                                        // Past half of the next tile: swap with it, and carry on from its place.
+                                        if (dragOffset > 0 && i < list.lastIndex) {
+                                            val h = (heights[list[i + 1]] ?: 0) + gap
+                                            if (dragOffset > h / 2) { move(id, 1); dragOffset -= h }
+                                        } else if (dragOffset < 0 && i > 0) {
+                                            val h = (heights[list[i - 1]] ?: 0) + gap
+                                            if (-dragOffset > h / 2) { move(id, -1); dragOffset += h }
+                                        }
+                                    }
+                                },
+                        )
+                        Text(
+                            id.title + if (hidden) " (hidden)" else "",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = if (hidden) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { onMove(id, -1) }, enabled = index > 0) {
+                            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${id.title} up")
+                        }
+                        IconButton(onClick = { onMove(id, 1) }, enabled = index < ids.lastIndex) {
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${id.title} down")
+                        }
+                        Switch(checked = !hidden, onCheckedChange = { on -> onHide(id, !on) }, enabled = id.canHide)
+                    }
+                }
+            }
+        }
+    }
+    if (!layout.isDefault) {
+        TextButton(onClick = onReset) { Text("Back to the usual order") }
     }
 }
 

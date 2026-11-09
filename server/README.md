@@ -205,7 +205,7 @@ Recovery codes (with a new account, used once, renewed, a new one from Profile n
 .\Run-AllTests.ps1 -Username Turismo
 ```
 
-Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, Handicap, which each ask for the password) and prints a summary. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
+Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, Handicap, Reset, which each ask for the password) and prints a summary. It waits a minute before each Owner test (2.4), because the API allows 30 sign-ins / new accounts a minute from one address and the earlier tests use most of that (otherwise 429 Too Many Requests); the whole run takes about 6 minutes. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing the handicap (2.2.01)
 

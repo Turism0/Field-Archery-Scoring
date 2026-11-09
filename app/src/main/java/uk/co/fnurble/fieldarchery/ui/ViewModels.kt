@@ -33,6 +33,9 @@ import uk.co.fnurble.fieldarchery.data.FriendRoundSummary
 import uk.co.fnurble.fieldarchery.data.FriendsOverview
 import uk.co.fnurble.fieldarchery.data.FriendsRepository
 import uk.co.fnurble.fieldarchery.data.HandicapRepository
+import uk.co.fnurble.fieldarchery.data.HomeLayoutStore
+import uk.co.fnurble.fieldarchery.domain.HomeLayout
+import uk.co.fnurble.fieldarchery.domain.HomeTileId
 import uk.co.fnurble.fieldarchery.data.ResetCode
 import uk.co.fnurble.fieldarchery.data.GroupMember
 import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
@@ -161,7 +164,26 @@ class HomeViewModel(
     network: NetworkStatus,
     private val serverCheck: suspend () -> Unit,
     handicap: HandicapRepository? = null,
+    private val layoutStore: HomeLayoutStore? = null,
 ) : SyncingViewModel(syncer, accountStore, accounts) {
+    // ---- Arranging the tiles (2.4.01) ----
+
+    /** The order and hidden tiles as saved. */
+    val layout: StateFlow<HomeLayout> = layoutStore?.layout ?: MutableStateFlow(HomeLayout())
+
+    private val _editing = MutableStateFlow<HomeLayout?>(null)
+    /** While arranging: the layout being changed (saved on Done); null otherwise. */
+    val editing: StateFlow<HomeLayout?> = _editing.asStateFlow()
+
+    fun startArranging() { _editing.value = layout.value }
+    fun moveTile(id: HomeTileId, by: Int, shown: Collection<HomeTileId>) = _editing.update { it?.move(id, by, shown) }
+    fun setTileHidden(id: HomeTileId, hide: Boolean) = _editing.update { it?.setHidden(id, hide) }
+    fun resetTiles() { _editing.value = HomeLayout() }
+    fun doneArranging() {
+        _editing.value?.let { layoutStore?.save(it) }
+        _editing.value = null
+    }
+
     /** Your handicap rating, for the Stats tile (null until there's a model and 3+ Big Game rounds). */
     val rating: StateFlow<HandicapRating?> = handicap?.let { h ->
         combine(roundRepo.finishedRounds, h.model) { rounds, m -> m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) } }

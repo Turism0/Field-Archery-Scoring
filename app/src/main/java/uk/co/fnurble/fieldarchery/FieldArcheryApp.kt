@@ -38,6 +38,8 @@ class AppContainer(app: Application) {
     val liveGroupRepository = LiveGroupRepository(app, api, accountStore, roundRepository)
     /** Handicap model from the server, kept on the phone (2.2.05). */
     val handicapRepository = HandicapRepository(app, api, accountStore)
+    /** How Home's tiles are arranged (2.4.01). */
+    val homeLayoutStore = uk.co.fnurble.fieldarchery.data.HomeLayoutStore(app)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
     suspend fun checkServer() {
         runCatching { api.health() }

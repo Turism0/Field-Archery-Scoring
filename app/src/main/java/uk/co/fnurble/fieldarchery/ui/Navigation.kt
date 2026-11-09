@@ -48,7 +48,7 @@ fun FieldArcheryNavHost() {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                vm = appViewModel { c, _ -> HomeViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore, c.networkStatus, c::checkServer, c.handicapRepository) },
+                vm = appViewModel { c, _ -> HomeViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore, c.networkStatus, c::checkServer, c.handicapRepository, c.homeLayoutStore) },
                 onProfile = { nav.navigate("profile") },
                 onScoreRound = { nav.navigate("scoreRound") },
                 onHistory = { nav.navigate("history") },
