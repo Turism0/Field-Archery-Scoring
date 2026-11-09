@@ -7,7 +7,7 @@ Check the Play Console for anything that's changed since.
 ## 1. Before uploading
 
 - **API 2.4.02 published** (account deletion, privacy page, nearby search in the body). Check
-  https://fieldarchery.fnurble.co.uk/privacy and https://fieldarchery.fnurble.co.uk/delete-account open from a phone
+  https://fieldarcheryscoring.fnurble.co.uk/privacy and https://fieldarcheryscoring.fnurble.co.uk/delete-account open from a phone
   on mobile data (Google checks them from outside your network).
 - **Target API 36** (Android 16): new apps must target it since 31 Aug 2026. Done in 2.4.02.
 - **Upload key:** Android Studio → Build → Generate Signed App Bundle → Android App Bundle → Create new key store.
@@ -24,7 +24,7 @@ Check the Play Console for anything that's changed since.
 
 | Section | Answer |
 |---|---|
-| Privacy policy | https://fieldarchery.fnurble.co.uk/privacy |
+| Privacy policy | https://fieldarcheryscoring.fnurble.co.uk/privacy |
 | App access | Some features need an account. Give reviewers a test account (make one in the app, e.g. `playreview`, with a few rounds and a friend) and say: "Sign in from Profile. Live groups need two phones; everything else works on one." |
 | Ads | No ads |
 | Content rating | Questionnaire: choose the category **All other app types** (it isn't a game). No violence, sexual content, profanity, drugs, gambling. Users can interact (friends) – answer Yes to "users can interact or exchange content" (friends see each other's rounds; no chat). Expect PEGI 3 / Everyone. |
@@ -32,7 +32,7 @@ Check the Play Console for anything that's changed since.
 | News app | No |
 | Health / government / financial features | None |
 | Foreground service permissions | **Connected device**: "During a live group (several archers scoring one round on their own phones), the app keeps exchanging scores with the other phones over Bluetooth / Wi-Fi (Nearby Connections) and the server while the screen is off, until the group is finished. A notification shows while it runs, with a Stop button." Google asks for a short video: make a live group, turn the screen off, show the notification and Stop. |
-| Account deletion | In the app: Profile → Delete account. Web: https://fieldarchery.fnurble.co.uk/delete-account. Deletes everything on the server straight away. |
+| Account deletion | In the app: Profile → Delete account. Web: https://fieldarcheryscoring.fnurble.co.uk/delete-account. Deletes everything on the server straight away. |
 | Data safety | Below |
 
 ### Data safety

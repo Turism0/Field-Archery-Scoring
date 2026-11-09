@@ -46,13 +46,28 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
   }
 }
 
+/** The website's address (2.6.03). A copy installed from the old address says where it's gone. */
+const PUBLIC_HOST = 'fieldarcheryscoring.fnurble.co.uk'
+function Moved() {
+  if (location.hostname !== 'fieldarchery.fnurble.co.uk') return null
+  const url = `https://${PUBLIC_HOST}/app/`
+  return (
+    <div class="banner bad moved">
+      <b>The web app has moved to {PUBLIC_HOST}</b>
+      <span>Please move to the new address. Tap Sync on Home so your rounds are on the server, then open
+        the new address (and on a phone, Add to Home Screen again and remove this one). Sign in there and your rounds come back.</span>
+      <a href={url}>Open {url}</a>
+    </div>
+  )
+}
+
 function App() {
   const route = useRoute()
   const desktop = useDesktop()
   const [path, query] = route.split('?')
   const parts = path.split('/').filter(Boolean)
   const screen = <Screen parts={parts} q={new URLSearchParams(query ?? '')} />
-  return <>{desktop ? <Shell section={parts[0] ?? ''}>{screen}</Shell> : screen}<Toasts /></>
+  return <><Moved />{desktop ? <Shell section={parts[0] ?? ''}>{screen}</Shell> : screen}<Toasts /></>
 }
 
 render(<App />, document.getElementById('app')!)

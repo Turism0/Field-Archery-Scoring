@@ -1,6 +1,6 @@
-# Field Archery Scoring – web app (2.6.02)
+# Field Archery Scoring – web app (2.6.03)
 
-The app for iPhones (and any phone or computer with a browser), at **https://fieldarchery.fnurble.co.uk/app/**.
+The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
 no signal, and keeps its rounds (an account backs them up to the server too).
 

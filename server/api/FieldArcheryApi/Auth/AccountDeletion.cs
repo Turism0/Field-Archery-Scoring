@@ -183,7 +183,7 @@ public static class AccountDeletion
 
         <h2>Deleting your data</h2>
         <p>Delete your account in the app (Profile → Delete account) or at
-        <a href="/delete-account">fieldarchery.fnurble.co.uk/delete-account</a>. Everything the server keeps about you is
+        <a href="/delete-account">fieldarcheryscoring.fnurble.co.uk/delete-account</a>. Everything the server keeps about you is
         deleted straight away, except public shoot locations you named, which stay as club details without your name.
         Rounds on your phone stay there until you delete them or the app.</p>
 

@@ -1,5 +1,6 @@
 // Field Archery Scoring API.
-// Runs on Odin under IIS, behind Nginx Proxy Manager at https://fieldarchery.fnurble.co.uk.
+// Runs on Odin under IIS, behind Nginx Proxy Manager at https://fieldarchery.fnurble.co.uk (the API, used by the apps)
+// and https://fieldarcheryscoring.fnurble.co.uk (the public website: web app, privacy policy, account deletion; 2.6.03).
 // The connection string (with the fieldarchery_api password) lives in appsettings.Production.json
 // on the server only; it is never committed to Git.
 
@@ -79,6 +80,35 @@ app.UseForwardedHeaders();
 // manifest are always re-checked so updates reach phones; everything else has a content hash in its name.
 var types = new FileExtensionContentTypeProvider();
 types.Mappings[".webmanifest"] = "application/manifest+json";
+// 2.6.03 (Pete): the website's public address is Web:PublicHost; the apps keep using the API's address. Pages opened at
+// the old address (Web:RedirectFrom) go to the new one: the web app's pages, /privacy and /delete-account (GET only, so
+// the apps and form posts are never redirected). The web app's files aren't redirected either, so a copy installed at
+// the old address can still update (and then tells you about the new address). / on the public address opens the app.
+var publicHost = app.Configuration["Web:PublicHost"];
+var redirectFrom = app.Configuration.GetSection("Web:RedirectFrom").Get<string[]>() ?? [];
+if (!string.IsNullOrWhiteSpace(publicHost))
+{
+    app.Use(async (ctx, next) =>
+    {
+        var host = ctx.Request.Host.Host;
+        var path = ctx.Request.Path.Value ?? "/";
+        var isGet = HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method);
+        if (isGet && string.Equals(host, publicHost, StringComparison.OrdinalIgnoreCase) && path == "/")
+        {
+            ctx.Response.Redirect("/app/");
+            return;
+        }
+        var page = path is "/privacy" or "/delete-account" or "/app" or "/app/" ||
+                   (path.StartsWith("/app/", StringComparison.OrdinalIgnoreCase) && (!Path.HasExtension(path) || path.EndsWith(".html", StringComparison.OrdinalIgnoreCase)));
+        if (isGet && page && redirectFrom.Any(h => string.Equals(h, host, StringComparison.OrdinalIgnoreCase)))
+        {
+            ctx.Response.Redirect($"https://{publicHost}{path}{ctx.Request.QueryString}");
+            return;
+        }
+        await next();
+    });
+}
+
 // 2.5.01: only the exact /app is redirected (routing ignores a trailing slash, so a mapped /app also caught /app/ and looped).
 app.Use(async (ctx, next) =>
 {
@@ -152,5 +182,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.6.02";
+    public const string Version = "2.6.03";
 }
