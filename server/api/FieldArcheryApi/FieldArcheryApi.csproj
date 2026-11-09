@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>FieldArcheryApi</RootNamespace>
-    <Version>2.5.01</Version>
-    <InformationalVersion>2.5.01</InformationalVersion>
+    <Version>2.6</Version>
+    <InformationalVersion>2.6</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

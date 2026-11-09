@@ -4,6 +4,7 @@ import { cachedFriends, getAccount, getProfile } from '../data/account'
 import { startRound, deleteRound, type MemberDraft } from '../data/rounds'
 import { create, METHODS, type LiveMethod } from '../data/live'
 import { getRound } from '../data/db'
+import { captureFor } from '../data/locations'
 import {
   AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_GROUP, MAX_TARGETS, ROUND_TYPE_HELP, ROUND_TYPE_NAMES, ageGroupFor,
   type AgeGroup, type ArcherClass,
@@ -50,6 +51,7 @@ export function NewRound() {
     try {
       const id = await startRound({ shootDate: date, targetCount: count, archerClass: cls!, ageGroup: age!, bowStyle: bow!, type,
         members: mode === 'solo' ? [] : members, groupId: mode === 'live' ? crypto.randomUUID() : undefined })
+      captureFor(id)   // shoot location: one GPS position, looked up when there's signal
       if (mode === 'live') {
         const r = (await getRound(id))!
         try { await create(r.groupId!, method, exp) } catch (e) { await deleteRound(r); throw e }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Bar, Dialog, errorText, go, replace, toast, useData } from './common'
 import { getRound } from '../data/db'
+import { getAccount } from '../data/account'
+import { LocationChip, LocationSheet } from './Locations'
 import { groupOf, saveTarget, setStatus, setTypeForGroup, syncNow } from '../data/rounds'
 import * as live from '../data/live'
 import { canGoTo, firstUnscored, roundTotal, target, targetsComplete, type Round } from '../domain/round'
@@ -97,6 +99,9 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     }
   }
 
+  const account = useData(getAccount)
+  const [locOpen, setLocOpen] = useState(false)
+  const own = group.find(m => m.groupRole == null || m.groupRole === 'SCORER') ?? round
   const allDone = group.every(m => targetsComplete(m) === m.targetCount)
 
   return (
@@ -119,6 +124,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
             }}>Host's phone gone? Take over</button>}
           </div>
         )}
+        {own && <LocationChip round={own} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {group.length > 1 && (
           <div class="strip">
             {group.map(m => (
@@ -172,6 +178,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
         </div>
         {allDone && round.status === 'IN_PROGRESS' && <button class="filled wide" onClick={() => setFinishOpen(true)}>Finish {group.length > 1 ? 'group round' : 'round'}</button>}
       </main>
+      {own && <LocationSheet roundId={own.id} open={locOpen} onClose={() => setLocOpen(false)} />}
 
       <div class="nav">
         <button class="tonal" onClick={() => step(-1)}>‹ Previous</button>

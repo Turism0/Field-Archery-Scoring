@@ -1,11 +1,13 @@
 // Rounds on this device and keeping them in step with the server (as the app's RoundRepository and RoundSyncer).
 import { allRounds, everyRoundEvenDeleted, getKv, getRound, getRoundEvenDeleted, groupRounds, putRound, putRounds, setKv } from './db'
 import { ApiError, request } from './api'
+import { refreshModelIfStale } from './handicap'
+import { lookUpPending, refreshNames } from './locations'
 import { getAccount, signedOutByServer, type Friend } from './account'
 import {
   newRound, nowUtc, roundFromJson, roundToJson, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
 } from '../domain/round'
-import { isComplete, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
+import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
 
 // ---- on this device ----
 
@@ -114,6 +116,10 @@ async function doSync(): Promise<SyncReport> {
   try {
     const me = await request('GET', '/api/me', undefined, token)
     await setKv('account', { ...account, role: me.role })
+    await setKv('duplicateLocations', me.duplicateLocations ?? 0)
+    if (me.roundOffers != null) await setKv('offerCount', me.roundOffers)
+    // Shoot locations before uploading, so finished rounds go up with theirs.
+    try { await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
     await upload(token)
     await download(token)
     try {
@@ -192,17 +198,39 @@ async function applyRemote(j: any) {
   }
   const r = roundFromJson(j)
   // Keep its place in a group on this device (the server doesn't send it back).
-  const merged: Round = local?.groupId
+  let merged: Round = local?.groupId
     ? { ...r, groupId: local.groupId, groupRole: local.groupRole, groupName: local.groupName, groupArcherId: local.groupArcherId, groupOrder: local.groupOrder }
     : r
+  // Its position stays on this device (the server never has it).
+  if (local?.fixLat != null) merged = { ...merged, fixLat: local.fixLat, fixLon: local.fixLon, locationState: merged.locationId ? null : local.locationState }
   await putRound(merged, false)
 }
 
 /** Sync every few minutes while the app is open, and when signal comes back. */
 export function startAutoSync() {
-  const go = () => { if (navigator.onLine) syncNow() }
+  const go = () => { if (navigator.onLine) { syncNow(); refreshModelIfStale() } }
   window.addEventListener('online', go)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') go() })
   setInterval(go, 5 * 60_000)
   go()
+}
+
+/** Round details (in a group the date and number of targets change for everyone; class, age and bow only this one). */
+export async function updateDetails(id: string, shootDate: string, targetCount: number, archerClass: ArcherClass, ageGroup: AgeGroup, bowStyle: string) {
+  const r = await getRound(id)
+  if (!r) return
+  const one = (x: Round, c: ArcherClass, a: AgeGroup, b: string): Round => {
+    const added = Array.from({ length: Math.max(0, targetCount - x.targetCount) }, (_, i) => newTarget(x.type, x.targetCount + i + 1))
+    return {
+      ...x, shootDate, targetCount, archerClass: c, ageGroup: a, bowStyle: b,
+      targets: [...x.targets.filter(t => t.targetNo <= targetCount), ...added],
+      status: added.length ? 'IN_PROGRESS' : x.status, updatedUtc: nowUtc(), pending: true, failed: false,
+    }
+  }
+  const changed: Round[] = []
+  for (const o of await groupOf(r)) {
+    if (o.id !== id && (o.shootDate !== shootDate || o.targetCount !== targetCount)) changed.push(one(o, o.archerClass, o.ageGroup, o.bowStyle))
+  }
+  changed.push(one(r, archerClass, ageGroup, bowStyle))
+  await putRounds(changed)
 }

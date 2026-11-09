@@ -122,3 +122,34 @@ export const errorText = (e: unknown) => (e instanceof Error ? e.message : Strin
 export const installed = () =>
   matchMedia('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true
 export const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent)
+
+/** One decimal place, UK style. */
+export const one = (v: number) => v.toFixed(1)
+
+export function Tabs({ tabs, value, onChange }: { tabs: string[]; value: number; onChange: (i: number) => void }) {
+  return (
+    <div class="tabs" role="tablist">
+      {tabs.map((t, i) => <button role="tab" aria-selected={i === value} class={i === value ? 'on' : ''} onClick={() => onChange(i)}>{t}</button>)}
+    </div>
+  )
+}
+
+/** Something loaded from the server: loading, failed (with try again) or ready. */
+export type Load<T> = { state: 'loading' } | { state: 'failed'; message: string } | { state: 'ready'; value: T }
+
+export function useLoad<T>(load: () => Promise<T>, deps: unknown[] = []): [Load<T>, () => void] {
+  const [v, setV] = useState<Load<T>>({ state: 'loading' })
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let alive = true
+    load().then(value => alive && setV({ state: 'ready', value }), e => alive && setV({ state: 'failed', message: errorText(e) }))
+    return () => { alive = false }
+  }, [...deps, n])
+  return [v, () => setN(x => x + 1)]
+}
+
+export function Loading<T>({ load, retry, children }: { load: Load<T>; retry: () => void; children: (v: T) => ComponentChildren }) {
+  if (load.state === 'loading') return <p class="sub" style="text-align:center">Loading…</p>
+  if (load.state === 'failed') return <div class="card err">{load.message}<button class="tonal" onClick={retry}>Try again</button></div>
+  return <>{children(load.value)}</>
+}

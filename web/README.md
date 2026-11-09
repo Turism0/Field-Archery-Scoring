@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.5)
+# Field Archery Scoring – web app (2.6)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarchery.fnurble.co.uk/app/**.
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -10,11 +10,17 @@ the server (the same as the Android app, so rounds appear on both); live groups 
 the four scoring methods, Start waits for everyone, take over as host). Not yet: stats, handicap, friends, shoot
 locations and the map (use the Android app). Live groups need signal on the web: a browser can't use Bluetooth.
 
+**In 2.6 (everything else):** Stats (bests, trends, seasons, handicap rating), history filters and PB marks, handicap
+calculator and handicap points, Friends and rounds scored for you, shoot locations (GPS, "Not here?", the map from
+OpenStreetMap via Leaflet, location pages), round details editing, arranging Home, offline / server notices and Admin.
+The one thing the web app can't do is score phone to phone with no signal.
+
 ## How it's built
 
 TypeScript + [Preact](https://preactjs.com) with [Vite](https://vite.dev). Rounds are kept in the browser's IndexedDB.
-`src/domain/` is a copy of the app's scoring rules (`domain/Scoring.kt`) – keep the two in step; `test/` has the same
-test cases as the app's `ScoringTest`. `src/data/` talks to the API with the same JSON as the Android app.
+`src/domain/` is a copy of the app's rules (`Scoring.kt`, `PersonalStats.kt`, `Handicap.kt`, `HomeLayout.kt`) – keep
+them in step; `test/` has the same test cases as the app's `ScoringTest`, `PersonalStatsTest`, `HandicapTest` and
+`HomeLayoutTest`. `src/data/` talks to the API with the same JSON as the Android app.
 
 ## Building (only needed when the web app changes)
 
@@ -22,7 +28,7 @@ Needs Node.js 20 or later. In this folder:
 
 ```
 npm install
-npm test          # the scoring rules
+npm test          # the rules (scoring, stats, handicap, Home layout)
 npm run build     # type-checks, then builds into ../server/api/FieldArcheryApi/wwwroot/app
 ```
 

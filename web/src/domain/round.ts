@@ -1,7 +1,7 @@
 // Rounds, archers and round JSON (the API's shape, as the Android app sends it).
 import {
   type RoundType, type TargetScore, type TargetType, type AnimalResult, type Hit,
-  newTarget, isComplete, totalPoints, maxPoints, animalPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
+  newTarget, isComplete, totalPoints, maxPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
 } from './scoring'
 
 export type ArcherClass = 'GENTS' | 'LADIES'
@@ -58,6 +58,11 @@ export interface Round {
   deleted?: boolean
   locationId?: string | null
   locationName?: string | null
+  /** GPS position taken when the round started (stays on this device; only used to ask what's nearby). */
+  fixLat?: number | null
+  fixLon?: number | null
+  /** PENDING_LOOKUP: position waiting to be looked up; NEEDS_NAME: nothing known nearby. */
+  locationState?: 'PENDING_LOOKUP' | 'NEEDS_NAME' | null
   groupId?: string | null
   groupRole?: GroupRole | null
   groupName?: string | null      // someone else's name in a group
@@ -103,34 +108,65 @@ export interface RoundStats {
   maxPerAnimal: number
   innerKills: number; kills: number; wounds: number; misses: number
   byArrow: number[]   // [arrow1, arrow2, arrow3]
+  overrides: number
+  /** Animals on fully scored targets (predator/prey = 2, fan = n; Woodsman: targets). */
+  animalsScored: number
+  /** Points on fully scored targets as a share of the maximum, 0..1. */
+  shareOfMax: number | null
+  /** Rates over animals (Woodsman: targets) whose arrows were recorded: fully scored, not overridden. */
+  firstArrowRate: number | null
+  killRate: number | null
+  missRate: number | null
 }
+
+const rate = <T,>(list: T[], f: (x: T) => boolean) => list.length ? list.filter(f).length / list.length : null
 
 /** Running stats (same rules as the app): averages per animal over fully scored targets. */
 export function roundStats(r: Round): RoundStats {
   const complete = r.targets.filter(isComplete)
+  const overrides = r.targets.filter(t => t.overridePoints != null).length
   if (r.type === 'WOODSMAN') {
-    const arrows = r.targets.filter(t => t.overridePoints == null).map(t => t.arrows).join('')
+    const recordedTargets = r.targets.filter(t => t.overridePoints == null)
+    const arrows = recordedTargets.map(t => t.arrows).join('')
+    const recorded = complete.filter(t => t.overridePoints == null)
+    const sum = complete.reduce((s, t) => s + totalPoints(t), 0)
     return {
       total: roundTotal(r), targetsScored: complete.length, maxPerAnimal: WOODSMAN_MAX,
-      averagePerAnimal: complete.length ? complete.reduce((s, t) => s + totalPoints(t), 0) / complete.length : null,
+      averagePerAnimal: complete.length ? sum / complete.length : null,
       innerKills: 0, kills: [...arrows].filter(a => a === 'K').length, wounds: [...arrows].filter(a => a === 'W').length,
       misses: [...arrows].filter(a => a === 'M').length,
-      byArrow: [0, 1, 2].map(i => r.targets.filter(t => t.overridePoints == null && t.arrows[i] === 'K').length),
+      byArrow: [0, 1, 2].map(i => recordedTargets.filter(t => t.arrows[i] === 'K').length),
+      overrides, animalsScored: complete.length,
+      shareOfMax: complete.length ? sum / (complete.length * WOODSMAN_MAX) : null,
+      firstArrowRate: rate(recorded, t => t.arrows[0] === 'K'),
+      killRate: rate(recorded, t => t.arrows.endsWith('K')),
+      missRate: rate(recorded, t => calculatedPoints(t) === 0),
     }
   }
   const results = r.targets.filter(t => t.overridePoints == null).flatMap(t => t.animals)
   const scored = results.filter((a): a is Extract<AnimalResult, { state: 'SCORED' }> => a.state === 'SCORED')
   const animals = complete.reduce((s, t) => s + t.animals.length, 0)
+  const recorded = complete.filter(t => t.overridePoints == null).flatMap(t => t.animals)
+  const max = complete.reduce((s, t) => s + maxPoints(t), 0)
+  const sum = complete.reduce((s, t) => s + totalPoints(t), 0)
   return {
     total: roundTotal(r), targetsScored: complete.length, maxPerAnimal: MAX_PER_ANIMAL,
-    averagePerAnimal: animals ? complete.reduce((s, t) => s + totalPoints(t), 0) / animals : null,
+    averagePerAnimal: animals ? sum / animals : null,
     innerKills: scored.filter(a => a.hit === 'INNER_KILL').length,
     kills: scored.filter(a => a.hit === 'KILL').length,
     wounds: scored.filter(a => a.hit === 'WOUND').length,
     misses: results.filter(a => a.state === 'MISSED').length,
     byArrow: [1, 2, 3].map(n => scored.filter(a => a.arrowNo === n).length),
+    overrides, animalsScored: animals,
+    shareOfMax: max ? sum / max : null,
+    firstArrowRate: rate(recorded, a => a.state === 'SCORED' && a.arrowNo === 1),
+    killRate: rate(recorded, a => a.state === 'SCORED' && a.hit !== 'WOUND'),
+    missRate: rate(recorded, a => a.state === 'MISSED'),
   }
 }
+
+/** Every target is scored. */
+export const isFullyScored = (r: Round) => r.targets.length === r.targetCount && r.targets.every(isComplete)
 
 export const nowUtc = () => new Date().toISOString()   // milliseconds, like the server keeps
 
@@ -195,3 +231,11 @@ export function roundFromJson(j: any): Round {
 
 /** Share of the maximum, for checks. */
 export const shareOfMax = (t: TargetScore) => maxPoints(t) ? totalPoints(t) / maxPoints(t) : 0
+
+export type LocationStatus = 'NONE' | 'LOOKING' | 'NEEDS_NAME' | 'SET'
+export function locationStatus(r: Round): LocationStatus {
+  if (r.locationId) return 'SET'
+  if (r.locationState === 'NEEDS_NAME') return 'NEEDS_NAME'
+  if (r.locationState === 'PENDING_LOOKUP' && r.fixLat != null) return 'LOOKING'
+  return 'NONE'
+}

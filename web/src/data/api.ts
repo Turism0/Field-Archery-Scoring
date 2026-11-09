@@ -17,6 +17,14 @@ function defaultMessage(status: number): string {
   return 'Something went wrong. Try again.'
 }
 
+// ---- is the server answering? (for the Home notice) ----
+export type ServerState = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE'
+let serverState: ServerState = 'UNKNOWN'
+const serverListeners = new Set<(s: ServerState) => void>()
+export const getServerState = () => serverState
+export function onServerState(l: (s: ServerState) => void): () => void { serverListeners.add(l); return () => serverListeners.delete(l) }
+function setServer(s: ServerState) { if (s !== serverState) { serverState = s; serverListeners.forEach(l => l(s)) } }
+
 export async function request<T = any>(method: string, path: string, body?: unknown, token?: string | null): Promise<T> {
   let res: Response
   try {
@@ -31,10 +39,12 @@ export async function request<T = any>(method: string, path: string, body?: unkn
       cache: 'no-store',
     })
   } catch {
+    if (navigator.onLine) setServer('UNAVAILABLE')
     throw new ApiError(0, navigator.onLine ? 'network' : 'offline',
       navigator.onLine ? "The server isn't available at the moment. Try again later." : "You're offline. It'll catch up when you have signal.")
   }
-  if (res.status >= 502 && res.status <= 504) throw new ApiError(0, 'network', "The server isn't available at the moment. Try again later.")
+  if (res.status >= 502 && res.status <= 504) { setServer('UNAVAILABLE'); throw new ApiError(0, 'network', "The server isn't available at the moment. Try again later.") }
+  setServer('AVAILABLE')
   const text = await res.text()
   let json: any = null
   try { json = text ? JSON.parse(text) : {} } catch { json = null }

@@ -1,7 +1,7 @@
 // Signing in and the archer's profile. Like the app: the token stays on this device, never the password.
 // Real name and date of birth stay here and are never sent.
 import { getKv, setKv } from './db'
-import { request } from './api'
+import { ApiError, request } from './api'
 import type { AgeGroup, ArcherClass } from '../domain/round'
 
 export interface Account { archerId: string; username: string; token: string; role?: string }
@@ -76,3 +76,22 @@ export async function deleteAccount(password: string) {
 
 /** 401 from the server: the sign-in has gone (revoked or expired). */
 export async function signedOutByServer() { await setKv('account', null) }
+
+/**
+ * A call that needs the sign-in. 401 signs out here; not_admin / not_owner correct the role kept here.
+ * Throws "Sign in (Profile) first." when not signed in.
+ */
+export async function authed<T = any>(f: (token: string) => Promise<T>): Promise<T> {
+  const a = await getAccount()
+  if (!a) throw new ApiError(401, 'not_signed_in', 'Sign in (Profile) first.')
+  try { return await f(a.token) } catch (e) {
+    if (e instanceof ApiError) {
+      if (e.status === 401) await signedOutByServer()
+      else if (e.code === 'not_admin') await setKv('account', { ...a, role: 'USER' })
+      else if (e.code === 'not_owner') await setKv('account', { ...a, role: 'ADMIN' })
+    }
+    throw e
+  }
+}
+
+export const isAdmin = (a?: Account | null) => a?.role === 'ADMIN' || a?.role === 'OWNER'
