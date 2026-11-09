@@ -23,6 +23,9 @@ namespace FieldArcheryApi.Groups;
 ///   PUT    /api/groups/{groupId}/entries  { entries: [{ targetNo, cardMemberId, scorerMemberId, target, enteredUtc }] }
 ///          → { results: [{ targetNo, cardMemberId, state, points }] }  (state WAITING / MATCHED / MISMATCH)
 ///   DELETE /api/groups/{groupId}/members/{memberId}  host removes anyone but the host; a joined archer can leave.
+///   POST   /api/groups/{groupId}/host                a joined archer takes over as host (API 2.3.01: the host's phone has
+///          gone). The old host stays in the group as a FRIEND card (their account; joining again on a phone makes them
+///          JOINED); the new host's phone then sends the group and scorers. → the group.
 /// Methods: SINGLE (one scorer, others watching), DOUBLE (two scorers, saved when both match), MULTI (3+ scorers, nobody
 /// scores their own card, two per card, shared evenly), SELF (everyone scores their own). When the group is STARTED
 /// without scorers, the usual ones are worked out (GroupRules.Default). Codes stop working when the group is closed or
@@ -70,6 +73,7 @@ public static class GroupEndpoints
         groups.MapGet("/{groupId:guid}", Get);
         groups.MapPut("/{groupId:guid}/entries", PutEntries);
         groups.MapDelete("/{groupId:guid}/members/{memberId:guid}", RemoveMember);
+        groups.MapPost("/{groupId:guid}/host", TakeOver);
     }
 
     // ---- Create / update (host) -------------------------------------------------------------------------------
@@ -119,8 +123,12 @@ public static class GroupEndpoints
         if (existing is not null && existing.Status != GroupRules.Open && (existing.Method != method || existing.RoundType != roundType))
             return Error(409, "group_started", "The method and round type can't change once scoring has started.");
 
-        // Friends must be friends of the host.
-        var friendIds = sent.Where((_, i) => kinds[i] == GroupRules.Friend).Select(m => m.ArcherId!.Value).Distinct().ToList();
+        // Friends must be friends of the host (API 2.3.01: unless already in the group, e.g. added by a host who handed over).
+        var already = existing is null ? new HashSet<Guid>() : (await conn.QueryAsync<Guid>(new CommandDefinition(
+            "SELECT ArcherId FROM dbo.ScoreGroupMember WHERE GroupId = @groupId AND ArcherId IS NOT NULL;",
+            new { groupId }, tx, cancellationToken: ct))).ToHashSet();
+        var friendIds = sent.Where((_, i) => kinds[i] == GroupRules.Friend).Select(m => m.ArcherId!.Value)
+            .Where(id => !already.Contains(id)).Distinct().ToList();
         if (friendIds.Count > 0)
         {
             var ok = await conn.ExecuteScalarAsync<int>(new CommandDefinition(
@@ -517,6 +525,32 @@ public static class GroupEndpoints
             "UPDATE dbo.ScoreGroup SET UpdatedUtc = SYSUTCDATETIME() WHERE GroupId = @groupId;", new { groupId }, tx, cancellationToken: ct));
         await tx.CommitAsync(ct);
         return Results.NoContent();
+    }
+
+    // ---- Taking over as host (API 2.3.01) -------------------------------------------------------------------
+
+    private static async Task<IResult> TakeOver(Guid groupId, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var group = await conn.QuerySingleOrDefaultAsync<GroupRow>(new CommandDefinition(
+            $"SELECT {GroupCols} FROM dbo.ScoreGroup WITH (UPDLOCK, HOLDLOCK) WHERE GroupId = @groupId;", new { groupId }, tx, cancellationToken: ct));
+        if (group is null) return NotFound();
+        var members = (await conn.QueryAsync<MemberRow>(new CommandDefinition(MembersSql, new { groupId }, tx, cancellationToken: ct))).ToList();
+        var mine = members.FirstOrDefault(m => m.ArcherId == me);
+        if (mine is null) return NotFound();
+        if (group.Status == GroupRules.Closed) return Error(409, "group_closed", "This group has been closed.");
+        if (mine.Kind == GroupRules.Host) { await tx.CommitAsync(ct); return await GroupResult(conn, groupId, user, null, ct); }
+        if (mine.Kind != GroupRules.Joined) return Error(403, "not_a_scorer", "Join the group on your phone to take over.");
+
+        await conn.ExecuteAsync(new CommandDefinition("""
+            UPDATE dbo.ScoreGroupMember SET Kind = 'FRIEND' WHERE GroupId = @groupId AND Kind = 'HOST';
+            UPDATE dbo.ScoreGroupMember SET Kind = 'HOST' WHERE GroupId = @groupId AND MemberId = @memberId;
+            UPDATE dbo.ScoreGroup SET HostId = @me, UpdatedUtc = SYSUTCDATETIME() WHERE GroupId = @groupId;
+            """, new { groupId, memberId = mine.MemberId, me }, tx, cancellationToken: ct));
+        await tx.CommitAsync(ct);
+        return await GroupResult(conn, groupId, user, null, ct);
     }
 
     // ---- Helpers ----------------------------------------------------------------------------------------------

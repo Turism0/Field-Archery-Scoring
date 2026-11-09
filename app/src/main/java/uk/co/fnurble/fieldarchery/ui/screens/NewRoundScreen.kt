@@ -137,7 +137,8 @@ fun NewRoundScreen(
                     )
                     2 -> {
                         Text(
-                            "Others join on their own phones with a code or QR. Needs signal and signing in.",
+                            "Others join on their own phones with a code or QR. Needs signing in; with no signal, phones " +
+                                "share scores directly (Bluetooth).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -158,6 +159,15 @@ fun NewRoundScreen(
                                 }
                             }
                         }
+                        val expectedError = f.liveExpectedText.isNotEmpty() && f.liveExpected == null
+                        NumberField(
+                            label = "Archers in the group (with you)",
+                            value = f.liveExpectedText,
+                            onValue = { v -> vm.update { it.copy(liveExpectedText = v) } },
+                            isError = expectedError,
+                            supportingText = if (expectedError) "${f.liveExpectedRange.first} to ${f.liveExpectedRange.last}"
+                            else "Start waits until this many are in (friends and guests you add count).",
+                        )
                         if (f.liveMethod.checked) {
                             Text(
                                 "Go through the group archer by archer: they call their score and both their scorers enter it. " +

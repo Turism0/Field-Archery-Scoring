@@ -112,6 +112,7 @@ fun ScoringScreen(
     var showOverride by remember { mutableStateOf(false) }
     var confirmFinish by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmTakeOver by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var showLocation by rememberSaveable { mutableStateOf(false) }
     var askedForName by rememberSaveable { mutableStateOf(false) }
@@ -183,6 +184,9 @@ fun ScoringScreen(
                                     text = { Text(if (inGroup && member != null) "Round details – ${member.name}" else "Round details") },
                                     onClick = { menuOpen = false; onEditDetails(currentId) },
                                 )
+                                if (live?.state?.canTakeOver == true) {
+                                    DropdownMenuItem(text = { Text("Take over as host") }, onClick = { menuOpen = false; confirmTakeOver = true })
+                                }
                                 DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }
@@ -276,6 +280,8 @@ fun ScoringScreen(
             onFinish = { showCard = false; confirmFinish = true },
         )
     }
+
+    if (confirmTakeOver) TakeOverDialog(onConfirm = { confirmTakeOver = false; vm.takeOver() }, onDismiss = { confirmTakeOver = false })
 
     // Double / 3+ scorers with no signal and no phones in range (2.3): compare five targets by hand.
     manualCheck?.let { c -> ManualCheckDialog(c, onAgree = vm::manualCheckAgreed, onLater = vm::manualCheckLater) }
@@ -741,6 +747,24 @@ private fun OverrideDialog(initial: Int, onDismiss: () -> Unit, onSave: (Int) ->
 /** In a group everyone is at the same location; the scorer's round has it (and the GPS position). */
 private fun shownLocation(group: List<GroupMember>, r: Round): RoundLocation =
     group.firstOrNull { it.role == GroupRole.SCORER }?.round?.location ?: r.location
+
+/** Taking over as host (2.3.01): only when the host's phone has gone. Shared with the lobby. */
+@Composable
+fun TakeOverDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Take over as host?") },
+        text = {
+            Text(
+                "Only if the host's phone has stopped working or gone. Your phone keeps the group going: the others " +
+                    "follow it, the host's card is scored by the rest of you, and who scores which card may be shared " +
+                    "out again. The host can join again with the code on any phone to get their card back.",
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Take over") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
 
 /** Five targets to compare aloud with the other scorer when the phones can't reach each other (2.3, Pete). */
 @Composable

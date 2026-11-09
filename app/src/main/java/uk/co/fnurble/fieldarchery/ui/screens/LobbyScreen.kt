@@ -74,6 +74,8 @@ fun LobbyScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     var confirmCancel by remember { mutableStateOf(false) }
+    var confirmEarlyStart by remember { mutableStateOf(false) }
+    var confirmTakeOver by remember { mutableStateOf(false) }
     val s = poll?.state
     AskForNearby()
 
@@ -143,19 +145,32 @@ fun LobbyScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            SectionCard(title = "In the group (${s.members.size})", subtitle = "In scoring order.") {
+            SectionCard(
+                title = if (s.expected > 0) "In the group (${s.members.size} of ${s.expected})" else "In the group (${s.members.size})",
+                subtitle = "In scoring order.",
+            ) {
                 s.members.sortedBy { it.sortOrder }.forEach { m -> MemberLine(m, isMe = m.memberId == s.myMemberId) }
             }
             // No signal: phone to phone instead; Bluetooth off etc. (2.3)
             poll?.let { LiveLinkNotes(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (s.isHost) {
+                // Start waits for everyone the host said would be in (2.3.01); "Start anyway" if someone doesn't turn up.
                 Button(
                     onClick = { vm.start() },
-                    enabled = !busy && !s.started && !s.closed,
+                    enabled = !busy && !s.started && !s.closed && s.everyoneIn,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(if (busy) "Starting…" else "Start scoring") }
+                if (!s.everyoneIn) {
+                    Text(
+                        "Waiting for ${s.expected - s.members.size} more to join (${s.expected} in the group).",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedButton(onClick = { confirmEarlyStart = true }, enabled = !busy && !s.started && !s.closed, modifier = Modifier.fillMaxWidth()) {
+                        Text("Start anyway")
+                    }
+                }
                 Text(
-                    "Start once everyone has joined. Anyone joining later can still use the code.",
+                    "Anyone joining later can still use the code, and anyone who drops out can join again to get their card back.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -170,9 +185,30 @@ fun LobbyScreen(
                 OutlinedButton(onClick = { confirmCancel = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                     Text("Leave the group")
                 }
+                if (s.canTakeOver) {
+                    TextButton(onClick = { confirmTakeOver = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("Host's phone gone? Take over as host")
+                    }
+                }
             }
         }
     }
+
+    if (confirmEarlyStart && s != null) {
+        AlertDialog(
+            onDismissRequest = { confirmEarlyStart = false },
+            title = { Text("Start without everyone?") },
+            text = {
+                Text(
+                    "${s.members.size} of ${s.expected} are in: " + s.members.sortedBy { it.sortOrder }.joinToString(", ") { it.name } +
+                        ". Anyone else can still join with the code; who scores which card is shared out again when they do.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmEarlyStart = false; vm.start() }) { Text("Start") } },
+            dismissButton = { TextButton(onClick = { confirmEarlyStart = false }) { Text("Wait") } },
+        )
+    }
+    if (confirmTakeOver) TakeOverDialog(onConfirm = { confirmTakeOver = false; vm.takeOver() }, onDismiss = { confirmTakeOver = false })
 
     if (confirmCancel && s != null) {
         AlertDialog(
@@ -181,7 +217,8 @@ fun LobbyScreen(
             text = {
                 Text(
                     if (s.isHost) "The code stops working and the group's rounds are deleted from this phone."
-                    else "Your round in this group is deleted from this phone.",
+                    else "Your round in this group is deleted from this phone." +
+                        (if (s.started) " Your card stays in the group: join again with the code to get it back." else ""),
                 )
             },
             confirmButton = {

@@ -929,6 +929,9 @@ class LobbyViewModel(
 
     fun start() = act { live.start(groupId) }
 
+    /** The host's phone has gone: this phone takes over as host (2.3.01). */
+    fun takeOver() = act { live.takeOver(groupId) }
+
     /** Host: close the group and delete it here. A joined archer: leave it and delete the copy here. */
     fun cancel(onDone: () -> Unit) = act {
         val mine = myRoundId
@@ -1152,13 +1155,19 @@ data class NewRoundForm(
     /** Group round scored on this phone (app 2.0): you plus [members]. */
     val group: Boolean = false,
     val members: List<GroupMemberDraft> = emptyList(),
-    /** Live group (app 2.1): others join on their own phones with a code; needs signal. */
+    /** Live group (app 2.1): others join on their own phones with a code (no signal: phone to phone, 2.3). */
     val live: Boolean = false,
     val liveMethod: LiveMethod = LiveMethod.SINGLE,
+    /** Live group: how many archers in all, including you and anyone added here (Start waits for them, 2.3.01). */
+    val liveExpectedText: String = "",
     val starting: Boolean = false,
     val error: String? = null,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
+
+    /** At least you and whoever's been added here; at most the group limit. */
+    val liveExpectedRange: IntRange get() = (members.size + 1)..RoundRepository.MAX_GROUP
+    val liveExpected: Int? get() = liveExpectedText.toIntOrNull()?.takeIf { it in liveExpectedRange }
 
     /** Room for more archers (the limit includes you). */
     val canAddMember: Boolean get() = members.size + 1 < RoundRepository.MAX_GROUP
@@ -1179,7 +1188,7 @@ data class NewRoundForm(
 
     val isValid: Boolean
         get() = targetCount != null && archerClass != null && ageGroup != null && bowStyle != null &&
-            (!group || live || members.isNotEmpty())
+            (!group || live || members.isNotEmpty()) && (!live || liveExpected != null)
 }
 
 /** Someone being added to a group round: a friend (from your friends list) or a guest (name only). */
@@ -1263,7 +1272,7 @@ class NewRoundViewModel(
                 groupId = groupId, live = true,
             )
             try {
-                repo.create(groupId, f.liveMethod)
+                repo.create(groupId, f.liveMethod, f.liveExpected ?: 0)
                 locations.captureFor(ownId)
                 update { it.copy(starting = false) }
                 onLive(groupId)
@@ -1742,8 +1751,25 @@ class ScoringViewModel(
 
     fun reopen() = viewModelScope.launch { rounds.setGroupStatus(_roundId.value, RoundStatus.IN_PROGRESS) }
 
-    /** Deletes the round (in a group, everyone's). */
+    /** Live group: the host's phone has gone, so this phone takes over as host (2.3.01). */
+    fun takeOver() {
+        val gid = liveGroupId ?: return
+        viewModelScope.launch {
+            try {
+                liveRepo?.takeOver(gid)
+                _message.value = "You're the host now. Other phones follow yours when they're in range or have signal."
+            } catch (e: ApiException) {
+                _message.value = e.message
+            }
+        }
+    }
+
+    /** Deletes the round (in a group, everyone's). A live group: the host closes it; others leave (and can join again). */
     fun delete(onDone: () -> Unit) = viewModelScope.launch {
+        val gid = liveGroupId
+        if (gid != null && liveRepo != null) {
+            runCatching { if (_live.value?.state?.isHost == true) liveRepo.close(gid) else liveRepo.leave(gid) }
+        }
         rounds.deleteGroup(_roundId.value)
         onDone()
     }

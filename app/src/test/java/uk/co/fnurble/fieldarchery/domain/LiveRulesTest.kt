@@ -73,8 +73,10 @@ class LiveRulesTest {
         val same = scored(1).totalPoints == other.target.totalPoints
         assertEquals(LiveRules.MISMATCH, LiveRules.cells(listOf(entry(1, "A", "H"), other), scorers)[1 to "A"])
         if (same) assertTrue(LiveRules.matchKey(scored(1)) != LiveRules.matchKey(other.target))
-        // Someone not scoring the card is ignored.
-        assertEquals(LiveRules.WAITING, LiveRules.cells(listOf(entry(1, "A", "H"), entry(1, "A", "C")), scorers)[1 to "A"])
+        // Someone not scoring the card (any more) is ignored, unless enough entries agree (scorers changed, 2.3.01).
+        assertEquals(LiveRules.MATCHED, LiveRules.cells(listOf(entry(1, "A", "H"), entry(1, "A", "C")), scorers)[1 to "A"])
+        assertEquals(LiveRules.WAITING, LiveRules.cells(listOf(entry(1, "A", "H"), other.copy(scorerMemberId = "C")), scorers)[1 to "A"])
+        assertEquals(LiveRules.WAITING, LiveRules.cells(listOf(entry(1, "A", "C")), scorers)[1 to "A"])
         // Before scorers are set, one entry counts.
         assertEquals(LiveRules.MATCHED, LiveRules.cells(listOf(entry(1, "A", "H")), emptyMap())[1 to "A"])
     }

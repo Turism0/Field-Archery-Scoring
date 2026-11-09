@@ -194,6 +194,13 @@ class FieldArcheryApi(
     suspend fun putEntries(token: String, groupId: String, entries: JSONArray): JSONObject =
         request("PUT", "/api/groups/$groupId/entries", JSONObject().put("entries", entries), token)
 
+    /** Groups you're in (last 30 days): { groups: [{ groupId, code, status, myMemberId, myKind, … }] }. */
+    suspend fun groups(token: String): JSONObject = request("GET", "/api/groups", body = null, token = token)
+
+    /** A joined archer takes over as host (API 2.3.01). → the group. */
+    suspend fun takeOverGroup(token: String, groupId: String): JSONObject =
+        request("POST", "/api/groups/$groupId/host", JSONObject(), token)
+
     /** Leave the group (a joined archer), or the host removes someone. */
     suspend fun removeGroupMember(token: String, groupId: String, memberId: String) {
         request("DELETE", "/api/groups/$groupId/members/$memberId", body = null, token = token)

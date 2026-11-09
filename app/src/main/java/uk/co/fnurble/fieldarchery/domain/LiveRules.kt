@@ -145,6 +145,10 @@ object LiveRules {
      * Each card's score on each target (server Cells): MATCHED when every scorer for the card has entered the same score
      * (one scorer: as soon as it's entered), MISMATCH when two differ, WAITING while a scorer still has to enter it.
      * Entries from someone not scoring the card are ignored; before scorers are set any single entry counts.
+     *
+     * One difference from the server (2.3.01): when the scorers have changed (someone took over as host, or left) and
+     * the card's current scorers haven't all entered a target, it still counts as matched if enough entries were made
+     * for it and they all agree, so targets already agreed don't go back to waiting.
      */
     fun cells(entries: Collection<Entry>, scorers: Map<String, List<String>>): Map<Pair<Int, String>, String> =
         entries.groupBy { it.targetNo to it.cardMemberId }.mapValues { (key, list) ->
@@ -152,7 +156,9 @@ object LiveRules {
             val counted = if (assigned.isEmpty()) list.take(1) else list.filter { it.scorerMemberId in assigned }
             val needed = maxOf(1, assigned.size)
             when {
-                counted.size < needed -> WAITING
+                counted.size < needed ->
+                    if (assigned.isNotEmpty() && list.size >= needed && list.map { matchKey(it.target) }.distinct().size == 1) MATCHED
+                    else WAITING
                 counted.map { matchKey(it.target) }.distinct().size == 1 -> MATCHED
                 else -> MISMATCH
             }

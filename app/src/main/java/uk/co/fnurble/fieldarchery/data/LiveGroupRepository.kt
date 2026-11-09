@@ -119,8 +119,16 @@ data class LiveGroupState(
     val cells: Map<Pair<Int, String>, String> = emptyMap(),
     /** (target, card) this phone's scorer checked by hand with the other scorer (no signal, 2.3). */
     val manualChecks: Set<Pair<Int, String>> = emptySet(),
+    /** How many archers the host said would be in the group; 0 if not said (2.3.01). */
+    val expected: Int = 0,
+    /** Hosts who were taken over from (2.3.01). */
+    val formerHosts: Set<String> = emptySet(),
 ) {
     val isHost: Boolean get() = myKind == "HOST"
+    /** Everyone the host expects is in (or no number was given). */
+    val everyoneIn: Boolean get() = members.size >= expected
+    /** A joined archer can take over if the host's phone has gone (2.3.01). */
+    val canTakeOver: Boolean get() = !isHost && myKind == "JOINED" && !closed
     /** Two scorers per card, saved when they match. */
     val checked: Boolean get() = LiveMethod.fromCode(method)?.checked == true
     val started: Boolean get() = status == "STARTED"
@@ -307,9 +315,10 @@ class LiveGroupRepository(
 
     /**
      * Host: makes the live group from the rounds already on this phone (made by [RoundRepository.createGroupRound] with
-     * [groupId]) with a new join code. Works with no signal: the server is told when there is. Returns the code.
+     * [groupId]) with a new join code. [expected]: how many archers will be in the group (Start waits for them, 2.3.01).
+     * Works with no signal: the server is told when there is. Returns the code.
      */
-    suspend fun create(groupId: String, method: LiveMethod): String {
+    suspend fun create(groupId: String, method: LiveMethod, expected: Int = 0): String {
         val account = accounts.account.value ?: throw ApiException(401, "not_signed_in", "Sign in (Profile) to use live groups.")
         val local = rounds.groupRounds(groupId)
         val mine = local.first { it.groupRole == GroupRole.SCORER }
@@ -327,10 +336,11 @@ class LiveGroupRepository(
             groupId = groupId, code = code, method = method.code,
             roundType = RoundType.entries.firstOrNull { it.name == mine.roundType } ?: RoundType.BIG_GAME,
             targetCount = mine.targetCount, shootDate = mine.shootDate, locationId = mine.locationId,
-            locationName = mine.locationName, status = LiveRules.OPEN, members = members,
+            locationName = mine.locationName, status = LiveRules.OPEN, members = members, expected = expected,
         )
         prefs.edit().putString(groupId, mine.id).putString("$groupId:code", code).putString("$groupId:method", method.code)
-            .putBoolean("$groupId:host", true).apply()
+            .putBoolean("$groupId:host", true)
+            .putStringSet("$groupId:added", members.filter { it.kind != LiveRules.HOST }.map { it.memberId }.toSet()).apply()
         lock.withLock { put(r) }
         // With signal, the server checks the group now (and a clashing code is changed). Without, carry on.
         try {
@@ -389,6 +399,8 @@ class LiveGroupRepository(
                     api.joinGroup(account.token, joinBody(clean, null, me))
                 } catch (e: ApiException) {
                     if (e.status == 401) accounts.clear()
+                    // The host on another phone (theirs died): this phone becomes the host's (2.3.01).
+                    if (e.code == "is_host") { groupId = hostOnThisPhone(account.token, clean); break }
                     if (!e.isNetwork && e.code != "no_such_group") throw e
                     null
                 }
@@ -405,6 +417,24 @@ class LiveGroupRepository(
             "Couldn't find the group. Check the code with the host. With no signal, stand near the host's phone " +
                 "(both with Bluetooth on and Nearby devices allowed).",
         )
+    }
+
+    /** The host joining their own group on another phone (with signal): the group from the server, as its host. */
+    private suspend fun hostOnThisPhone(token: String, code: String): String {
+        val mine = call { api.groups(token) }.optJSONArray("groups")?.objects().orEmpty()
+            .firstOrNull { it.optString("code") == code && it.optString("myKind") == LiveRules.HOST && it.optString("status") != LiveRules.CLOSED }
+            ?: throw ApiException(404, "no_such_group", "Couldn't find your group on the server.")
+        val gid = mine.getString("groupId")
+        val json = call { api.group(token, gid) }
+        prefs.edit().putString(gid, json.getJSONObject("me").getString("memberId")).putString("$gid:code", json.getString("code"))
+            .putString("$gid:method", json.getString("method")).putBoolean("$gid:host", true).putBoolean("$gid:server", true).apply()
+        lock.withLock {
+            val r = parseGroup(json, replicas.value[gid])
+            put(r.copy(entries = LiveRules.mergeEntries(r.entries, json.optJSONArray("entries")?.objects().orEmpty().mapNotNull { parseEntry(it) }).first))
+            mergeServer(gid, json)
+        }
+        followNearby(gid)
+        return gid
     }
 
     private suspend fun joinedViaServer(json: JSONObject): String {
@@ -430,14 +460,22 @@ class LiveGroupRepository(
         // Say hello again as a member of the group: the host's phone sends everything it has.
         replicas.value[gid]?.members?.firstOrNull { it.memberId == mine }?.let { m ->
             nearby.send(nearby.endpoints, JSONObject().put("t", "HELLO").put("v", PROTOCOL).put("code", state.getString("code"))
-                .put("groupId", gid).put("member", memberJson(m)))
+                .put("groupId", gid).put("hostTerm", replicas.value[gid]?.hostTerm ?: 0).put("member", memberJson(m)))
         }
         return gid
     }
 
-    /** Leave a group you joined (your round stays on your phone). Works with no signal. */
+    /**
+     * Leave a group you joined. Before scoring starts you're taken out of the group; once it's started your card stays
+     * in it (2.3.01), so joining again with the code gets it back with every score so far. Works with no signal.
+     */
     suspend fun leave(groupId: String) {
         val me = myMemberId(groupId)
+        if (replicas.value[groupId]?.status == LiveRules.STARTED) {
+            if (nearbyGroup == groupId) { nearby.stop(); nearbyGroup = null }
+            forget(groupId)
+            return
+        }
         if (nearbyGroup == groupId) {
             nearby.send(nearby.endpoints, JSONObject().put("t", "LEAVE"))
             delay(300)
@@ -454,6 +492,49 @@ class LiveGroupRepository(
     suspend fun markChecked(groupId: String, cells: Set<Pair<Int, String>>) = lock.withLock {
         val r = replicas.value[groupId] ?: return@withLock
         put(r.copy(manualChecks = r.manualChecks + cells))
+    }
+
+    /**
+     * The host's phone has gone (2.3.01): this phone takes over as host. The old host stays in the group as a card the
+     * others score (they get it back by joining again on a phone); scorers are shared out again. Works with no signal:
+     * phones in range follow this one, and the server is told when there's signal. If two phones take over, the later
+     * one wins.
+     */
+    suspend fun takeOver(groupId: String) {
+        val account = accounts.account.value ?: throw ApiException(401, "not_signed_in", "Sign in (Profile) to use live groups.")
+        val me = myMemberId(groupId) ?: return
+        lock.withLock {
+            val r = replicas.value[groupId] ?: throw ApiException(404, "no_such_group", "That group isn't on this phone.")
+            if (r.status == LiveRules.CLOSED) throw ApiException(409, "group_closed", "This group has been closed.")
+            val old = r.members.filter { it.kind == LiveRules.HOST && it.memberId != me }.map { it.memberId }.toSet()
+            val members = r.members.map {
+                when {
+                    it.memberId == me -> it.copy(kind = LiveRules.HOST, archerId = account.archerId)
+                    it.memberId in old -> it.copy(kind = LiveRules.FRIEND)
+                    else -> it
+                }
+            }
+            prefs.edit().putBoolean("$groupId:host", true).putBoolean("$groupId:takeover", true).apply()
+            lastFromHost.remove(groupId)
+            endpointMember.clear()
+            put(rescore(r.copy(members = members, hostTerm = r.hostTerm + 1, formerHosts = r.formerHosts + old)))
+        }
+        followNearby(groupId)
+        scope.launch { runCatching { syncLock.withLock { hostSync(groupId) } } }
+    }
+
+    /** Someone else is the host now (they took over): this phone carries on as a member. Call with [lock] held. */
+    private fun stepDown(groupId: String, hostTerm: Int?) {
+        prefs.edit().putBoolean("$groupId:host", false).putBoolean("$groupId:server", false).remove("$groupId:takeover").apply()
+        endpointMember.clear()
+        lastFromHost.remove(groupId)
+        val r = replicas.value[groupId] ?: return
+        val me = myMemberId(groupId)
+        put(r.copy(
+            hostTerm = maxOf(r.hostTerm, hostTerm ?: r.hostTerm),
+            members = r.members.map { if (it.memberId == me) it.copy(kind = LiveRules.JOINED) else it },
+        ))
+        scope.launch { followNearby(groupId) }
     }
 
     // ---- Following the group -----------------------------------------------------------------------------
@@ -541,11 +622,33 @@ class LiveGroupRepository(
     private suspend fun hostSync(groupId: String) {
         val token = token()
         refreshLocation(groupId)
+        // Took over as host (2.3.01): tell the server first.
+        if (prefs.getBoolean("$groupId:takeover", false)) {
+            try {
+                call { api.takeOverGroup(token, groupId) }
+                prefs.edit().remove("$groupId:takeover").apply()
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status >= 500) throw e
+                if (e.status != 404) {   // 404: the server hasn't got the group yet (made with no signal): carry on
+                    prefs.edit().remove("$groupId:takeover").apply()
+                    lock.withLock { stepDown(groupId, null) }
+                    throw e
+                }
+            }
+        }
         val server = try {
             call { api.group(token, groupId) }
         } catch (e: ApiException) {
             if (e.status != 404) throw e
             null
+        }
+        // Someone else took over as host on the server: carry on as a member.
+        val account = accounts.account.value
+        if (server != null && account != null && !prefs.getBoolean("$groupId:takeover", false) &&
+            server.optString("hostArcherId").let { it.isNotEmpty() && !it.equals(account.archerId, ignoreCase = true) }
+        ) {
+            lock.withLock { stepDown(groupId, null); mergeServer(groupId, server) }
+            return
         }
         if (server != null) lock.withLock { mergeServer(groupId, server) }
         val r = replicas.value[groupId] ?: return
@@ -782,6 +885,11 @@ class LiveGroupRepository(
         val r = replicas.value[gid] ?: return@withLock
         when (type) {
             "HELLO" -> {
+                // That phone has heard from a newer host (someone took over): this one steps down.
+                if (msg.optInt("hostTerm", 0) > r.hostTerm) {
+                    stepDown(gid, msg.optInt("hostTerm"))
+                    return@withLock
+                }
                 val m = parseMember(msg.getJSONObject("member"))
                 val problem = when {
                     msg.optString("code") != r.code && msg.optString("groupId") != gid -> "That isn't this group's code."
@@ -841,12 +949,20 @@ class LiveGroupRepository(
             "_CONNECTED" -> {
                 // Back in range: say who we are, and send everything we have (ours and what the server gave us).
                 val me = r.members.firstOrNull { it.memberId == myMemberId(gid) } ?: return@withLock
-                nearby.send(ep, JSONObject().put("t", "HELLO").put("v", PROTOCOL).put("code", r.code).put("groupId", gid).put("member", memberJson(me)))
+                nearby.send(ep, JSONObject().put("t", "HELLO").put("v", PROTOCOL).put("code", r.code).put("groupId", gid)
+                    .put("hostTerm", r.hostTerm).put("member", memberJson(me)))
                 sendEntries(listOf(ep), r.entries.values)
             }
             "STATE" -> {
                 val g = msg.getJSONObject("group")
                 if (g.optString("groupId") != gid) return@withLock
+                // From a host that's since been taken over from: tell it (in HELLO) and wait for the new one.
+                if (g.optInt("hostTerm", 0) < r.hostTerm) {
+                    val me = r.members.firstOrNull { it.memberId == myMemberId(gid) } ?: return@withLock
+                    nearby.send(ep, JSONObject().put("t", "HELLO").put("v", PROTOCOL).put("code", r.code).put("groupId", gid)
+                        .put("hostTerm", r.hostTerm).put("member", memberJson(me)))
+                    return@withLock
+                }
                 lastFromHost[gid] = System.currentTimeMillis()
                 val next = parseGroup(g, r)
                 if (next != r) put(next)
@@ -922,6 +1038,8 @@ class LiveGroupRepository(
             entries = r.entries.values.map { LiveEntry(it.targetNo, it.cardMemberId, it.scorerMemberId, it.target, it.target.totalPoints, it.enteredUtc) },
             cells = LiveRules.cells(r.entries.values, r.members.associate { it.memberId to it.scorers }),
             manualChecks = r.manualChecks,
+            expected = r.expected,
+            formerHosts = r.formerHosts,
         )
     }
 
@@ -934,12 +1052,16 @@ class LiveGroupRepository(
     private suspend fun applyToRounds(s: LiveGroupState) {
         if (!isLive(s.groupId)) return
         val local = rounds.groupRounds(s.groupId).associateBy { it.id }
+        val added = prefs.getStringSet("${s.groupId}:added", emptySet()).orEmpty()
+        val friends = accounts.cachedFriends().map { it.archerId }.toSet()
         for (m in s.members) {
             val isMe = m.memberId == s.myMemberId
+            // Friends' rounds go to them from the phone that added them, or from a host who took over and is their friend.
             val role = when {
                 isMe -> GroupRole.SCORER
-                m.kind == "FRIEND" && s.isHost -> GroupRole.FRIEND
-                m.kind == "GUEST" && s.isHost -> GroupRole.GUEST
+                m.kind == "FRIEND" && m.memberId !in s.formerHosts &&
+                    (m.memberId in added || (s.isHost && m.archerId != null && m.archerId in friends)) -> GroupRole.FRIEND
+                m.kind == "GUEST" && (s.isHost || m.memberId in added) -> GroupRole.GUEST
                 else -> GroupRole.MIRROR
             }
             val existing = local[m.memberId]
@@ -954,8 +1076,9 @@ class LiveGroupRepository(
         }
         for ((key, target) in savedTargets(s)) {
             val (targetNo, card) = key
-            if (!s.checked && s.canScore(card)) continue   // this phone's own entries are saved as they're made
             val current = rounds.get(card) ?: continue
+            // Cards this phone scores are saved as they're entered; only fill in blanks (joined again, 2.3.01).
+            if (!s.checked && s.canScore(card) && !current.target(targetNo).isBlank()) continue
             if (current.target(targetNo) != target) rounds.saveTarget(card, target)
         }
         if (s.closed) {
@@ -1036,6 +1159,10 @@ class LiveGroupRepository(
         .put("locationId", r.locationId ?: JSONObject.NULL)
         .put("locationName", r.locationName ?: JSONObject.NULL)
         .put("status", r.status)
+        // Phone to phone only (the server doesn't keep these): Start waits for this many (2.3.01); who's host, and since when.
+        .put("expected", r.expected)
+        .put("hostTerm", r.hostTerm)
+        .put("formerHosts", JSONArray().apply { r.formerHosts.forEach { put(it) } })
         .apply {
             if (me != null) put("me", JSONObject().put("memberId", me).put("kind", r.members.firstOrNull { it.memberId == me }?.kind ?: LiveRules.JOINED))
         }
@@ -1061,6 +1188,9 @@ class LiveGroupRepository(
         entries = base?.entries.orEmpty(),
         removed = base?.removed.orEmpty(),
         manualChecks = base?.manualChecks.orEmpty(),
+        expected = if (json.has("expected")) json.optInt("expected") else base?.expected ?: 0,
+        hostTerm = maxOf(base?.hostTerm ?: 0, json.optInt("hostTerm", 0)),
+        formerHosts = base?.formerHosts.orEmpty() + json.optJSONArray("formerHosts").strings(),
     )
 
     /** The host's group for PUT /api/groups/{id}: you, friends and guests (archers on their own phones join themselves). */
@@ -1164,6 +1294,12 @@ internal data class LiveReplica(
     val removed: Set<String> = emptySet(),
     /** (target, card) checked by hand on this phone with no signal. */
     val manualChecks: Set<Pair<Int, String>> = emptySet(),
+    /** How many archers the host said would be in the group (0: not said). */
+    val expected: Int = 0,
+    /** Goes up each time someone takes over as host: the newest host wins phone to phone. */
+    val hostTerm: Int = 0,
+    /** Hosts who were taken over from (their cards aren't sent to them as friends' rounds). */
+    val formerHosts: Set<String> = emptySet(),
 ) {
     fun ruleMembers() = members.map { LiveRules.Member(it.memberId, it.kind, it.sortOrder) }
 }
@@ -1208,6 +1344,10 @@ internal fun JSONObject.toTargetScore(): TargetScore {
         arrows = if (type == TargetType.WOODSMAN) WoodsmanScoring.decode(optString("arrows")) else emptyList(),
     )
 }
+
+/** Nothing entered on this target yet. */
+private fun TargetScore.isBlank() =
+    overridePoints == null && arrows.isEmpty() && animals.all { it == AnimalResult.Pending }
 
 private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 

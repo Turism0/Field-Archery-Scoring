@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    API – group scoring (API 1.9.06). Run in PowerShell 7 (pwsh):
+    API – group scoring (API 1.9.06; taking over as host 2.3.01). Run in PowerShell 7 (pwsh):
 
         .\Test-Groups.ps1
         .\Test-Groups.ps1 -BaseUrl http://localhost:8085
@@ -77,7 +77,7 @@ function CellOf($Result, $No, $Card) { @($Result.Body.results | Where-Object { $
 Write-Host "Testing $BaseUrl`n"
 $r = Call GET '/health'
 if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status)). Is the FieldArcheryApi app pool started?" }
-Expect 'API is version 1.9.06 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'1.9.6') "(got $($r.Body.apiVersion) – publish the new build?)"
+Expect 'API is version 2.3.01 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'2.3.1') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 6 or later (008 run)' ($r.Body.schemaVersion -ge 6) "(got $($r.Body.schemaVersion))"
 
 $A = New-TestUser; $B = New-TestUser; $C = New-TestUser; $D = New-TestUser; $E = New-TestUser
@@ -235,6 +235,23 @@ $cBy = @(ScorersOf $r.Body $cM4)[0]; $guestBy = @(ScorersOf $r.Body $guest4.memb
 Expect 'started: C scores C, A scores the guest' ($r.Status -eq 200 -and $cBy -eq $cM4 -and $guestBy -eq $host4.memberId) "($($r.Status) C by $cBy, guest by $guestBy)"
 $r = Send $g4 $C @((Entry 1 $cM4 $cM4))
 Expect 'C''s own score is saved straight away' ((CellOf $r 1 $cM4).state -eq 'MATCHED') (Why $r)
+
+# --- 4b. Taking over as host (API 2.3.01): the host's phone has gone ---------------------------------
+Write-Host "`nTaking over as host"
+$r = Call POST "/api/groups/$g4/host" -Token $D.Token
+Expect 'someone not in the group can''t take over' ($r.Status -eq 404) (Why $r)
+$r = Call POST "/api/groups/$g4/host" -Token $C.Token
+Expect 'C takes over: C is the host, A is a friend card' ($r.Status -eq 200 -and (MemberOf $r.Body $C).kind -eq 'HOST' -and (MemberOf $r.Body $A).kind -eq 'FRIEND' -and $r.Body.hostArcherId -eq $C.Id) (Why $r)
+$cHost = @{ memberId = $cM4; kind = 'HOST'; archerId = $C.Id; guestName = $null; archerClass = 'G'; ageGroup = 'ADULT'; bowStyle = 'BB' }
+$aFriend = @{ memberId = $host4.memberId; kind = 'FRIEND'; archerId = $A.Id; guestName = $null; archerClass = 'G'; ageGroup = 'ADULT'; bowStyle = 'LB' }
+$r = Call PUT "/api/groups/$g4" (New-Group $code4 'SELF' @($cHost, $aFriend, $guest4) 'STARTED') -Token $C.Token
+Expect 'the new host sends the group (A stays though not C''s friend)' ($r.Status -eq 200 -and @($r.Body.members).Count -eq 3) (Why $r)
+$r = Call PUT "/api/groups/$g4" (New-Group $code4 'SELF' @($host4, $guest4) 'STARTED') -Token $A.Token
+Expect 'the old host can''t change the group any more' ($r.Status -eq 404) (Why $r)
+$r = Join-Group $code4 $A
+Expect 'A joins again on a phone: joined, same member id' ($r.Status -eq 200 -and (MemberOf $r.Body $A).kind -eq 'JOINED' -and (MemberOf $r.Body $A).memberId -eq $host4.memberId) (Why $r)
+$r = Call POST "/api/groups/$g4/host" -Token $C.Token
+Expect 'taking over again as the host changes nothing' ($r.Status -eq 200 -and (MemberOf $r.Body $C).kind -eq 'HOST') (Why $r)
 
 # --- 5. A friend added by name joins on their own phone; closing --------------------------------------
 Write-Host "`nJoining as a friend, closing"
