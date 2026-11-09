@@ -16,6 +16,7 @@ namespace FieldArcheryApi.Locations;
 ///   GET /api/locations/{id}/page   → { location, myRounds: [...], friends: [{ archerId, username, roundType, rounds, bestTotal,
 ///                                    averagePerAnimal, roundsList: [...] }], bowStyles: [{ roundType, bowStyle, archers, rounds,
 ///                                    bestTotal, averageTotal, averagePerAnimal }] }  (one row per round type)
+///   (API 2.4: bowClasses: the same per bow style, class (G / L) and age group, for the app's class filter.)
 /// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it and
 /// Admins, and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
 /// </summary>
@@ -29,6 +30,9 @@ public static class LocationPageEndpoints
         string AgeGroup, string BowStyle, int TotalPoints, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
 
     private sealed record FriendRow(Guid ArcherId, string Username, string RoundType, int Rounds, int? BestTotal, double? AveragePerAnimal);
+
+    private sealed record BowClassRow(string RoundType, string BowStyle, string ArcherClass, string AgeGroup, int Archers, int Rounds,
+        int? BestTotal, double? AverageTotal, double? AveragePerAnimal);
 
     private sealed record BowRow(string RoundType, string BowStyle, int Archers, int Rounds, int? BestTotal, double? AverageTotal, double? AveragePerAnimal);
 
@@ -100,6 +104,7 @@ public static class LocationPageEndpoints
 
         object friends = Array.Empty<object>();
         object bowStyles = Array.Empty<object>();
+        object bowClasses = Array.Empty<object>();
         if (!loc.IsPrivate)
         {
             // Friends' finished rounds here, with a summary each (average per animal, out of 24).
@@ -160,6 +165,32 @@ public static class LocationPageEndpoints
                 average36 = Over(b.AveragePerAnimal, 36),
                 average40 = Over(b.AveragePerAnimal, 40),
             }).ToList();
+
+            // The same, per class and age group (API 2.4).
+            var classRows = await conn.QueryAsync<BowClassRow>(new CommandDefinition($"""
+                WITH done AS (
+                    SELECT RoundId, ArcherId, RoundType, BowStyle, ArcherClass, AgeGroup, TotalPoints FROM dbo.Round d
+                    WHERE LocationId = @id AND Status = 'COMPLETED' AND IsDeleted = 0),
+                an AS (
+                    SELECT d.RoundType, d.BowStyle, d.ArcherClass, d.AgeGroup, SUM(x.Animals) AS Animals
+                    FROM done d CROSS APPLY ({AnimalsPerRoundSql}) x
+                    GROUP BY d.RoundType, d.BowStyle, d.ArcherClass, d.AgeGroup)
+                SELECT d.RoundType, d.BowStyle, d.ArcherClass, d.AgeGroup, COUNT(DISTINCT d.ArcherId) AS Archers, COUNT(*) AS Rounds,
+                       MAX(d.TotalPoints) AS BestTotal, AVG(CAST(d.TotalPoints AS float)) AS AverageTotal,
+                       CAST(SUM(CAST(d.TotalPoints AS bigint)) AS float) / NULLIF(MAX(an.Animals), 0) AS AveragePerAnimal
+                FROM done d LEFT JOIN an ON an.BowStyle = d.BowStyle AND an.RoundType = d.RoundType
+                    AND an.ArcherClass = d.ArcherClass AND an.AgeGroup = d.AgeGroup
+                GROUP BY d.RoundType, d.BowStyle, d.ArcherClass, d.AgeGroup
+                ORDER BY d.RoundType, COUNT(*) DESC, d.BowStyle;
+                """, new { id = loc.LocationId }, cancellationToken: ct));
+            bowClasses = classRows.Select(b => new
+            {
+                b.RoundType, b.BowStyle, archerClass = b.ArcherClass.Trim(), b.AgeGroup, b.Archers, b.Rounds, b.BestTotal,
+                averageTotal = b.AverageTotal is { } t ? Math.Round(t, 1) : (double?)null,
+                averagePerAnimal = b.AveragePerAnimal is { } a ? Math.Round(a, 1) : (double?)null,
+                average36 = Over(b.AveragePerAnimal, 36),
+                average40 = Over(b.AveragePerAnimal, 40),
+            }).ToList();
         }
 
         return Results.Ok(new
@@ -171,6 +202,7 @@ public static class LocationPageEndpoints
             myRounds = myRounds.Select(Summary),
             friends,
             bowStyles,
+            bowClasses,
         });
     }
 

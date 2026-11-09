@@ -144,7 +144,7 @@ fun FieldArcheryNavHost() {
         // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).
         composable("friends") {
             FriendsScreen(
-                vm = appViewModel { c, _ -> FriendsViewModel(c.friendsRepository, c.accountRepository) },
+                vm = appViewModel { c, _ -> FriendsViewModel(c.friendsRepository, c.accountRepository, c.handicapRepository) },
                 onBack = { nav.popBackStack() },
                 onProfile = { nav.navigate("profile") },
                 onOpenFriend = { f -> nav.navigate("friend/${f.archerId}/${f.username}") },

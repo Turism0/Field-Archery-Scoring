@@ -84,12 +84,14 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | POST | `/api/auth/check` | `{ username }` | `{ username, exists }` |
 | POST | `/api/auth/register` | `{ username, password, deviceName }` | 201 `{ archerId, username, token, expiresUtc }`; 409 `username_taken` |
 | POST | `/api/auth/login` | `{ username, password, deviceName }` | 200 as above; 401 `invalid_credentials`; 423 `locked_out` |
+| POST | `/api/auth/reset` | `{ username, code, newPassword, deviceName }` (API 2.4) | 200 as register, with a new `recoveryCode`. `code`: the recovery code or an Admin's reset code (case, spaces and dashes don't matter). Every other phone is signed out. 401 `invalid_code`; 423 `locked_out` (wrong codes count like wrong passwords) |
+| POST | `/api/auth/recovery-code` | Bearer token; `{ password }` (API 2.4) | `{ recoveryCode }`, a new one (the old one stops working); 401 `wrong_password` |
 | POST | `/api/auth/logout` | `Authorization: Bearer <token>` | 204, revokes this phone's token |
-| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users); `roundOffers` is the number of rounds friends have scored for you, waiting to be accepted |
+| GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, hasRecoveryCode, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users); `roundOffers` is the number of rounds friends have scored for you, waiting to be accepted |
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
-| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game |
+| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest, recent }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game; `recent` (API 2.4): their latest 10 finished Big Game rounds `{ shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints }` for the handicap rating |
 | POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
 | POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
 | DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
@@ -111,6 +113,7 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | POST | `/api/offers/{roundId}/decline` | The friend | 204, deleted |
 | DELETE | `/api/offers/{roundId}` | The scorer | 204, withdrawn |
 | GET | `/api/admin/archers` | Bearer token, Admin or Owner | `{ archers: [{ archerId, username, role, createdUtc, lastLoginUtc }] }`, Owner first, then Admins; 403 `not_admin` |
+| POST | `/api/admin/archers/{archerId}/reset-code` | Bearer token; Admins for users, the Owner for anyone but themselves (API 2.4) | `{ username, code, expiresUtc }`: a one-off password reset code, 24 hours (replaces any earlier one). 403 `not_admin` / `not_owner`; 400 `not_yourself`; 404 `no_such_archer` |
 | PUT | `/api/admin/archers/{archerId}/role` | Bearer token, Owner only; `{ role: "ADMIN" \| "USER" }` | `{ archerId, username, role }`; 403 `not_owner` / `not_admin`; 400 `invalid_role`; 404 `no_such_archer`; 409 `cannot_change_owner` |
 | GET | `/api/locations/nearby?lat=&lon=&radius=` | Bearer token | `{ locations: [{ locationId, name, distanceMetres }], catchmentMetres }`, nearest first. Radius in metres: default the catchment (402 m, a quarter mile, `Locations:CatchmentMetres`), max 10 km. The position isn't stored. |
 | POST | `/api/locations` | Bearer token; `{ name, latitude, longitude, isPrivate? }` | 201 `{ locationId, name }`; 409 `name_taken` with `existing: { locationId, name }`; 400 `invalid_name` (2–60 characters) / `invalid_position` |
@@ -185,6 +188,16 @@ Uploads, re-sends, edits, the download list, rule violations, another archer's a
 ```
 
 Three test accounts: requests (unknown user, yourself, twice), who can accept, both-way friendship, summaries, seeing only finished rounds, read-only, asking back auto-accepts, unfriending. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing password reset (2.4)
+
+Run `sql/012_password_reset.sql` in SSMS first (schema 8), then publish API 2.4.
+
+```powershell
+.\Test-Reset.ps1 -Username Turismo
+```
+
+Recovery codes (with a new account, used once, renewed, a new one from Profile needs the password), wrong codes and the lock-out, every other phone signed out, the Owner's reset codes (once, not for yourself, not by a User), and friends' latest 10 rounds for the rating. `Test-LocationPage.ps1` also checks the per-class rows. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Running every test (2.0.16)
 

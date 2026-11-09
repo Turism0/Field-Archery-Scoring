@@ -19,8 +19,22 @@ class AccountRepository(
 
     suspend fun checkUsername(username: String): UsernameCheck = api.checkUsername(username.trim())
 
-    suspend fun register(username: String, password: String) =
-        signedIn(api.register(username.trim(), password, deviceName()))
+    /** Creates the account and signs in. Returns its recovery code (server 2.4) to show once. */
+    suspend fun register(username: String, password: String): String? =
+        api.register(username.trim(), password, deviceName()).also { signedIn(it) }.recoveryCode
+
+    /**
+     * Forgotten password (2.4): with the recovery code or a reset code from an Admin. Signs in here (every other phone is
+     * signed out) and returns the new recovery code to show once.
+     */
+    suspend fun resetPassword(username: String, code: String, newPassword: String): String? =
+        api.resetPassword(username.trim(), code.trim(), newPassword, deviceName()).also { signedIn(it) }.recoveryCode
+
+    /** A new recovery code (the old one stops working). */
+    suspend fun newRecoveryCode(password: String): String {
+        val token = store.account.value?.token ?: throw uk.co.fnurble.fieldarchery.data.remote.ApiException(401, "not_signed_in", "Sign in first.")
+        return api.newRecoveryCode(token, password)
+    }
 
     suspend fun login(username: String, password: String) =
         signedIn(api.login(username.trim(), password, deviceName()))

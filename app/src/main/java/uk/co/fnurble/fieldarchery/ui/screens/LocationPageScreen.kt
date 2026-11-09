@@ -32,6 +32,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import uk.co.fnurble.fieldarchery.ui.ClassChoice
+import uk.co.fnurble.fieldarchery.ui.components.FilterMenuChip
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,6 +71,8 @@ fun LocationPageScreen(
     val page by vm.page.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    // Class filter for the all-archer table (2.4): "G-ADULT", "L-JUNIOR" … or "" for all classes.
+    var classKey by rememberSaveable { mutableStateOf("") }
     val title = (page as? Load.Ready)?.value?.location?.name ?: "Shoot location"
 
     Scaffold(
@@ -130,13 +134,28 @@ fun LocationPageScreen(
 
                             // ---- Everyone ----
                             item(key = "allHeader") { Header("All archers, by bow style") }
-                            if (data.bowStyles.isEmpty()) {
+                            // Class filter (2.4): the classes shot here, in the usual order.
+                            val classes = data.bowClasses.mapNotNull { b -> b.ageGroup?.let { a -> b.archerClass?.let { ClassChoice(it, a) } } }
+                                .distinct().sortedWith(compareBy({ it.ageGroup.ordinal }, { it.archerClass.ordinal }))
+                            val chosen = classes.firstOrNull { "${it.archerClass.name}-${it.ageGroup.name}" == classKey }
+                            if (classes.isNotEmpty()) {
+                                item(key = "classFilter") {
+                                    FilterMenuChip(
+                                        title = "Class", anyLabel = "All classes", options = classes, selected = chosen,
+                                        optionLabel = { it.label },
+                                        onSelect = { c -> classKey = c?.let { "${it.archerClass.name}-${it.ageGroup.name}" } ?: "" },
+                                    )
+                                }
+                            }
+                            val shown = if (chosen == null) data.bowStyles
+                            else data.bowClasses.filter { it.archerClass == chosen.archerClass && it.ageGroup == chosen.ageGroup }
+                            if (shown.isEmpty()) {
                                 item(key = "allNone") { Muted("No finished rounds here yet.") }
                             } else {
-                                data.bowStyles.groupBy { it.roundType }.forEach { (type, rows) ->
+                                shown.groupBy { it.roundType }.forEach { (type, rows) ->
                                     item(key = "allTable-$type") {
                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            if (data.bowStyles.any { it.roundType != type }) {
+                                            if (shown.any { it.roundType != type }) {
                                                 Text(typeName(type), style = MaterialTheme.typography.labelLarge)
                                             }
                                             BowStyleTable(rows, if (type == "BIG_GAME") handicap else null)
@@ -148,7 +167,8 @@ fun LocationPageScreen(
                                         "a fan as its animals); Woodsman is per target, out of 30. Avg 36 and Avg 40 are that " +
                                         "average over a whole 36- or 40-target round, so rounds of any length compare fairly." +
                                         (if (handicap != null) " Handicap is Avg 40 in handicap points (out of 1000, the same for the same performance with any bow; " +
-                                            "each bow taken as Gents), so bow styles compare directly; All bows is their average, by rounds." else ""))
+                                            (if (chosen == null) "each bow taken as Gents" else "for ${chosen.label}") +
+                                            "), so bow styles compare directly; All bows is their average, by rounds." else ""))
                                 }
                             }
                         }
@@ -244,12 +264,13 @@ private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> U
 
 @Composable
 private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = null) {
-    // Handicap points of each bow's 40-target average (location stats aren't split by class: taken as Gents).
+    // Handicap points of each bow's 40-target average: for the class filtered on (2.4), else taken as Gents.
     fun ul(b: BowStyleStats): Double? {
         val m = handicap ?: return null
         val bow = BowStyle.fromCode(b.bowStyle) ?: return null
         val avg = b.average40 ?: return null
-        return m.handicapPoints(avg, 960.0, HandicapModel.Archer(bow, ArcherClass.GENTS, AgeGroup.ADULT), m.dataThroughYear)
+        val archer = HandicapModel.Archer(bow, b.archerClass ?: ArcherClass.GENTS, b.ageGroup ?: AgeGroup.ADULT)
+        return m.handicapPoints(avg, 960.0, archer, m.dataThroughYear)
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(vertical = 8.dp)) {

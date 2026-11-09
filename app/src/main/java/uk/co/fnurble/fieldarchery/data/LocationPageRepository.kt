@@ -46,6 +46,9 @@ data class BowStyleStats(
     /** Average per animal × 36 and × 40. */
     val average36: Double? = null,
     val average40: Double? = null,
+    /** Set on the per-class rows (server 2.4); null on the all-classes rows. */
+    val archerClass: ArcherClass? = null,
+    val ageGroup: AgeGroup? = null,
 )
 
 data class LocationPage(
@@ -53,6 +56,8 @@ data class LocationPage(
     val myRounds: List<FriendRoundSummary>,
     val friends: List<LocationFriend>,
     val bowStyles: List<BowStyleStats>,
+    /** The same per class and age group, for the class filter (empty from servers before 2.4). */
+    val bowClasses: List<BowStyleStats> = emptyList(),
 )
 
 /** Map and location pages, straight from the server (nothing stored on the phone). Needs signal. */
@@ -97,19 +102,28 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
                     roundsList = f.getJSONArray("roundsList").objects().map { it.toRoundSummary() },
                 )
             },
-            bowStyles = json.getJSONArray("bowStyles").objects().map { b ->
-                BowStyleStats(
-                    roundType = b.optString("roundType", "BIG_GAME"),
-                    bowStyle = b.getString("bowStyle"),
-                    archers = b.getInt("archers"),
-                    rounds = b.getInt("rounds"),
-                    bestTotal = b.intOrNull("bestTotal"),
-                    averageTotal = b.doubleOrNull("averageTotal"),
-                    averagePerAnimal = b.doubleOrNull("averagePerAnimal"),
-                    average36 = b.doubleOrNull("average36"),
-                    average40 = b.doubleOrNull("average40"),
+            bowStyles = json.getJSONArray("bowStyles").objects().map { it.toBowStats() },
+            bowClasses = json.optJSONArray("bowClasses")?.objects().orEmpty().map { b ->
+                b.toBowStats().copy(
+                    archerClass = if (b.optString("archerClass") == "L") ArcherClass.LADIES else ArcherClass.GENTS,
+                    ageGroup = runCatching { AgeGroup.valueOf(b.getString("ageGroup")) }.getOrNull(),
                 )
             },
+        )
+    }
+
+    private fun JSONObject.toBowStats(): BowStyleStats {
+        val b = this
+        return BowStyleStats(
+            roundType = b.optString("roundType", "BIG_GAME"),
+            bowStyle = b.getString("bowStyle"),
+            archers = b.getInt("archers"),
+            rounds = b.getInt("rounds"),
+            bestTotal = b.intOrNull("bestTotal"),
+            averageTotal = b.doubleOrNull("averageTotal"),
+            averagePerAnimal = b.doubleOrNull("averagePerAnimal"),
+            average36 = b.doubleOrNull("average36"),
+            average40 = b.doubleOrNull("average40"),
         )
     }
 

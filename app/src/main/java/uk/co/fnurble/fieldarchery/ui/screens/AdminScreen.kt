@@ -1,5 +1,9 @@
 package uk.co.fnurble.fieldarchery.ui.screens
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,8 +66,10 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit,
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val changing by vm.changing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val resetCode by vm.resetCode.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val isOwner = role == AccountRole.OWNER
+    var confirmReset by remember { mutableStateOf<AdminArcher?>(null) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -185,12 +191,54 @@ fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit, onLocations: () -> Unit,
                                 busy = changing == archer.archerId,
                                 anyBusy = changing != null,
                                 onSetAdmin = { vm.setAdmin(archer, it) },
+                                // Password reset codes (2.4): admins for users, the owner for anyone but themselves.
+                                canReset = archer.archerId != vm.myArcherId && archer.role != AccountRole.OWNER &&
+                                    (archer.role != AccountRole.ADMIN || isOwner),
+                                onReset = { confirmReset = archer },
                             )
                         }
                     }
                 }
             }
         }
+    }
+
+    confirmReset?.let { archer ->
+        AlertDialog(
+            onDismissRequest = { confirmReset = null },
+            title = { Text("Reset code for ${archer.username}?") },
+            text = {
+                Text(
+                    "Only for someone who has lost both their password and their recovery code. Check it's really " +
+                        "${archer.username} first (e.g. in person): the code lets whoever has it set a new password. " +
+                        "It works once, for 24 hours.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmReset = null; vm.makeResetCode(archer) }) { Text("Make code") } },
+            dismissButton = { TextButton(onClick = { confirmReset = null }) { Text("Cancel") } },
+        )
+    }
+    resetCode?.let { c ->
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Reset code for ${c.username}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        c.code,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    )
+                    Text(
+                        "Give it to ${c.username} (tell them, don't post it). On the sign-in screen they enter their username, " +
+                            "tap Forgot your password?, and use this code. Works once" +
+                            (c.expiresUtc?.let { ", until " + it.atZone(ZoneId.systemDefault()).toLocalDateTime().format(java.time.format.DateTimeFormatter.ofPattern("d MMM HH:mm")) } ?: "") +
+                            ". Making another replaces it.",
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = vm::resetCodeShown) { Text("Done") } },
+        )
     }
 }
 
@@ -201,6 +249,8 @@ private fun ArcherRow(
     busy: Boolean,
     anyBusy: Boolean,
     onSetAdmin: (Boolean) -> Unit,
+    canReset: Boolean = false,
+    onReset: () -> Unit = {},
 ) {
     val scheme = MaterialTheme.colorScheme
     Card(
@@ -221,6 +271,7 @@ private fun ArcherRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = scheme.onSurfaceVariant,
                 )
+                if (canReset) TextButton(onClick = onReset, enabled = !anyBusy) { Text("Password reset code") }
             }
             if (canChange) {
                 if (busy) {

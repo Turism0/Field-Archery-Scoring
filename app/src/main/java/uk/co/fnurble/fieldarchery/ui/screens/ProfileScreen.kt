@@ -41,6 +41,7 @@ import uk.co.fnurble.fieldarchery.ui.ProfileViewModel
 import uk.co.fnurble.fieldarchery.ui.components.BottomActionBar
 import uk.co.fnurble.fieldarchery.ui.components.DateField
 import uk.co.fnurble.fieldarchery.ui.components.OptionDropdown
+import uk.co.fnurble.fieldarchery.ui.components.RecoveryCodeDialog
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
 import uk.co.fnurble.fieldarchery.ui.components.SegmentedChoice
 import java.time.LocalDate
@@ -51,6 +52,8 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
     val profile by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
+    val recovery by vm.recovery.collectAsStateWithLifecycle()
+    var askPassword by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -89,6 +92,17 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                         }
                         OutlinedButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
                     }
+                    // Password reset with no email (2.4): a recovery code to keep somewhere safe.
+                    Text(
+                        "Lost your recovery code, or made your account before there was one? Make a new one (the old one " +
+                            "stops working).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedButton(onClick = { askPassword = true }, enabled = !recovery.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (recovery.busy) "Making a recovery code…" else "New recovery code")
+                    }
+                    recovery.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             }
 
@@ -133,6 +147,32 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                 )
             }
         }
+    }
+
+    recovery.code?.let { RecoveryCodeDialog(it, onDone = vm::recoveryDone) }
+    if (askPassword) {
+        var password by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { askPassword = false },
+            title = { Text("New recovery code") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter your password to make a new recovery code.")
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { askPassword = false; vm.newRecoveryCode(password) }, enabled = password.isNotEmpty()) { Text("Make code") }
+            },
+            dismissButton = { TextButton(onClick = { askPassword = false }) { Text("Cancel") } },
+        )
     }
 
     if (confirmSignOut) {

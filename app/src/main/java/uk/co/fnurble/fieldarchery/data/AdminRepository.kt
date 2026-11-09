@@ -14,6 +14,9 @@ data class AdminArcher(
     val lastLoginUtc: Instant?,
 )
 
+/** A reset code made for an archer who's lost their password and recovery code (2.4). */
+data class ResetCode(val username: String, val code: String, val expiresUtc: Instant?)
+
 data class AdminLocation(
     val id: String,
     val name: String,
@@ -52,6 +55,12 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
     }
 
     /** Owner only: make an account an Admin, or back to a User. */
+    /** A one-off password reset code for [archerId] (24 hours, server 2.4). → (username, code, expires). */
+    suspend fun resetCode(archerId: String): ResetCode = call { token ->
+        val json = api.adminResetCode(token, archerId)
+        ResetCode(json.getString("username"), json.getString("code"), runCatching { Instant.parse(json.getString("expiresUtc")) }.getOrNull())
+    }
+
     suspend fun setAdmin(archerId: String, admin: Boolean) = call { token ->
         api.setRole(token, archerId, if (admin) AccountRole.ADMIN.name else AccountRole.USER.name)
     }

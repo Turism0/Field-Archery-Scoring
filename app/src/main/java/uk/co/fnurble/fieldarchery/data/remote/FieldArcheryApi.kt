@@ -32,7 +32,14 @@ class ApiException(
 
 data class UsernameCheck(val username: String, val exists: Boolean)
 
-data class AuthResult(val archerId: String, val username: String, val token: String, val expiresUtc: String)
+data class AuthResult(
+    val archerId: String,
+    val username: String,
+    val token: String,
+    val expiresUtc: String,
+    /** A new recovery code to show once (after creating an account or a reset, server 2.4). */
+    val recoveryCode: String? = null,
+)
 
 /**
  * Small client for the API using the platform's HttpURLConnection and org.json,
@@ -58,6 +65,21 @@ class FieldArcheryApi(
 
     suspend fun login(username: String, password: String, deviceName: String): AuthResult =
         request("POST", "/api/auth/login", credentials(username, password, deviceName)).toAuthResult()
+
+    /** Forgotten password (server 2.4): [code] is the recovery code or a reset code from an Admin. */
+    suspend fun resetPassword(username: String, code: String, newPassword: String, deviceName: String): AuthResult =
+        request(
+            "POST", "/api/auth/reset",
+            JSONObject().put("username", username).put("code", code).put("newPassword", newPassword).put("deviceName", deviceName),
+        ).toAuthResult()
+
+    /** A new recovery code (the old one stops working); needs the password again. → the code. */
+    suspend fun newRecoveryCode(token: String, password: String): String =
+        request("POST", "/api/auth/recovery-code", JSONObject().put("password", password), token).getString("recoveryCode")
+
+    /** Owner / Admin: a one-off reset code for an archer (24 hours). → { username, code, expiresUtc } */
+    suspend fun adminResetCode(token: String, archerId: String): JSONObject =
+        request("POST", "/api/admin/archers/$archerId/reset-code", JSONObject(), token)
 
     suspend fun logout(token: String) {
         request("POST", "/api/auth/logout", body = null, token = token)
@@ -259,6 +281,7 @@ class FieldArcheryApi(
         username = getString("username"),
         token = getString("token"),
         expiresUtc = getString("expiresUtc"),
+        recoveryCode = if (isNull("recoveryCode")) null else optString("recoveryCode").ifEmpty { null },
     )
 
     private suspend fun request(method: String, path: String, body: JSONObject?, token: String? = null): JSONObject =

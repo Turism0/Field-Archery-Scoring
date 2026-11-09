@@ -549,7 +549,12 @@ class LiveGroupRepository(
         }
             .distinctUntilChanged()
             .transformWhile { emit(it); it.state?.closed != true }
-            .onStart { acquire(groupId) }
+            .onStart {
+                // Opened in the app: keep it going in the background too (2.4), even if Stop was tapped before.
+                prefs.edit().remove("$groupId:paused").apply()
+                if (isLive(groupId)) LiveGroupService.start(context)
+                acquire(groupId)
+            }
             .onCompletion { release(groupId) }
 
     /** Sends a score this phone entered for [cardMemberId]: to the others now if it can, else when it can. */
@@ -562,6 +567,54 @@ class LiveGroupRepository(
         }
         if (nearbyGroup == groupId) nearby.send(nearby.endpoints, entriesMessage(listOf(e)))
         scope.launch { runCatching { pushEntries(groupId) } }
+    }
+
+    // ---- In the background (2.4) -------------------------------------------------------------------------
+
+    /** Live groups to keep going in the background: not closed, and not stopped from the notification. */
+    fun backgroundGroupIds(): Set<String> = prefs.all.keys.filter { it.endsWith(":code") }.map { it.removeSuffix(":code") }
+        .filter { isLive(it) && !prefs.getBoolean("$it:paused", false) }.toSet()
+
+    /** The notification's Stop: no background running until the group is opened in the app again. */
+    fun pauseBackground() {
+        val e = prefs.edit()
+        backgroundGroupIds().forEach { e.putBoolean("$it:paused", true) }
+        e.apply()
+    }
+
+    /**
+     * Run by [LiveGroupService]: keeps every live group on this phone going (server and phone to phone) until it's
+     * closed or stopped, telling [onStatus] what to show in the notification.
+     */
+    suspend fun keepRunning(onStatus: (String) -> Unit) {
+        val held = mutableSetOf<String>()
+        try {
+            while (true) {
+                val live = backgroundGroupIds()
+                (live - held).forEach { acquire(it); held += it }
+                (held - live).forEach { release(it); held -= it }
+                if (held.isEmpty()) break
+                onStatus(held.mapNotNull { replicas.value[it] }.joinToString("\n") { backgroundText(it) }
+                    .ifEmpty { "Keeping scores in step with the other phones." })
+                delay(5_000)
+            }
+        } finally {
+            held.forEach { release(it) }
+        }
+    }
+
+    private fun backgroundText(r: LiveReplica): String {
+        val serverOk = serverProblem.value[r.groupId] == null
+        val near = if (nearbyGroup == r.groupId) nearby.status.value.connected else 0
+        val others = r.members.count { it.hasPhone && it.memberId != myMemberId(r.groupId) }
+        val how = when {
+            serverOk && near > 0 -> "signal and $near phone${if (near == 1) "" else "s"} in range"
+            serverOk -> "through the server"
+            near > 0 -> "no signal, $near phone${if (near == 1) "" else "s"} in range"
+            others == 0 -> "no signal: sent when there is"
+            else -> "no signal and no phones in range: catches up later"
+        }
+        return "${r.code.chunked(3).joinToString(" ")} · ${if (r.status == LiveRules.STARTED) "scoring" else "waiting to start"} · $how"
     }
 
     private fun acquire(groupId: String) = synchronized(sessions) {

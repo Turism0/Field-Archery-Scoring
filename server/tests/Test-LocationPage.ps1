@@ -101,6 +101,9 @@ $bb = @($r.Body.bowStyles | Where-Object bowStyle -eq 'BB')[0]
 Expect 'all-archer stats: LB 2 archers, 2 rounds, best 54, average 52' ($lb.archers -eq 2 -and $lb.rounds -eq 2 -and $lb.bestTotal -eq 54 -and $lb.averageTotal -eq 52) "($($lb | ConvertTo-Json -Compress))"
 Expect 'all-archer stats: LB average per animal (104 / 6 = 17.3)' ($lb.averagePerAnimal -eq 17.3) "(got $($lb.averagePerAnimal))"
 Expect "all-archer stats include non-friends' rounds (BB 1)" ($bb.rounds -eq 1 -and $bb.archers -eq 1)
+$cls = @($r.Body.bowClasses | Where-Object { $_.bowStyle -eq 'LB' })
+if ($null -eq $r.Body.bowClasses) { Write-Host 'PROBLEM: no bowClasses (API 2.4 not published?)' -ForegroundColor Red; $script:problems++ }
+else { Expect 'per class (2.4): LB rows add up to the LB total' (($cls | Measure-Object rounds -Sum).Sum -eq 2 -and @($cls | Where-Object { -not $_.archerClass -or -not $_.ageGroup }).Count -eq 0) "($($cls | ConvertTo-Json -Compress))" }
 
 $roundId = @($f[0].roundsList)[0].roundId
 $r = Call GET "/api/friends/$($B.Id)/rounds/$roundId" -Token $A.Token

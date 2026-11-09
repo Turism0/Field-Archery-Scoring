@@ -12,6 +12,8 @@ namespace FieldArcheryApi.Friends;
 /// Friends (step 7a). Request by username; the other archer accepts; then each can see the other's
 /// FINISHED rounds, read-only. All calls need "Authorization: Bearer &lt;token&gt;".
 ///   GET    /api/friends                              → { friends: [...summary], incoming: [...], outgoing: [...] }
+///          (API 2.4: each friend has recent: their latest 10 finished Big Game rounds, for the handicap rating:
+///          { shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints })
 ///   POST   /api/friends/requests        { username } → 201 { result: "requested" } or 200 { result: "accepted" }
 ///                                                      (accepts straight away if they had already asked you)
 ///   POST   /api/friends/{archerId}/accept            → 200, accept their request
@@ -40,6 +42,9 @@ public static class FriendEndpoints
         Guid ArcherId, string Username, DateTime? FriendsSinceUtc,
         int Rounds, int? BestTotal, DateTime? LastShootDate, double? AveragePerAnimal,
         int WoodsmanRounds, int? WoodsmanBest);
+
+    private sealed record RecentRow(Guid ArcherId, DateTime ShootDate, short TargetCount, int AnimalCount, string ArcherClass,
+        string AgeGroup, string BowStyle, int TotalPoints);
 
     public sealed record PendingRequest(Guid ArcherId, string Username, DateTime RequestedUtc, bool Outgoing);
 
@@ -93,6 +98,20 @@ public static class FriendEndpoints
             ORDER BY a.Username;
             """, new { me }, cancellationToken: ct))).ToList();
 
+        // Each friend's latest 10 finished Big Game rounds: the phone works out their handicap rating (API 2.4).
+        var recent = (await conn.QueryAsync<RecentRow>(new CommandDefinition("""
+            WITH fr AS (SELECT FriendId FROM dbo.vFriend WHERE ArcherId = @me),
+            ranked AS (
+                SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.TotalPoints,
+                       ROW_NUMBER() OVER (PARTITION BY r.ArcherId ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC) AS n
+                FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
+                WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0 AND r.RoundType = 'BIG_GAME')
+            SELECT k.ArcherId, CAST(k.ShootDate AS datetime2(3)) AS ShootDate, k.TargetCount,
+                   (SELECT COUNT(*) FROM dbo.AnimalScore s WHERE s.RoundId = k.RoundId) AS AnimalCount,
+                   k.ArcherClass, k.AgeGroup, k.BowStyle, k.TotalPoints
+            FROM ranked k WHERE k.n <= 10;
+            """, new { me }, cancellationToken: ct))).ToLookup(x => x.ArcherId);
+
         var pending = (await conn.QueryAsync<PendingRequest>(new CommandDefinition("""
             SELECT a.ArcherId, a.Username, f.RequestedUtc,
                    CAST(CASE WHEN f.RequestedById = @me THEN 1 ELSE 0 END AS bit) AS Outgoing
@@ -104,10 +123,16 @@ public static class FriendEndpoints
 
         return Results.Ok(new
         {
-            friends = friends.Select(f => f with
+            friends = friends.Select(f => new
             {
-                FriendsSinceUtc = Utc(f.FriendsSinceUtc),
-                AveragePerAnimal = f.AveragePerAnimal is { } avg ? Math.Round(avg, 1) : null,
+                f.ArcherId, f.Username, FriendsSinceUtc = Utc(f.FriendsSinceUtc), f.Rounds, f.BestTotal, f.LastShootDate,
+                AveragePerAnimal = f.AveragePerAnimal is { } avg ? Math.Round(avg, 1) : (double?)null,
+                f.WoodsmanRounds, f.WoodsmanBest,
+                recent = recent[f.ArcherId].Select(x => new
+                {
+                    shootDate = DateOnly.FromDateTime(x.ShootDate), targetCount = (int)x.TargetCount, animalCount = x.AnimalCount,
+                    archerClass = x.ArcherClass.Trim(), ageGroup = x.AgeGroup, bowStyle = x.BowStyle, totalPoints = x.TotalPoints,
+                }),
             }),
             incoming = pending.Where(p => !p.Outgoing).Select(p => p with { RequestedUtc = Utc(p.RequestedUtc)!.Value }),
             outgoing = pending.Where(p => p.Outgoing).Select(p => p with { RequestedUtc = Utc(p.RequestedUtc)!.Value }),

@@ -42,13 +42,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.domain.AccountRules
 import uk.co.fnurble.fieldarchery.ui.AccountStep
 import uk.co.fnurble.fieldarchery.ui.AccountViewModel
+import uk.co.fnurble.fieldarchery.ui.components.RecoveryCodeDialog
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
 
 /**
  * Sign in or create an account:
  *  1. enter a username → the server checks it;
  *  2a. it exists → "That username already exists" → password → Sign in;
- *  2b. it's new → choose a password, typed twice → Create account.
+ *  2b. it's new → choose a password, typed twice → Create account (then its recovery code, 2.4).
+ *  2c. forgot the password → recovery code (or a reset code from an admin) and a new password (2.4).
  * Returns to the previous screen once signed in.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,12 +58,16 @@ import uk.co.fnurble.fieldarchery.ui.components.SectionCard
 fun AccountScreen(vm: AccountViewModel, onBack: () -> Unit) {
     val s by vm.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(s.signedIn) { if (s.signedIn) onBack() }
+    // Signed in: back, once any new recovery code has been written down.
+    LaunchedEffect(s.signedIn, s.recoveryCode) { if (s.signedIn && s.recoveryCode == null) onBack() }
+    s.recoveryCode?.let { RecoveryCodeDialog(it, onDone = vm::recoveryCodeSeen) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (s.step == AccountStep.NEW_USER) "Create account" else "Sign in") },
+                title = {
+                    Text(when (s.step) { AccountStep.NEW_USER -> "Create account"; AccountStep.RESET -> "New password"; else -> "Sign in" })
+                },
                 navigationIcon = {
                     IconButton(onClick = { if (s.step == AccountStep.USERNAME) onBack() else vm.changeUsername() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -99,7 +105,36 @@ fun AccountScreen(vm: AccountViewModel, onBack: () -> Unit) {
                 ) {
                     PasswordField("Password", s.password, vm::onPassword, !s.busy, ImeAction.Done) { vm.signIn() }
                     BusyButton("Sign in", s.busy, vm::signIn)
+                    TextButton(onClick = vm::forgotPassword, enabled = !s.busy) { Text("Forgot your password?") }
                     TextButton(onClick = vm::changeUsername, enabled = !s.busy) { Text("Use a different username") }
+                }
+
+                AccountStep.RESET -> SectionCard(
+                    title = "Forgot your password?",
+                    subtitle = "Enter the recovery code you saved when you made your account (or a reset code from the " +
+                        "owner or an admin), and choose a new password for ${s.username}.",
+                ) {
+                    OutlinedTextField(
+                        value = s.code,
+                        onValueChange = vm::onCode,
+                        label = { Text("Recovery or reset code") },
+                        singleLine = true,
+                        enabled = !s.busy,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    PasswordField("New password", s.password, vm::onPassword, !s.busy, ImeAction.Next, null)
+                    PasswordField("Type the new password again", s.confirmPassword, vm::onConfirmPassword, !s.busy, ImeAction.Done) {
+                        vm.resetPassword()
+                    }
+                    Text(
+                        "Your other phones are signed out, and you get a new recovery code (the old one stops working). " +
+                            "No code? Ask the owner or an admin for a reset code: they'll check it's you.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    BusyButton("Set new password", s.busy, vm::resetPassword)
+                    TextButton(onClick = vm::changeUsername, enabled = !s.busy) { Text("Back") }
                 }
 
                 AccountStep.NEW_USER -> SectionCard(
@@ -111,7 +146,7 @@ fun AccountScreen(vm: AccountViewModel, onBack: () -> Unit) {
                         vm.createAccount()
                     }
                     Text(
-                        "At least ${AccountRules.MIN_PASSWORD} characters. There's no password reset yet, so keep it somewhere safe.",
+                        "At least ${AccountRules.MIN_PASSWORD} characters. Next you'll get a recovery code to keep, in case you forget it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

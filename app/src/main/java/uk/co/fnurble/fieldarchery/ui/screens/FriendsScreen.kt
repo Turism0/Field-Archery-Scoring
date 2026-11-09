@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.data.FriendRequest
 import uk.co.fnurble.fieldarchery.data.FriendSummary
+import uk.co.fnurble.fieldarchery.domain.HandicapRating
+import uk.co.fnurble.fieldarchery.domain.HandicapStats
 import uk.co.fnurble.fieldarchery.data.RoundOffer
 import uk.co.fnurble.fieldarchery.ui.FriendsViewModel
 import uk.co.fnurble.fieldarchery.ui.Load
@@ -65,6 +68,7 @@ fun FriendsScreen(
     val offers by vm.offers.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val overview by vm.overview.collectAsStateWithLifecycle()
+    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val username by vm.username.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -189,7 +193,11 @@ fun FriendsScreen(
                                 )
                             }
                         }
-                        items(data.friends, key = { "f-" + it.archerId }) { f -> FriendCard(f) { onOpenFriend(f) } }
+                        items(data.friends, key = { "f-" + it.archerId }) { f ->
+                            // Their handicap rating (2.4): average of their last 10 Big Game rounds, out of 1000.
+                            val rating = handicap?.let { HandicapStats.rating(it, f.recent) }
+                            FriendCard(f, rating) { onOpenFriend(f) }
+                        }
                     }
                 }
             }
@@ -251,7 +259,7 @@ private fun OfferRow(offer: RoundOffer, busy: Boolean, onOpen: () -> Unit, actio
 
 /** Friend with a summary: rounds, best, average per animal, last shot. */
 @Composable
-private fun FriendCard(f: FriendSummary, onClick: () -> Unit) {
+private fun FriendCard(f: FriendSummary, rating: HandicapRating?, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -280,6 +288,12 @@ private fun FriendCard(f: FriendSummary, onClick: () -> Unit) {
                 f.lastShootDate?.let {
                     Text("Last shot ${it.format(UkDate)}", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            rating?.let {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text("${it.rating}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("handicap", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)

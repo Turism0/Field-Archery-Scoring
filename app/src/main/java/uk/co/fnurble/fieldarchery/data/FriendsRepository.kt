@@ -23,6 +23,8 @@ data class FriendSummary(
     val averagePerAnimal: Double?,
     val woodsmanRounds: Int = 0,
     val woodsmanBest: Int? = null,
+    /** Their latest finished Big Game rounds (up to 10, server 2.4), for their handicap rating on the friends list. */
+    val recent: List<HandicapRound> = emptyList(),
 )
 
 data class FriendRequest(val archerId: String, val username: String)
@@ -110,6 +112,14 @@ class FriendsRepository(
                     averagePerAnimal = if (f.isNull("averagePerAnimal")) null else f.getDouble("averagePerAnimal"),
                     woodsmanRounds = f.optInt("woodsmanRounds"),
                     woodsmanBest = f.intOrNull("woodsmanBest"),
+                    recent = f.optJSONArray("recent")?.objects().orEmpty().mapNotNull { r ->
+                        runCatching {
+                            FriendRoundSummary(
+                                roundId = "", shootDate = LocalDate.parse(r.getString("shootDate").take(10)),
+                                targetCount = r.getInt("targetCount"), classLine = "", totalPoints = r.getInt("totalPoints"),
+                            ).withHandicapFields(r).handicapRound()
+                        }.getOrNull()
+                    },
                 )
             },
             incoming = json.getJSONArray("incoming").objects().map { FriendRequest(it.getString("archerId"), it.getString("username")) },

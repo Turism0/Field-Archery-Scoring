@@ -33,6 +33,7 @@ import uk.co.fnurble.fieldarchery.data.FriendRoundSummary
 import uk.co.fnurble.fieldarchery.data.FriendsOverview
 import uk.co.fnurble.fieldarchery.data.FriendsRepository
 import uk.co.fnurble.fieldarchery.data.HandicapRepository
+import uk.co.fnurble.fieldarchery.data.ResetCode
 import uk.co.fnurble.fieldarchery.data.GroupMember
 import uk.co.fnurble.fieldarchery.data.LiveGroupRepository
 import uk.co.fnurble.fieldarchery.data.LiveGroupState
@@ -341,6 +342,29 @@ class ScoreRoundViewModel(profiles: ProfileRepository, roundRepo: RoundRepositor
  */
 class AdminViewModel(private val admin: AdminRepository, accountStore: AccountStore) : ViewModel() {
     val role: StateFlow<AccountRole> = accountStore.role
+    /** This account (no reset code for yourself). */
+    val myArcherId: String? = accountStore.account.value?.archerId
+
+    private val _resetCode = MutableStateFlow<ResetCode?>(null)
+    /** A reset code just made, to show (2.4). */
+    val resetCode: StateFlow<ResetCode?> = _resetCode.asStateFlow()
+    fun resetCodeShown() { _resetCode.value = null }
+
+    /** Owner / Admin: a one-off password reset code for [archer] (check it's them first). */
+    fun makeResetCode(archer: AdminArcher) {
+        if (_changing.value != null) return
+        _changing.value = archer.archerId
+        viewModelScope.launch {
+            try {
+                _resetCode.value = admin.resetCode(archer.archerId)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _changing.value = null
+            }
+        }
+    }
     val duplicateLocations: StateFlow<Int> = accountStore.duplicateLocations
 
     private val _archers = MutableStateFlow<Load<List<AdminArcher>>>(Load.Loading)
@@ -656,6 +680,11 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
 
 // ---------------- Friends ----------------
 
+/** A class and age group, for the location page's class filter (2.4). */
+data class ClassChoice(val archerClass: ArcherClass, val ageGroup: AgeGroup) {
+    val label: String get() = if (ageGroup == AgeGroup.ADULT) archerClass.displayName else "${ageGroup.displayName} ${archerClass.displayName}"
+}
+
 /** Something loaded from the server: still loading, failed with a message, or ready. */
 sealed interface Load<out T> {
     data object Loading : Load<Nothing>
@@ -669,7 +698,16 @@ private fun Throwable.friendlyMessage(): String = when (this) {
 }
 
 /** Friends screen: add by username, incoming / outgoing requests, friends with summaries. */
-class FriendsViewModel(private val friends: FriendsRepository, accounts: AccountRepository) : ViewModel() {
+class FriendsViewModel(
+    private val friends: FriendsRepository,
+    accounts: AccountRepository,
+    handicap: HandicapRepository? = null,
+) : ViewModel() {
+    /** For each friend's handicap rating on the list (2.4; null until downloaded). */
+    val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
+    init { handicap?.let { viewModelScope.launch { it.refreshIfStale() } } }
+
     val signedIn: StateFlow<Boolean> = accounts.account.map { it != null }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), accounts.account.value != null)
 
@@ -1007,6 +1045,8 @@ class JoinViewModel(profiles: ProfileRepository, private val live: LiveGroupRepo
 
 // ---------------- Profile ----------------
 
+data class RecoveryState(val busy: Boolean = false, val code: String? = null, val error: String? = null)
+
 class ProfileViewModel(
     private val repo: ProfileRepository,
     private val accounts: AccountRepository,
@@ -1018,6 +1058,24 @@ class ProfileViewModel(
     val account: StateFlow<Account?> = accounts.account
 
     fun signOut() = viewModelScope.launch { accounts.signOut() }
+
+    private val _recovery = MutableStateFlow<RecoveryState>(RecoveryState())
+    /** Making a new recovery code (2.4): busy, the code to show, or a problem. */
+    val recovery: StateFlow<RecoveryState> = _recovery.asStateFlow()
+
+    fun newRecoveryCode(password: String) {
+        if (_recovery.value.busy) return
+        _recovery.value = RecoveryState(busy = true)
+        viewModelScope.launch {
+            _recovery.value = try {
+                RecoveryState(code = accounts.newRecoveryCode(password))
+            } catch (e: ApiException) {
+                RecoveryState(error = e.message)
+            }
+        }
+    }
+
+    fun recoveryDone() { _recovery.value = RecoveryState() }
 
     init {
         viewModelScope.launch { _state.value = repo.get() }
@@ -1036,16 +1094,20 @@ class ProfileViewModel(
 
 // ---------------- Account (sign in / create account) ----------------
 
-enum class AccountStep { USERNAME, EXISTING_USER, NEW_USER }
+enum class AccountStep { USERNAME, EXISTING_USER, NEW_USER, RESET }
 
 data class AccountUiState(
     val step: AccountStep = AccountStep.USERNAME,
     val username: String = "",
     val password: String = "",
     val confirmPassword: String = "",
+    /** Forgotten password (2.4): the recovery code or a reset code from an Admin. */
+    val code: String = "",
     val busy: Boolean = false,
     val error: String? = null,
     val signedIn: Boolean = false,
+    /** A recovery code to show once (after creating the account or a reset); the screen closes once it's been seen. */
+    val recoveryCode: String? = null,
 )
 
 /**
@@ -1071,6 +1133,29 @@ class AccountViewModel(
     fun onUsername(v: String) = _state.update { it.copy(username = v.trim(), error = null) }
     fun onPassword(v: String) = _state.update { it.copy(password = v, error = null) }
     fun onConfirmPassword(v: String) = _state.update { it.copy(confirmPassword = v, error = null) }
+    fun onCode(v: String) = _state.update { it.copy(code = v, error = null) }
+
+    /** "Forgot your password?" (2.4). */
+    fun forgotPassword() = _state.update { it.copy(step = AccountStep.RESET, password = "", confirmPassword = "", code = "", error = null) }
+
+    /** The recovery code has been written down. */
+    fun recoveryCodeSeen() = _state.update { it.copy(recoveryCode = null) }
+
+    fun resetPassword() {
+        val s = _state.value
+        if (s.code.isBlank()) {
+            _state.update { it.copy(error = "Enter your recovery code (or a reset code from an admin).") }
+            return
+        }
+        AccountRules.newPasswordProblem(s.password, s.confirmPassword)?.let { problem ->
+            _state.update { it.copy(error = problem) }
+            return
+        }
+        launchCall {
+            val recovery = accounts.resetPassword(s.username, s.code, s.password)
+            _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", code = "", recoveryCode = recovery) }
+        }
+    }
 
     /** Back to the username step (e.g. "use a different username"). */
     fun changeUsername() = _state.update {
@@ -1114,8 +1199,8 @@ class AccountViewModel(
         }
         launchCall {
             try {
-                accounts.register(s.username, s.password)
-                _state.update { it.copy(signedIn = true, password = "", confirmPassword = "") }
+                val recovery = accounts.register(s.username, s.password)
+                _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", recoveryCode = recovery) }
             } catch (e: ApiException) {
                 if (e.code == "username_taken") {
                     // Someone took it in the meantime: switch to signing in.

@@ -84,11 +84,11 @@ total targets). It isn't a flat percentage: e.g. in 2026 a Longbow day of 480 / 
 - **Equivalent of a round:** its points and maximum (24 × animals on fully scored targets) through the formula, out of
   the same maximum. Friends' rounds use their animal count (or targets) from the server.
 - **Rating:** the average equivalent share of your last 10 finished Big Game rounds × 24 × 40 (a 40-target Unlimited
-  Gents score); 3 rounds needed. Shown on Stats → Bests and the Stats tile; friends' ratings on their rounds page.
+  Gents score); 3 rounds needed. Shown on Stats → Bests and the Stats tile; friends' ratings on their rounds page and (2.4) the friends list.
 - **Calculator tile:** a score, targets, bow and class → the Unlimited Gents score and a table for every bow style
   (rows) and class (columns), using the latest year's factors.
-- **Location pages:** each bow's 40-target average as Unlimited Gents (the stats aren't split by class, so each is
-  taken as Gents) and an "All bows" average weighted by rounds.
+- **Location pages:** each bow's 40-target average in handicap points (all classes: each taken as Gents; 2.4: filter by
+  class to use that class) and an "All bows" average weighted by rounds.
 - Woodsman rounds have no handicap (the championships are Big Game).
 
 ## First results (Nov 2026, 2026 factors, Nationals, Gents, 40 targets: a 600 day as Unlimited Gents)

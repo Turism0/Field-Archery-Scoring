@@ -33,9 +33,13 @@ fun AskForNearby() {
     var asked by rememberSaveable { mutableStateOf(false) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
     LaunchedEffect(Unit) {
-        if (!asked && !NearbyLink.hasPermissions(context)) {
+        // Also the notification permission (Android 13+), for the live group notification while it runs in the background (2.4).
+        val notify = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!asked && (!NearbyLink.hasPermissions(context) || notify)) {
             asked = true
-            launcher.launch(NearbyLink.permissions())
+            launcher.launch(NearbyLink.permissions() + (if (notify) arrayOf(android.Manifest.permission.POST_NOTIFICATIONS) else emptyArray()))
         }
     }
 }
