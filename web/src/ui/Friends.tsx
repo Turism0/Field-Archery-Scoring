@@ -30,11 +30,11 @@ export function Friends() {
     <>
       <Bar title="Friends" />
       <main>
+        <Loading load={data} retry={retry}>{v => v && <div class="split"><div>
         <Card title="Add a friend" sub="They'll see your finished rounds once they accept, and you'll see theirs.">
           <Field label="Their username"><input autocapitalize="off" value={name} onInput={e => setName((e.target as HTMLInputElement).value)} /></Field>
           <button class="filled" disabled={busy || !name.trim()} onClick={() => act(async () => { toast(await friends.sendRequest(name)); setName('') })}>Send friend request</button>
         </Card>
-        <Loading load={data} retry={retry}>{v => v && <>
           {v.offers.length > 0 && <>
             <h3 class="section">Rounds scored for you</h3>
             {v.offers.map(o => (
@@ -64,6 +64,7 @@ export function Friends() {
                 <button disabled={busy} onClick={() => act(() => friends.removeFriend(r.archerId))}>Cancel</button></div>
             ))}
           </>}
+          </div><div>
           <h3 class="section">Friends</h3>
           {!v.o.friends.length && <p class="sub">No friends yet. Add one by username above.</p>}
           {v.o.friends.map(f => {
@@ -82,7 +83,7 @@ export function Friends() {
               </button>
             )
           })}
-        </>}</Loading>
+        </div></div>}</Loading>
       </main>
     </>
   )
@@ -104,14 +105,14 @@ export function FriendRounds({ id, name }: { id: string; name: string }) {
               <div class="sub" style="color:inherit">Average handicap of their last {rt.rounds} Big Game rounds (out of 1000)</div></div><span class="big">{rt.rating}</span></div></Card>}
             <h3 class="section">Finished rounds</h3>
             {!list.length && <p class="sub">No finished rounds yet.</p>}
-            {list.map(r => (
+            <div class="grid2">{list.map(r => (
               <button class="tile" onClick={() => go(`/friendcard/${id}/${r.roundId}?name=${encodeURIComponent(name)}`)}>
                 <span class="grow"><b>{ukDate(r.shootDate)}</b>
                   <span class="sub" style="display:block">{r.classLine} · {r.targetsLine}{r.locationName ? ` · ${r.locationName}` : ''}</span>
                   {model && r.handicap && <span class="sub" style="display:block">Handicap {roundPoints(model, r.handicap)}</span>}</span>
                 <span style="text-align:center"><span class="num-big">{r.totalPoints}</span><span class="sub" style="display:block">points</span></span>
               </button>
-            ))}
+            ))}</div>
           </>
         }}</Loading>
       </main>

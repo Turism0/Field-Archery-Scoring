@@ -109,7 +109,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       <Bar title={`Target ${n} of ${round.targetCount}${name ? ` · ${name}` : ''}`} onBack={() => go('/')}>
         <button onClick={() => go(`/card/${round.id}`)}>Card</button>
       </Bar>
-      <main>
+      <main class="form">
         {isLive && (
           <div class={`banner ${problem || mismatch ? 'bad' : ''}`}>
             <b>Live group{s ? ` · ${s.code} · ${s.status === 'CLOSED' ? 'finished' : s.status === 'STARTED' ? live.methodOf(s.method)?.name : 'waiting to start'}` : ''}</b>

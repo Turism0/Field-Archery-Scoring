@@ -33,6 +33,7 @@ export function Scorecard({ id }: { id: string }) {
     <>
       <Bar title={name ? `${name}'s card` : 'Scorecard'} onBack={() => go('/')} />
       <main>
+        <div class="split"><div>
         <RoundHeader round={round} />
         {beat && <Card title="New personal best" cls="hi">
           <div>{roundTotal(round)} beats your previous best of {roundTotal(beat)} ({ukDate(beat.shootDate)}) for {round.targetCount}-target {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}. +{roundTotal(round) - roundTotal(beat)} points.</div>
@@ -50,7 +51,6 @@ export function Scorecard({ id }: { id: string }) {
             ))}
           </Card>
         )}
-        <TargetTable round={round} onTarget={round.groupRole !== 'MIRROR' ? n => go(`/score/${group[0]?.id ?? round.id}?t=${n}`) : undefined} />
         {round.groupRole !== 'MIRROR' && <div class="row">
           {round.status === 'COMPLETED'
             ? <button class="tonal" onClick={async () => { await setStatus(round, 'IN_PROGRESS'); go(`/score/${group[0]?.id ?? round.id}`) }}>Reopen to edit</button>
@@ -58,6 +58,9 @@ export function Scorecard({ id }: { id: string }) {
           <button class="outlined" onClick={() => go(`/edit/${round.id}`)}>Edit round details</button>
           <button class="danger" onClick={() => setConfirmDelete(true)}>Delete</button>
         </div>}
+        </div><div>
+        <TargetTable round={round} onTarget={round.groupRole !== 'MIRROR' ? n => go(`/score/${group[0]?.id ?? round.id}?t=${n}`) : undefined} />
+        </div></div>
       </main>
       <LocationSheet roundId={round.id} open={locOpen} onClose={() => setLocOpen(false)} />
       <Dialog open={confirmDelete} title="Delete this round?" onClose={() => setConfirmDelete(false)}
@@ -129,11 +132,14 @@ export function TargetTable({ round, onTarget }: { round: Round; onTarget?: (n: 
 export function ReadOnlySheet({ round, model }: { round: Round; model: HandicapModel | null | undefined }) {
   const s = roundStats(round)
   const h = round.status === 'COMPLETED' ? handicapRound(round) : null
-  return <>
-    <RoundHeader round={round} />
-    <StatsCard round={round} s={s} />
-    {model && h && <HandicapCard points={roundPoints(model, h)} />}
-    <MoreStats s={s} />
-    <TargetTable round={round} />
-  </>
+  return (
+    <div class="split"><div>
+      <RoundHeader round={round} />
+      <StatsCard round={round} s={s} />
+      {model && h && <HandicapCard points={roundPoints(model, h)} />}
+      <MoreStats s={s} />
+    </div><div>
+      <TargetTable round={round} />
+    </div></div>
+  )
 }

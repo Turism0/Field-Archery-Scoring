@@ -36,6 +36,7 @@ export function Admin() {
     <>
       <Bar title="Admin" />
       <main>
+        <div class="grid3">
         <button class={`tile ${duplicates > 0 ? 'warn' : ''}`} onClick={() => go('/admin/duplicates')}>
           <span class="dot">⚠</span><span class="grow"><b>Possible duplicates</b>
             <span class="sub">{duplicates > 0 ? `${duplicates} to check: merge or mark as different places` : 'Nothing to check'}</span></span><span>›</span></button>
@@ -43,10 +44,11 @@ export function Admin() {
           <span class="dot">📍</span><span class="grow"><b>Shoot locations</b><span class="sub">Rename, make private or public, merge</span></span><span>›</span></button>
         <button class="tile" onClick={() => go('/admin/handicap')}>
           <span class="dot">ⓘ</span><span class="grow"><b>Handicap</b><span class="sub">NFAS results, targets per day, models</span></span><span>›</span></button>
+        </div>
         <Card title="Accounts" sub={owner ? 'Switch Admin on to let someone rename and merge shoot locations. Only you can make or remove admins.' : 'Only the owner can make or remove admins.'}>
           <Loading load={list} retry={retry}>{as => <>
             <div class="sub">{as.length} account{as.length === 1 ? '' : 's'}</div>
-            {as.map(a => (
+            <div class="grid2">{as.map(a => (
               <div class="card low">
                 <div class="row between" style="flex-wrap:nowrap">
                   <span class="grow"><b>{a.username}</b> <span class="sub">{ROLE_NAMES[a.role] ?? a.role}</span>
@@ -57,7 +59,7 @@ export function Admin() {
                 </div>
                 {a.role !== 'OWNER' && a.archerId !== account?.archerId && <button class="outlined" style="align-self:flex-start" disabled={busy} onClick={() => setConfirmReset(a)}>Password reset code</button>}
               </div>
-            ))}
+            ))}</div>
           </>}</Loading>
         </Card>
       </main>
@@ -95,7 +97,7 @@ export function AdminDuplicates() {
         <Card title="Check these" sub={'Locations within a quarter mile of each other, or with the same or a similar name. Merge the duplicate into the one to keep, or tap "Different places" so they stop showing.'} />
         <Loading load={data} retry={retry}>{pairs => <>
           {!pairs.length && <p class="sub">Nothing to check. All locations look distinct.</p>}
-          {pairs.map(p => (
+          <div class="grid2">{pairs.map(p => (
             <div class="card low">
               <div class="sub">{p.reasons.map(r => REASONS[r] ?? r).join(' · ')} · {p.distanceMetres < 1000 ? `${p.distanceMetres} m` : `${(p.distanceMetres / 1000).toFixed(1)} km`} apart</div>
               {[p.a, p.b].map((l, i) => <div><b>{i + 1}. {l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}<div class="sub">{locLine(l)}</div></div>)}
@@ -106,7 +108,7 @@ export function AdminDuplicates() {
               {(p.a.isPrivate || p.b.isPrivate) && <div class="sub">Private locations are only shown to Admins when they clash with a public one. Keep the public one to merge the private one into it, or mark them as different places.</div>}
               <button disabled={busy} onClick={() => act(() => admin.approve(p), 'Marked as different places.')}>Different places – stop flagging</button>
             </div>
-          ))}
+          ))}</div>
         </>}</Loading>
       </main>
       <MergeDialog pair={merge} onClose={() => setMerge(null)} onMerge={(dup, keep) => act(async () => toast(`Merged: ${await admin.merge(dup.id, keep.id)} rounds moved.`))} />
@@ -152,12 +154,12 @@ export function AdminLocations() {
         <Card title="Locations" sub="Tap a location to fix its name, or to merge a duplicate (e.g. two phones named the same club while offline) into the one to keep. Its rounds move across." />
         <Loading load={data} retry={retry}>{list => <>
           {!list.length && <p class="sub">No shoot locations yet. They appear as archers name them.</p>}
-          {list.map(l => (
+          <div class="grid2">{list.map(l => (
             <button class="tile" disabled={l.hidden} onClick={() => { setSel(l); setName(l.name); setPriv(l.isPrivate); setMerging(false) }}>
               <span class="grow"><b>{l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}
                 <span class="sub" style="display:block">{l.rounds} round{l.rounds === 1 ? '' : 's'}{l.createdBy ? ` · named by ${l.createdBy}` : ''}{l.createdUtc ? ` · ${ukDate(l.createdUtc)}` : ''}</span></span>
             </button>
-          ))}
+          ))}</div>
           {list.some(l => l.hidden) && <div class="sub">Private locations belong to the archer who named them: their names and positions are hidden. They only appear under Possible duplicates if they clash with a public location.</div>}
         </>}</Loading>
       </main>
@@ -209,6 +211,7 @@ export function AdminHandicap() {
           {d.runs?.[0] && <><b>Last run{d.runs[0].finishedUtc ? ` · ${dt(d.runs[0].finishedUtc)}` : ' · not finished'}</b>
             {d.runs[0].outcome && <div class={d.runs[0].failed ? 'error' : 'sub'}>{d.runs[0].outcome}</div>}</>}
         </Card>
+        <div class="grid2"><div class="col">
         <h3 class="section">Models</h3>
         {(d.models ?? []).map((m: any) => (
           <Card cls={m.status === 'ACTIVE' ? 'hi' : 'low'} title={`Model ${m.modelId} · ${STATUS[m.status] ?? 'replaced'}`}>
@@ -218,6 +221,7 @@ export function AdminHandicap() {
             {m.status !== 'ACTIVE' && account?.role === 'OWNER' && <button class="outlined" disabled={busy} onClick={() => act(() => activateHandicapModel(m.modelId), 'Model in use.')}>Use this model</button>}
           </Card>
         ))}
+        </div><div class="col">
         <h3 class="section">Championships</h3>
         <div class="sub">Targets per day aren't published: the server works them out (before Covid all 40). Tap one to set it by hand.</div>
         {(d.events ?? []).map((e: any) => (
@@ -228,6 +232,7 @@ export function AdminHandicap() {
             {e.status === 'RESULTS' && <span style="text-align:right"><span class="num-big">{e.targetsPerDay ?? '–'}</span><span class="sub" style="display:block">{source(e.targetsSource, e.targetsSetBy)}</span></span>}
           </button>
         ))}
+        </div></div>
       </>}</Loading></main>
       <Dialog open={!!editing} title={editing ? `${name(editing)}: targets a day` : ''} onClose={() => setEditing(null)}
         actions={<><button onClick={() => setEditing(null)}>Cancel</button>

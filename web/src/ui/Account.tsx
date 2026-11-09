@@ -47,7 +47,7 @@ export function AccountScreen() {
     <>
       <Bar title={step === 'new' ? 'Create account' : step === 'reset' ? 'New password' : 'Sign in'}
         onBack={step === 'name' ? undefined : () => { setStep('name'); setPassword(''); setConfirm('') }} />
-      <main>
+      <main class="form">
         {step === 'name' && (
           <Card title="Username" sub="Enter your username to sign in, or choose one to create an account. No email needed.">
             <Field label="Username" help="3 to 30 letters, numbers, dots, dashes or underscores">
@@ -116,7 +116,7 @@ export function ProfileScreen() {
   return (
     <>
       <Bar title="Profile"><button onClick={async () => { await saveProfile(p); back() }}>Save</button></Bar>
-      <main>
+      <main class="form">
         <Card title="Account" sub="Optional. Scoring works without it.">
           {account ? <>
             <div class="row between"><div><div class="sub">Signed in as</div><b style="font-size:20px">{account.username}</b></div>

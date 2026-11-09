@@ -46,7 +46,7 @@ export function HandicapCalculator() {
             {failed && <div class="error">Couldn't download it. Check you have signal and try again.</div>}
             <button class="tonal" disabled={busy} onClick={async () => { setBusy(true); setFailed(!(await refreshModel())); setBusy(false) }}>{busy ? 'Downloading…' : 'Download now'}</button>
           </Card>
-        ) : <>
+        ) : <div class="split"><div>
           <Card title="Your score" sub="A whole round or one day: the score and how many targets it was out of.">
             <div class="row" style="flex-wrap:nowrap">
               <Field label="Score"><input inputMode="numeric" value={score} onInput={e => setScore((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 4))} /></Field>
@@ -58,11 +58,12 @@ export function HandicapCalculator() {
             <Select<AgeGroup> label="Age group" value={age} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]} onChange={a => a && setAge(a)} />
             <Select label="Bow style" value={bow} options={BOW_STYLES.map(b => b.code)} optionLabel={c => `${BOW_STYLES.find(b => b.code === c)!.name} (${c})`} onChange={b => b && setBow(b)} />
           </Card>
-          {ready && <>
-            <Card cls="hi">
+          {ready && <Card cls="hi">
               <div class="big" style="text-align:center">Handicap {Math.round(handicapPoints(model, sc, max, from, model.dataThroughYear))}</div>
               <div style="text-align:center">out of 1000 – the same for the same performance with any bow and class</div>
-            </Card>
+          </Card>}
+          </div><div>
+          {ready && <>
             <h3 class="section">The same performance with every bow style and class</h3>
             <div class="card low scroll-x" style="padding:8px 0">
               <table class="equiv">
@@ -78,7 +79,7 @@ export function HandicapCalculator() {
             </div>
             <div class="sub">From the NFAS Nationals and 3D Championships since 2002 (paper faces and 3D targets averaged), up to {model.dataThroughYear}. Equal scores here mean the same standing among archers with that bow and class.</div>
           </>}
-        </>}
+        </div></div>}
       </main>
     </>
   )

@@ -36,7 +36,7 @@ function Bests({ rounds, model }: { rounds: Round[]; model: HandicapModel | null
     <RatingCard rounds={rounds} model={model} />
     <div class="sub">Best totals for each round type, bow style and number of targets, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
     {!groups.size && <p>No fully scored rounds yet.</p>}
-    {[...groups.entries()].map(([k, l]) => {
+    <div class="grid2">{[...groups.entries()].map(([k, l]) => {
       const [type, bow] = k.split('|') as [RoundType, string]
       const a = avgs.find(x => x.type === type && x.bowStyle === bow)
       return (
@@ -52,7 +52,7 @@ function Bests({ rounds, model }: { rounds: Round[]; model: HandicapModel | null
           ))}
         </Card>
       )
-    })}
+    })}</div>
   </>
 }
 
@@ -87,10 +87,12 @@ function Trends({ rounds }: { rounds: Round[] }) {
   return <>
     {types.length > 1 && <Seg<RoundType> options={types} value={type} label={t => ROUND_TYPE_NAMES[t]} onChange={t => { setType(t); setBow(null) }} />}
     <Select label="Bow" value={bow ?? undefined} options={bows} none="All bows" optionLabel={b => `${bowName(b)} (${b})`} onChange={b => setBow({ v: b ?? null })} />
+    <div class="split"><div>
     <Card title={`Average ${perWhat(type)}`} sub="Each dot is a round; the line is the average of the last 5.">
       {points.length < 2 ? <div>Shoot at least two rounds of this kind to see a trend.</div> : <TrendChart points={points} max={type === 'WOODSMAN' ? 30 : 24} />}
     </Card>
     {points.length >= 2 && <TrendSummary points={points} />}
+    </div><div>
     {points.length > 0 && <>
       <h3 class="section">Rounds (newest first)</h3>
       {[...points].reverse().map(p => (
@@ -100,6 +102,7 @@ function Trends({ rounds }: { rounds: Round[] }) {
         </button>
       ))}
     </>}
+    </div></div>
   </>
 }
 
@@ -148,7 +151,7 @@ function TrendChart({ points, max }: { points: TrendPoint[]; max: number }) {
 }
 
 function Seasons({ rounds }: { rounds: Round[] }) {
-  return <>{seasons(rounds).map(s => (
+  return <div class="grid2">{seasons(rounds).map(s => (
     <Card title={`${s.year} · ${ROUND_TYPE_NAMES[s.type]}`}
       sub={`${s.rounds} round${s.rounds === 1 ? '' : 's'} · ${s.targets} targets` + (s.locations ? ` · ${s.locations} location${s.locations === 1 ? '' : 's'}` : '') +
         (s.personalBests ? ` · ${s.personalBests} PB${s.personalBests === 1 ? '' : 's'}` : '')}>
@@ -166,7 +169,7 @@ function Seasons({ rounds }: { rounds: Round[] }) {
           <span class="sub">{b.rounds} round{b.rounds === 1 ? '' : 's'} · avg {b.average != null ? one(b.average) : '–'}</span></div>
       ))}
     </Card>
-  ))}</>
+  ))}</div>
 }
 
 const pct = (v: number | null) => (v == null ? '–' : `${Math.round(v * 100)}%`)

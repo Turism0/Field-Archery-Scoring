@@ -32,7 +32,7 @@ export function Join({ code: startCode }: { code: string }) {
   return (
     <>
       <Bar title="Join a live group" />
-      <main>
+      <main class="form">
         {!account && <div class="card err">Sign in (Profile) to join a live group.</div>}
         <Card title="Group code" sub="Type the 6-character code from the host's phone. The web app needs signal for live groups.">
           <input class="code" autocapitalize="characters" autocomplete="off" value={code} onInput={e => setCode(live.cleanCode((e.target as HTMLInputElement).value))} />
@@ -96,7 +96,7 @@ export function Lobby({ groupId }: { groupId: string }) {
   return (
     <>
       <Bar title="Live group" onBack={() => go('/')} />
-      <main>
+      <main class="form">
         <Card title="Join code" sub="Others tap Join a live group (web app) or Score a round → Join a live group (Android app), then type this or scan the QR.">
           <div class="code" style="font-size:40px;text-align:center">{s.code.slice(0, 3)} {s.code.slice(3)}</div>
           <div class="qr" style="width:200px" dangerouslySetInnerHTML={{ __html: qr }} />

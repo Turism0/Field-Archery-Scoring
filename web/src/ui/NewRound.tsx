@@ -70,7 +70,7 @@ export function NewRound() {
   return (
     <>
       <Bar title="New round" />
-      <main>
+      <main class="form">
         <Card title="Round type">
           <Seg<RoundType> options={['BIG_GAME', 'WOODSMAN']} value={type} label={t => ROUND_TYPE_NAMES[t]} onChange={setType} />
           <div class="sub">{ROUND_TYPE_HELP[type]}</div>

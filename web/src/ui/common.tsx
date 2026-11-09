@@ -41,7 +41,26 @@ export function Toasts() {
 }
 
 // ---- pieces ----
+/** Wide window (about 1000px+): the desktop layout with a sidebar. */
+export const DESKTOP = '(min-width: 1000px)'
+export function useDesktop(): boolean {
+  const [d, setD] = useState(() => matchMedia(DESKTOP).matches)
+  useEffect(() => {
+    const m = matchMedia(DESKTOP)
+    const h = () => setD(m.matches)
+    m.addEventListener('change', h)
+    return () => m.removeEventListener('change', h)
+  }, [])
+  return d
+}
+
+/** Sections reached from the desktop sidebar: no back arrow there. */
+const TOP_LEVEL = ['/', '/new', '/join', '/history', '/stats', '/handicap', '/friends', '/map', '/admin', '/profile']
+const isTopLevel = () => TOP_LEVEL.includes((location.hash.slice(1) || '/').split('?')[0])
+
 export function Bar({ title, onBack, children }: { title: string; onBack?: (() => void) | false; children?: ComponentChildren }) {
+  const desktop = useDesktop()
+  if (desktop && onBack === undefined && isTopLevel()) onBack = false
   return (
     <header class="bar">
       {onBack !== false && <button class="icon" aria-label="Back" onClick={onBack ?? back}>←</button>}

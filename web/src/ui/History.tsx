@@ -51,7 +51,7 @@ export function History() {
           {active && <div class="row between"><span class="sub">Showing {list.length} of {rounds.length} round{rounds.length === 1 ? '' : 's'}{f.period.kind !== 'all' && f.period.kind !== 'between' ? ` · ${periodLabel(f.period)}` : ''}</span>
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
           {!list.length && <p class="sub" style="text-align:center">No rounds match these filters.</p>}
-          {list.map(r => (
+          <div class="grid2">{list.map(r => (
             <button class="tile" onClick={() => go(`/card/${r.id}`)}>
               <span class="grow">
                 <b>{roundTotal(r)} <span class="sub">{r.type === 'WOODSMAN' ? ROUND_TYPE_NAMES.WOODSMAN : ''}</span> {pbs.has(r.id) && <span class="pb">PB</span>}</b>
@@ -59,7 +59,7 @@ export function History() {
                 <span class="sub">{r.pending ? 'Waiting to back up' : r.failed ? "Couldn't back up" : r.groupId ? 'Group' : ''}</span>
               </span>
             </button>
-          ))}
+          ))}</div>
         </>}
       </main>
       <Dialog open={!!dates} title="Rounds between" onClose={() => setDates(null)}

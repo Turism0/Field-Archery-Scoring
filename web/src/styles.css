@@ -137,3 +137,46 @@ button.locchip.hi b { color: inherit; }
 .tile.warn { background: var(--error-c); }
 .tile:disabled { opacity: .7; }
 .tile .grow > .sub { display: block; }
+
+/* ---- 2.6.01: desktop layout (wide windows): sidebar + wider pages ---- */
+.grid2, .grid3, .split { display: flex; flex-direction: column; gap: 12px; }
+.grid2 > *, .grid3 > *, .split > * { min-width: 0; }
+.split > div { display: flex; flex-direction: column; gap: 12px; }
+table.card-table.click tbody tr { cursor: pointer; }
+table.card-table.click tbody tr:hover { background: var(--surface-low); }
+.shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+.side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 16px 12px; background: var(--surface-low); border-right: 1px solid var(--outline-v); }
+.side .brand { display: flex; align-items: center; gap: 10px; text-align: left; color: var(--on-surface); font-weight: 600; font-size: 16px; line-height: 1.2; padding: 6px 10px 16px; border-radius: 12px; }
+.side .logo { font-size: 26px; }
+.sideitem { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border-radius: 999px; padding: 10px 14px; color: var(--on-surface); font-size: 15px; }
+.sideitem:hover { background: var(--surface-c); }
+.sideitem.on { background: var(--secondary-c); color: var(--on-secondary-c); font-weight: 600; }
+.sideitem .si { width: 22px; text-align: center; font-size: 17px; }
+.sidenote { font-size: 13px; border-radius: 12px; padding: 8px 12px; background: var(--surface-c); color: var(--muted); margin: 8px 0; }
+.sidenote.bad { background: var(--error-c); color: var(--on-surface); }
+.sideaccount { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--outline-v); padding-top: 10px; }
+.content { min-width: 0; }
+
+@media (min-width: 1000px) {
+  #app { max-width: none; }
+  .content header.bar { max-width: 1180px; margin: 0 auto; padding: 20px 32px 8px; position: static; }
+  .content header.bar h1 { font-size: 26px; font-weight: 500; }
+  .content .tabs { max-width: 1116px; margin: 0 auto; top: 0; }
+  .content main { max-width: 1180px; margin: 0 auto; padding: 12px 32px 112px; }
+  .content main.narrow { max-width: 720px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: start; }
+  .split > div:first-child { position: sticky; top: 16px; }
+  .nav { left: 248px; max-width: none; padding-left: max(32px, calc((100vw - 248px - 1180px) / 2 + 32px)); padding-right: max(32px, calc((100vw - 248px - 1180px) / 2 + 32px)); }
+  .toast { left: calc(50% + 124px); bottom: 32px; }
+  .map { height: calc(100vh - 220px); }
+  .tile:hover, button.plain:hover { filter: brightness(0.97); }
+  /* Pages that are one column of controls (scoring, forms) stay a readable width. */
+  .content main.form > * { max-width: 760px; width: 100%; }
+  .nav { justify-content: flex-start; }
+  .nav button { flex: 0 1 370px; }
+  dialog { max-width: 520px; }
+  .content main > label.field { max-width: 360px; }
+  table.equiv { width: 100%; }
+}

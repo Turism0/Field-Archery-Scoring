@@ -202,7 +202,7 @@ export function LocationPageScreen({ id }: { id: string }) {
         const chosen = classes.find(c => `${c.archerClass}-${c.ageGroup}` === classKey)
         const shown = chosen ? p.bowClasses.filter(b => b.archerClass === chosen.archerClass && b.ageGroup === chosen.ageGroup) : p.bowStyles
         const types = [...new Set(shown.map(b => b.roundType))]
-        return <>
+        return <div class="split"><div>
           {p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 Private: only you see it</span>}
           <h3 class="section">Your scorecards here</h3>
           {!p.myRounds.length ? <div class="sub">You haven't finished a round here yet.</div> : <>
@@ -227,6 +227,9 @@ export function LocationPageScreen({ id }: { id: string }) {
                 </div>
               )
             })}
+          </>}
+          </div><div>
+          {!p.location.isPrivate && <>
             <h3 class="section">All archers, by bow style</h3>
             {classes.length > 0 && <div class="filters"><select class={chosen ? 'on' : ''} value={classKey} onChange={e => setClassKey((e.target as HTMLSelectElement).value)}>
               <option value="">Class: All classes</option>
@@ -242,7 +245,7 @@ export function LocationPageScreen({ id }: { id: string }) {
                 {model ? ` Handicap is Avg 40 in handicap points (out of 1000, the same for the same performance with any bow; ${chosen ? `for ${loc.classChoiceLabel(chosen.archerClass, chosen.ageGroup)}` : 'each bow taken as Gents'}), so bow styles compare directly; All bows is their average, by rounds.` : ''}</div>
             </>}
           </>}
-        </>
+        </div></div>
       }}</Loading></main>
     </>
   )

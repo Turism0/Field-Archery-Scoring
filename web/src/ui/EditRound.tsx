@@ -36,7 +36,7 @@ export function EditRound({ id }: { id: string }) {
       <Bar title={name ? `Round details · ${name}` : 'Round details'}>
         <button disabled={!countOk || !changed || !date} onClick={() => (removed.length ? setConfirm(true) : save())}>Save</button>
       </Bar>
-      <main>
+      <main class="form">
         <Card title="Shoot" sub={r.groupId ? 'Group round: the date and number of targets change for everyone.' : undefined}>
           <Field label="Shoot date"><input type="date" value={date} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
           <Field label="Number of targets" help={count && !countOk ? `1 to ${MAX_TARGETS}`

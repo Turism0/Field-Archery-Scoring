@@ -11,7 +11,7 @@ import {
   DEFAULT_LAYOUT, TILE_TITLES, canHide, isDefault, move, normalised, setHidden, type HomeLayout, type TileId,
 } from '../domain/homeLayout'
 
-function useOnline(): [boolean, ServerState] {
+export function useOnline(): [boolean, ServerState] {
   const [online, setOnline] = useState(navigator.onLine)
   const [server, setServer] = useState(getServerState())
   useEffect(() => {
@@ -102,7 +102,7 @@ export function Home() {
           : <>
             {shown.filter(id => !layout.hidden.includes(id)).map(tile)}
             <button style="align-self:center" onClick={() => setEditing(layout)}>⇅ Arrange tiles</button>
-            <p class="sub" style="text-align:center">Web app 2.6</p>
+            <p class="sub" style="text-align:center">Web app 2.6.01</p>
           </>}
       </main>
     </>
@@ -120,7 +120,7 @@ function Tile({ icon, title, sub, onClick, hi, badge = 0 }: { icon: string; titl
 }
 
 /** Arranging Home: drag by ≡ or use the arrows; untick to hide (Score a round always shows). */
-function Arrange({ layout, shown, onChange }: { layout: HomeLayout; shown: TileId[]; onChange: (l: HomeLayout) => void }) {
+export function Arrange({ layout, shown, onChange }: { layout: HomeLayout; shown: TileId[]; onChange: (l: HomeLayout) => void }) {
   const ids = layout.order.filter(id => shown.includes(id))
   const [drag, setDrag] = useState<{ id: TileId; dy: number } | null>(null)
   const latest = useRef({ layout, ids }); latest.current = { layout, ids }
