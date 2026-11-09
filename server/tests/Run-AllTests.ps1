@@ -10,7 +10,7 @@
     it for the admin checks and each asks for its password. Without it those five are skipped.
     Not included (they need you to look at the phone): Test-Download.ps1 and Test-FriendView.ps1.
     Every test makes throwaway zz_test_ accounts: run server/sql/900_delete_test_accounts.sql afterwards.
-    The API allows 30 sign-ins a minute from one address, so it waits a minute before each Owner test (about 5 minutes).
+    The API allows 30 sign-ins a minute from one address, so it waits a minute before Test-Groups and each Owner test (about 6 minutes).
 #>
 param(
     [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk',
@@ -18,7 +18,7 @@ param(
 )
 
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
-         'Test-Groups', 'Test-Offers'
+         'Test-Groups', 'Test-Offers', 'Test-Delete'
 $owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap', 'Test-Reset'
 
 $results = @()
@@ -29,8 +29,8 @@ foreach ($name in $plain + $owner) {
         continue
     }
     # The API allows 30 sign-ins / new accounts a minute from one address (RateLimits:AuthPerMinute); the tests before
-    # use most of that, so wait a minute before each Owner test (2.4) rather than get 429 Too Many Requests.
-    if ($owner -contains $name) {
+    # use most of that, so wait a minute before Test-Groups and each Owner test (2.4) rather than get 429 Too Many Requests.
+    if ($owner -contains $name -or ($name -in @('Test-Groups', 'Test-Delete'))) {
         Write-Host "`nWaiting a minute before $name (sign-in limit)..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 61
     }

@@ -183,7 +183,8 @@ Decisions:
 - Real name and date of birth stay in the phone's `profile` table and are never sent.
 - Pseudonymous data (username + scores) can still be personal data if the username identifies someone; the app tells users not to use their real name.
 - Class, age group and bow style are categories, not identifiers.
-- The API should not log client IPs (or should truncate them) and keep log retention short.
+- The API should not log client IPs (or should truncate them) and keep log retention short. Positions go in request bodies, not addresses, so they aren't in web logs (2.4.02).
+- **Privacy policy** served by the API at `/privacy`; **account deletion** in the app (Profile → Delete account) and at `/delete-account` (2.4.02, Google Play). Contact fieldarcheryscoring@gmail.com. Play listing: 13 and over.
 
 ## Security — iteration 2
 
@@ -196,7 +197,7 @@ Decisions:
 - Tokens are 32 random bytes (64 hex characters), valid for a year and extended while in use; signing out revokes only that phone's token.
 - Endpoints and error codes: see `server/README.md`.
 - Checking whether a username exists does reveal which usernames are taken; accepted, as usernames are public to friends anyway. Rate-limited.
-- **No password reset for now** (to revisit): a forgotten password means a new account.
+- **Password reset** (2.4): recovery code or an Admin's reset code, no email (section 8 of Iterations).
 - HTTPS only via Nginx Proxy Manager; request size limits on the API.
 - Server-side validation of every score against the scoring rules (allowed values, arrow limits, predator/prey rules, flagged overrides).
 - SQL Server on Mimir is only reached by the API (login `nfas_api`), never by the app. Port 1433 is open to the internet, so `nfas_api` needs a long random password.

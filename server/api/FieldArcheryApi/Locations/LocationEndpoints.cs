@@ -10,6 +10,7 @@ namespace FieldArcheryApi.Locations;
 /// Shoot locations (roadmap step 2a). All calls need "Authorization: Bearer &lt;token&gt;".
 /// The phone's position is only used to answer the request; it is never stored. A location's stored
 /// position is where it was first named.
+///   POST /api/locations/nearby { latitude, longitude, radiusMetres? }  (API 2.4.02; position kept out of the logs) → as GET:
 ///   GET  /api/locations/nearby?lat=&amp;lon=&amp;radius=   → { locations: [{ locationId, name, distanceMetres }] } nearest first;
 ///                                                    radius in metres, default the catchment (about a quarter mile), max 10 km
 ///   POST /api/locations          { name, latitude, longitude, isPrivate? } → 201 { locationId, name }; 409 name_taken with the existing one
@@ -53,6 +54,9 @@ public static class LocationEndpoints
     {
         var locations = app.MapGroup("/api/locations").RequireAuthorization();
         locations.MapGet("/nearby", Nearby);
+        // API 2.4.02: the same with the position in the body, so it isn't written to web server logs (app 2.4.02 uses this).
+        locations.MapPost("/nearby", (NearbyIn n, ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct) =>
+            Nearby(n.Latitude, n.Longitude, n.RadiusMetres, user, db, config, ct));
         locations.MapPost("/", Create);
         locations.MapPost("/resolve", Resolve);
 
@@ -63,6 +67,8 @@ public static class LocationEndpoints
         admin.MapGet("/duplicates", Duplicates);
         admin.MapPost("/duplicates/approve", Approve);
     }
+
+    public sealed record NearbyIn(double? Latitude, double? Longitude, int? RadiusMetres);
 
     private static async Task<IResult> Nearby(double? lat, double? lon, int? radius, ClaimsPrincipal user, Db db, IConfiguration config, CancellationToken ct)
     {

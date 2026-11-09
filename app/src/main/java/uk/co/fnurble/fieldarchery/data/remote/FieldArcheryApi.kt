@@ -73,6 +73,11 @@ class FieldArcheryApi(
             JSONObject().put("username", username).put("code", code).put("newPassword", newPassword).put("deviceName", deviceName),
         ).toAuthResult()
 
+    /** Deletes the account and everything the server keeps about it (server 2.4.02); needs the password. */
+    suspend fun deleteAccount(token: String, password: String) {
+        request("POST", "/api/me/delete", JSONObject().put("password", password), token)
+    }
+
     /** A new recovery code (the old one stops working); needs the password again. → the code. */
     suspend fun newRecoveryCode(token: String, password: String): String =
         request("POST", "/api/auth/recovery-code", JSONObject().put("password", password), token).getString("recoveryCode")
@@ -155,12 +160,9 @@ class FieldArcheryApi(
 
     /** { locations: [ { locationId, name, distanceMetres } ], catchmentMetres }, nearest first. Position isn't stored. */
     suspend fun nearbyLocations(token: String, lat: Double, lon: Double, radiusMetres: Int? = null): JSONObject {
-        val query = listOfNotNull(
-            "lat=" + String.format(java.util.Locale.ROOT, "%.6f", lat),
-            "lon=" + String.format(java.util.Locale.ROOT, "%.6f", lon),
-            radiusMetres?.let { "radius=$it" },
-        ).joinToString("&")
-        return request("GET", "/api/locations/nearby?$query", body = null, token = token)
+        // In the body (server 2.4.02), so the position isn't written to the web server's logs as part of the address.
+        val body = JSONObject().put("latitude", lat).put("longitude", lon).put("radiusMetres", radiusMetres ?: JSONObject.NULL)
+        return request("POST", "/api/locations/nearby", body, token)
     }
 
     /** 201 { locationId, name }; 409 name_taken with { existing: { locationId, name } } in [ApiException.body]. */

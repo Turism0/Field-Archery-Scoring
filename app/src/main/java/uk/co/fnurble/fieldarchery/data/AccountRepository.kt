@@ -30,6 +30,16 @@ class AccountRepository(
     suspend fun resetPassword(username: String, code: String, newPassword: String): String? =
         api.resetPassword(username.trim(), code.trim(), newPassword, deviceName()).also { signedIn(it) }.recoveryCode
 
+    /**
+     * Deletes the account and everything the server keeps about it (2.4.02, Google Play needs this), then signs out
+     * here. Rounds on this phone stay.
+     */
+    suspend fun deleteAccount(password: String) {
+        val token = store.account.value?.token ?: throw uk.co.fnurble.fieldarchery.data.remote.ApiException(401, "not_signed_in", "Sign in first.")
+        api.deleteAccount(token, password)
+        store.clear()
+    }
+
     /** A new recovery code (the old one stops working). */
     suspend fun newRecoveryCode(password: String): String {
         val token = store.account.value?.token ?: throw uk.co.fnurble.fieldarchery.data.remote.ApiException(401, "not_signed_in", "Sign in first.")

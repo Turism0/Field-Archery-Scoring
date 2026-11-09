@@ -1099,6 +1099,28 @@ class ProfileViewModel(
 
     fun recoveryDone() { _recovery.value = RecoveryState() }
 
+    private val _deleting = MutableStateFlow(RecoveryState())
+    /** Deleting the account (2.4.02): busy, or a problem (code unused). */
+    val deleting: StateFlow<RecoveryState> = _deleting.asStateFlow()
+    private val _deleted = MutableStateFlow(false)
+    val deleted: StateFlow<Boolean> = _deleted.asStateFlow()
+
+    fun deleteAccount(password: String) {
+        if (_deleting.value.busy) return
+        _deleting.value = RecoveryState(busy = true)
+        viewModelScope.launch {
+            _deleting.value = try {
+                accounts.deleteAccount(password)
+                _deleted.value = true
+                RecoveryState()
+            } catch (e: ApiException) {
+                RecoveryState(error = e.message)
+            }
+        }
+    }
+
+    fun deletedShown() { _deleted.value = false }
+
     init {
         viewModelScope.launch { _state.value = repo.get() }
     }

@@ -54,6 +54,9 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
     var confirmSignOut by remember { mutableStateOf(false) }
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     var askPassword by remember { mutableStateOf(false) }
+    val deleting by vm.deleting.collectAsStateWithLifecycle()
+    val deleted by vm.deleted.collectAsStateWithLifecycle()
+    var confirmDelete by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -103,6 +106,11 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                         Text(if (recovery.busy) "Making a recovery code…" else "New recovery code")
                     }
                     recovery.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    // Google Play: accounts can be deleted in the app (2.4.02); also at fieldarchery.fnurble.co.uk/delete-account.
+                    TextButton(onClick = { confirmDelete = true }, enabled = !deleting.busy, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (deleting.busy) "Deleting…" else "Delete account", color = MaterialTheme.colorScheme.error)
+                    }
+                    deleting.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
             }
 
@@ -150,6 +158,44 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
     }
 
     recovery.code?.let { RecoveryCodeDialog(it, onDone = vm::recoveryDone) }
+    if (deleted) {
+        AlertDialog(
+            onDismissRequest = vm::deletedShown,
+            title = { Text("Account deleted") },
+            text = { Text("Your account and everything the server kept about it have been deleted. Your rounds are still on this phone.") },
+            confirmButton = { TextButton(onClick = vm::deletedShown) { Text("OK") } },
+        )
+    }
+    if (confirmDelete) {
+        var password by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete your account?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "This deletes your account and everything the server keeps about it: your rounds and scores there, " +
+                            "friends, round requests and your place in live groups. It can't be undone. Rounds on this " +
+                            "phone stay here.",
+                    )
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; vm.deleteAccount(password) }, enabled = password.isNotEmpty()) {
+                    Text("Delete account", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
+    }
     if (askPassword) {
         var password by remember { mutableStateOf("") }
         AlertDialog(

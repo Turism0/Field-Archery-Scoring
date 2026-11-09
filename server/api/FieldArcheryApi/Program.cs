@@ -123,10 +123,11 @@ app.MapLocationPageEndpoints();
 app.MapGroupEndpoints();
 app.MapOfferEndpoints();
 app.MapHandicapEndpoints();
+app.MapAccountDeletion();   // API 2.4.02: POST /api/me/delete, /delete-account and /privacy pages
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.4";
+    public const string Version = "2.4.02";
 }

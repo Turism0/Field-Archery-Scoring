@@ -85,6 +85,9 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | POST | `/api/auth/register` | `{ username, password, deviceName }` | 201 `{ archerId, username, token, expiresUtc }`; 409 `username_taken` |
 | POST | `/api/auth/login` | `{ username, password, deviceName }` | 200 as above; 401 `invalid_credentials`; 423 `locked_out` |
 | POST | `/api/auth/reset` | `{ username, code, newPassword, deviceName }` (API 2.4) | 200 as register, with a new `recoveryCode`. `code`: the recovery code or an Admin's reset code (case, spaces and dashes don't matter). Every other phone is signed out. 401 `invalid_code`; 423 `locked_out` (wrong codes count like wrong passwords) |
+| POST | `/api/me/delete` | Bearer token; `{ password }` (API 2.4.02) | 204: the account and everything about it deleted (rounds, friends, requests, group places, private locations; public locations kept, unlinked). 401 `wrong_password`; 409 `is_owner` |
+| GET / POST | `/delete-account`, `/privacy` | Web pages (API 2.4.02) | Delete an account with username and password; the privacy policy. Linked from the Play listing |
+| POST | `/api/locations/nearby` | Bearer token; `{ latitude, longitude, radiusMetres? }` (API 2.4.02) | As the GET, with the position in the body so it isn't in web logs |
 | POST | `/api/auth/recovery-code` | Bearer token; `{ password }` (API 2.4) | `{ recoveryCode }`, a new one (the old one stops working); 401 `wrong_password` |
 | POST | `/api/auth/logout` | `Authorization: Bearer <token>` | 204, revokes this phone's token |
 | GET | `/api/me` | `Authorization: Bearer <token>` | `{ archerId, username, createdUtc, role, hasRecoveryCode, duplicateLocations }`; role is `USER`, `ADMIN` or `OWNER`; `duplicateLocations` is the number of possible duplicate locations waiting (Admins only, 0 for Users); `roundOffers` is the number of rounds friends have scored for you, waiting to be accepted |
@@ -199,13 +202,21 @@ Run `sql/012_password_reset.sql` in SSMS first (schema 8), then publish API 2.4.
 
 Recovery codes (with a new account, used once, renewed, a new one from Profile needs the password), wrong codes and the lock-out, every other phone signed out, the Owner's reset codes (once, not for yourself, not by a User), and friends' latest 10 rounds for the rating. `Test-LocationPage.ps1` also checks the per-class rows. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
+## Testing account deletion and the privacy page (2.4.02)
+
+```powershell
+.\Test-Delete.ps1
+```
+
+Deleting needs the password; after deleting, the account can't sign in, its phones are signed out, the username is free, and it's gone from friends and groups; the web page refuses a wrong password and deletes with the right one; the privacy page is there with the contact email; nearby search works with the position in the body.
+
 ## Running every test (2.0.16)
 
 ```powershell
 .\Run-AllTests.ps1 -Username Turismo
 ```
 
-Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, and with `-Username` the Owner ones: Roles, Locations, LocationReview, Handicap, Reset, which each ask for the password) and prints a summary. It waits a minute before each Owner test (2.4), because the API allows 30 sign-ins / new accounts a minute from one address and the earlier tests use most of that (otherwise 429 Too Many Requests); the whole run takes about 6 minutes. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
+Runs the automatic tests one after another (Accounts, Rounds, Friends, Woodsman, LocationPage, CourseAverages, Groups, Offers, Delete, and with `-Username` the Owner ones: Roles, Locations, LocationReview, Handicap, Reset, which each ask for the password) and prints a summary. It waits a minute before Test-Groups and each Owner test (2.4), because the API allows 30 sign-ins / new accounts a minute from one address and the earlier tests use most of that (otherwise 429 Too Many Requests); the whole run takes about 7 minutes. Test-Download and Test-FriendView aren't included because they need the phone. Tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing the handicap (2.2.01)
 
