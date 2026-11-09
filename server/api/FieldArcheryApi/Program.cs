@@ -79,6 +79,12 @@ app.UseForwardedHeaders();
 // manifest are always re-checked so updates reach phones; everything else has a content hash in its name.
 var types = new FileExtensionContentTypeProvider();
 types.Mappings[".webmanifest"] = "application/manifest+json";
+// 2.5.01: only the exact /app is redirected (routing ignores a trailing slash, so a mapped /app also caught /app/ and looped).
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path.Value == "/app") { ctx.Response.Redirect("/app/"); return; }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -89,6 +95,7 @@ app.UseStaticFiles(new StaticFileOptions
             ctx.Context.Response.Headers.CacheControl = "no-cache";
     },
 });
+app.UseRouting();   // after the static files, so /app/ is served as app/index.html before any endpoint is chosen
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRateLimiter();
@@ -139,12 +146,11 @@ app.MapGroupEndpoints();
 app.MapOfferEndpoints();
 app.MapHandicapEndpoints();
 app.MapAccountDeletion();   // API 2.4.02: POST /api/me/delete, /delete-account and /privacy pages
-app.MapGet("/app", () => Results.Redirect("/app/"));
 app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");   // the web app's own pages (2.5)
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.5";
+    public const string Version = "2.5.01";
 }
