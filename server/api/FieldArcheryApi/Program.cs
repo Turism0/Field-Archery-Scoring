@@ -9,6 +9,7 @@ using System.Threading.RateLimiting;
 using Dapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.StaticFiles;
 using FieldArcheryApi.Admin;
 using FieldArcheryApi.Auth;
 using FieldArcheryApi.Data;
@@ -74,6 +75,20 @@ builder.Services.AddRateLimiter(o =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+// The web app (2.5, built from web/ into wwwroot/app): /app/ for iPhones and any browser. The page, service worker and
+// manifest are always re-checked so updates reach phones; everything else has a content hash in its name.
+var types = new FileExtensionContentTypeProvider();
+types.Mappings[".webmanifest"] = "application/manifest+json";
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = types,
+    OnPrepareResponse = ctx =>
+    {
+        if (ctx.File.Name is "index.html" or "sw.js" or "registerSW.js" or "manifest.webmanifest")
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
+    },
+});
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseRateLimiter();
@@ -124,10 +139,12 @@ app.MapGroupEndpoints();
 app.MapOfferEndpoints();
 app.MapHandicapEndpoints();
 app.MapAccountDeletion();   // API 2.4.02: POST /api/me/delete, /delete-account and /privacy pages
+app.MapGet("/app", () => Results.Redirect("/app/"));
+app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");   // the web app's own pages (2.5)
 
 app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.4.02";
+    public const string Version = "2.5";
 }

@@ -10,6 +10,8 @@ The app only ever talks to the API; the API is the only thing that talks to SQL 
 
 If the release adds a database script (e.g. `sql/007_round_types.sql`), run it in SSMS on Mimir **first**.
 
+The web app (2.5) is part of the API: copy `wwwroot\` with the rest (it's already built, from `web/`), and it's published at https://fieldarchery.fnurble.co.uk/app/.
+
 After a new version, copy the changed files into `C:\zScripts\FieldArcheryApi` (keeping subfolders), then in **Windows PowerShell 5.1 as Administrator**:
 
 ```powershell
