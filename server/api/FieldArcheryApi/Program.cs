@@ -121,7 +121,8 @@ app.UseStaticFiles(new StaticFileOptions
     ContentTypeProvider = types,
     OnPrepareResponse = ctx =>
     {
-        if (ctx.File.Name is "index.html" or "sw.js" or "registerSW.js" or "manifest.webmanifest")
+        // 2.7.02: the web app's files keep the same names every build, so the browser must check each time (a 304 if unchanged).
+        if (ctx.File.Name is "index.html" or "sw.js" or "registerSW.js" or "manifest.webmanifest" or "index.js" or "index.css")
             ctx.Context.Response.Headers.CacheControl = "no-cache";
     },
 });
@@ -182,5 +183,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.7.01";
+    public const string Version = "2.7.02";
 }

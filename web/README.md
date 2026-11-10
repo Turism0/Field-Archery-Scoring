@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.7.01)
+# Field Archery Scoring – web app (2.7.02)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -24,6 +24,9 @@ sheet. Live groups aren't offered on desktop.
 
 **In 2.7:** an optional starting target on new rounds, Add a round and Round details, shown on the scorecard (`startTarget` in
 the round JSON; a live group's comes from the host).
+
+**In 2.7.02:** the build always writes `assets/index.js` and `assets/index.css` (no hash in the name, see `vite.config.ts`), so a
+new build copied over the old one leaves no old files behind; the API sends them with `Cache-Control: no-cache`.
 
 **In 2.7.01:** the phone layout follows the Android app screen by screen (Score a round → Round type → New round, the scoring
 screen's points tiles, running stats, Prev / Next and menus, scorecards and history cards). Shared pieces are in `ui/Parts.tsx`.
