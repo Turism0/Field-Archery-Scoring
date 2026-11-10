@@ -62,35 +62,91 @@ class HandicapTest {
         assertEquals(600.0, model.convert(600.0, 960.0, bb, 2026), 1e-9)
     }
 
+    // ---- Multipliers (2.9) ----
+
+    private val withBase = model.copy(factors = model.factors + ("BASE:ALL" to 1.2))
+
     @Test
-    fun handicapPointsAreTheSameForTheSamePerformance() {
-        // A Longbow score and its Unlimited equivalent get the same handicap points.
-        val asUl = model.convert(600.0, 960.0, lb, 2026)
-        assertEquals(model.handicapPoints(600.0, 960.0, lb, 2026), model.handicapPoints(asUl, 960.0, ul, 2026), 1e-6)
-        // Out of 1000, and higher for a better score.
-        val hp = model.handicapPoints(600.0, 960.0, lb, 2026)
-        assertTrue(hp > 0 && hp < 1000)
-        assertTrue(model.handicapPoints(700.0, 960.0, lb, 2026) > hp)
+    fun multiplierIsTheMaximumOverATypicalScore() {
+        // Unlimited Gents: typical share 1 / (1 + e^-1.2) = 0.7685 → 1.30.
+        assertEquals(1.30, withBase.multiplier(ul)!!, 1e-9)
+        val share = 1 / (1 + exp(-(1.2 - 1.36 - 0.25 * 1.2 + 0.5 * -0.07)))
+        assertEquals(Math.round(100 / share) / 100.0, withBase.multiplier(lb)!!, 1e-9)
+        assertTrue(withBase.multiplier(lb)!! > withBase.multiplier(ul)!!)
+        assertTrue(withBase.multiplier(lbLady)!! > withBase.multiplier(lb)!!)
     }
 
     @Test
-    fun neutralIsTheMiddleOfAllBowsAndClasses() {
-        val all = BowStyle.entries.flatMap { b -> ArcherClass.entries.flatMap { c -> AgeGroup.entries.map { a -> model.offset(b, c, a, 2026) } } }.sorted()
-        val n = model.neutralOffset(2026)
-        assertTrue(all.count { it < n } <= all.size / 2 && all.count { it > n } <= all.size / 2)
-        // An archer exactly at the middle keeps their share: 50% → 500.
-        val unchanged = 1000 / (1 + exp(-(logit(0.5) - 0 + n)))
-        assertEquals(unchanged, model.handicapPoints(480.0, 960.0, ul, 2026), 1e-6)
+    fun aTypicalScoreTimesItsMultiplierIsAboutTheMaximum() {
+        val typical = (withBase.typicalShare(lb)!! * 960).toInt()
+        assertEquals(960.0, HandicapModel.applyMultiplier(typical, withBase.multiplier(lb)!!).toDouble(), 6.0)
     }
 
     @Test
-    fun ratingAveragesTheLatestTen() {
-        val rounds = (1..12).map { HandicapRound(LocalDate.of(2026, 1, it), points = 480 + it, maxPoints = 960, archer = lb) }
-        val r = HandicapStats.rating(model, rounds)!!
-        assertEquals(10, r.rounds)
-        // Latest 10 = days 3..12.
-        val expected = rounds.drop(2).map { model.handicapPoints(it.points.toDouble(), 960.0, lb, 2026) }.average()
-        assertEquals(Math.round(expected).toInt(), r.rating)
-        assertNull(HandicapStats.rating(model, rounds.take(2)))
+    fun noMultipliersFromAnOlderServer() {
+        assertNull(model.multiplier(lb))
+    }
+
+    // ---- Personal handicap (2.9) ----
+
+    private fun e(day: Int, points: Int, targets: Int = 40, bow: BowStyle = BowStyle.LONGBOW, order: Long = 0) =
+        PersonalHandicap.Entry(LocalDate.of(2026, 1, 1).plusDays(day.toLong()), order, bow, points, targets)
+
+    @Test
+    fun howManyRoundsCount() {
+        assertEquals(listOf(0, 0, 3, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8), listOf(1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 17, 18, 20).map { PersonalHandicap.counting(it) })
+    }
+
+    @Test
+    fun noHandicapUntilThreeRounds() {
+        assertNull(PersonalHandicap.of(listOf(e(1, 600), e(2, 620)), BowStyle.LONGBOW))
+        val h = PersonalHandicap.of(listOf(e(1, 600), e(2, 620), e(3, 640)), BowStyle.LONGBOW)!!
+        assertEquals(960 - 620, h.handicap)
+        assertEquals(3, h.counted.size)
+    }
+
+    @Test
+    fun bestEightOfTheLastTwenty() {
+        // 25 rounds: the oldest 5 (all 900) are too old; of the latest 20 (500 … 690), the best 8 are 620 … 690.
+        val old = (1..5).map { e(it, 900) }
+        val recent = (0 until 20).map { e(10 + it, 500 + it * 10) }
+        val h = PersonalHandicap.of(old + recent, BowStyle.LONGBOW)!!
+        assertEquals(20, h.considered)
+        assertEquals(8, h.counted.size)
+        assertEquals((620..690 step 10).average(), h.usual, 1e-9)
+        assertEquals(960 - 655, h.handicap)
+    }
+
+    @Test
+    fun roundsAreScaledTo40Targets() {
+        // 36 targets: 540 is 600 off 40.
+        val h = PersonalHandicap.of(listOf(e(1, 540, 36), e(2, 600), e(3, 300, 20)), BowStyle.LONGBOW)!!
+        assertEquals(600.0, h.usual, 1e-9)
+        assertEquals(360, h.handicap)
+    }
+
+    @Test
+    fun onePerBowStyle() {
+        val list = listOf(e(1, 600), e(2, 600), e(3, 600), e(4, 800, bow = BowStyle.UNLIMITED), e(5, 800, bow = BowStyle.UNLIMITED))
+        val all = PersonalHandicap.all(list)
+        assertEquals(listOf(BowStyle.LONGBOW), all.map { it.bowStyle })
+        assertEquals(360, all[0].handicap)
+    }
+
+    @Test
+    fun handicapBeforeARound() {
+        val list = listOf(e(1, 600), e(2, 600), e(3, 600), e(4, 900), e(4, 300, order = 5))
+        val third = list[2]
+        assertNull(PersonalHandicap.of(list, BowStyle.LONGBOW, before = third))
+        // Before the second round on day 4: day 1–3 and the first on day 4 → best 3 of 4 = 900, 600, 600.
+        assertEquals(960 - 700, PersonalHandicap.of(list, BowStyle.LONGBOW, before = list[4])!!.handicap)
+    }
+
+    @Test
+    fun netScoreScalesTheHandicapToTheTargets() {
+        assertEquals(960, PersonalHandicap.net(600, 40, 360))
+        assertEquals(540 + 324, PersonalHandicap.net(540, 36, 360))
+        assertEquals(324, PersonalHandicap.allowance(360, 36))
+        assertEquals(864, PersonalHandicap.parFor(36))
     }
 }

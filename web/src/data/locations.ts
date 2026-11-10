@@ -7,7 +7,7 @@ import { request, ApiError } from './api'
 import { authed, getAccount } from './account'
 import { allRounds, getRound, groupRounds, putRound, putRounds } from './db'
 import { AGE_NAMES, CLASS_NAMES, nowUtc, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
-import { classLineOf, handicapOf, targetsLineOf, type RoundSummary } from './friends'
+import { classLineOf, targetsLineOf, type RoundSummary } from './friends'
 
 export interface NearbyLocation { id: string; name: string; distanceMetres: number }
 export interface MapLocation { id: string; name: string; latitude: number; longitude: number; isPrivate: boolean; myRounds: number; rounds: number }
@@ -145,7 +145,7 @@ export interface LocationPage { location: MapLocation; myRounds: RoundSummary[];
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
-  totalPoints: r.totalPoints, locationName: r.locationName ?? null, targetsLine: targetsLineOf(r), handicap: handicapOf(r),
+  totalPoints: r.totalPoints, locationName: r.locationName ?? null, targetsLine: targetsLineOf(r),
 })
 const bowStats = (b: any, withClass: boolean): BowStyleStats => ({
   roundType: b.roundType ?? 'BIG_GAME', bowStyle: b.bowStyle, archers: b.archers, rounds: b.rounds, bestTotal: b.bestTotal ?? null,

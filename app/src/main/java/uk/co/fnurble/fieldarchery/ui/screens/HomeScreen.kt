@@ -74,7 +74,7 @@ import uk.co.fnurble.fieldarchery.ui.HomeViewModel
 import uk.co.fnurble.fieldarchery.ui.components.syncStatusText
 
 /**
- * Home: account / sync status and tiles – Score a round, Score history, Stats, Handicap calculator, Friends, Shoot
+ * Home: account / sync status and tiles – Score a round, Score history, Stats, Handicaps, Friends, Shoot
  * locations – plus an Admin tile for Admins and the Owner. Pull down to sync now. Arrange tiles (2.4.01): the order and
  * which show are the archer's own, kept on the phone.
  */
@@ -92,7 +92,7 @@ fun HomeScreen(
     onMap: () -> Unit,
 ) {
     val summary by vm.summary.collectAsStateWithLifecycle()
-    val rating by vm.rating.collectAsStateWithLifecycle()
+    val handicaps by vm.handicaps.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val username by vm.username.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
@@ -195,15 +195,16 @@ fun HomeScreen(
                                 title = "Stats",
                                 subtitle = when {
                                     s?.finished == 0 -> "Personal bests, trends and seasons once you finish a round"
-                                    rating != null -> "Handicap rating ${rating!!.rating} · bests, trends and seasons"
                                     else -> "Personal bests, trends and season summaries"
                                 },
                                 onClick = onStats,
                             )
                             HomeTileId.HANDICAP -> HomeTile(
                                 icon = Icons.Filled.Info,
-                                title = "Handicap calculator",
-                                subtitle = "Handicap out of 1000, and a score as every other bow and class",
+                                title = "Handicaps",
+                                // 2.9 (Pete: the old wording didn't make sense).
+                                subtitle = if (handicaps.isEmpty()) "Your personal handicap, and the class multipliers for handicap competitions"
+                                else "Your handicap: " + handicaps.joinToString(" · ") { "${it.bowStyle.code} ${it.handicap}" } + " · class multipliers",
                                 onClick = onHandicap,
                             )
                             HomeTileId.FRIENDS -> HomeTile(

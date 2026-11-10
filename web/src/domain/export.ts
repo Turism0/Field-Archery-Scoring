@@ -1,7 +1,7 @@
 // Exporting rounds (2.7.03, desktop): two CSV layouts and JSON. Pure functions, tested in test/export.test.ts.
 import { AGE_NAMES, CLASS_NAMES, ROUND_TYPE_NAMES, bowName, roundStats, roundToJson, type Round } from './round'
 import { HIT_NAMES, TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, maxPoints, totalPoints, type TargetScore } from './scoring'
-import { handicapRound, roundPoints, type HandicapModel } from './handicap'
+import { applyMultiplier, handicapEntry, multiplier, net, personalHandicap, type HandicapModel } from './handicap'
 
 export type ExportFormat = 'CSV_ROUNDS' | 'CSV_TARGETS' | 'JSON'
 
@@ -23,21 +23,28 @@ export const ROUND_HEADER = [
   'Date', 'Round type', 'Targets', 'Targets scored', 'Starting target', 'Location', 'Bow', 'Bow code', 'Class', 'Age group',
   'Total', 'Max for targets scored', 'Average per animal', 'Inner kills', 'Kills', 'Wounds', 'Misses',
   'Hits on 1st arrow', 'Hits on 2nd arrow', 'Hits on 3rd arrow', 'Overridden targets', '1st arrow %', 'Kill %', 'Miss %',
-  'Handicap points', 'Group round', 'Round id',
+  'Handicap', 'Net score', 'Multiplier', 'Score × multiplier', 'Group round', 'Round id',
 ]
 
-/** One row per round: the details and its stats (as on the scorecard). */
-export function roundsCsv(rounds: Round[], model?: HandicapModel | null): string {
+/**
+ * One row per round: the details and its stats (as on the scorecard), and (2.9) the personal handicap before it with
+ * the net score, worked out from [all] your rounds, and the class multiplier.
+ */
+export function roundsCsv(rounds: Round[], model?: HandicapModel | null, all: Round[] = rounds): string {
+  const entries = all.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
   return toCsv(ROUND_HEADER, rounds.map(r => {
     const s = roundStats(r)
-    const h = model ? handicapRound(r) : null
+    const big = r.type === 'BIG_GAME'
+    const h = big ? personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: s.total, targetCount: r.targetCount }) : null
+    const mult = big && model ? multiplier(model, { bowStyle: r.bowStyle, archerClass: r.archerClass, ageGroup: r.ageGroup }) : null
     const max = r.targets.filter(isComplete).reduce((t, x) => t + maxPoints(x), 0)
     return [
       r.shootDate, ROUND_TYPE_NAMES[r.type], r.targetCount, s.targetsScored, r.startTarget ?? null, r.locationName ?? null,
       bowName(r.bowStyle), r.bowStyle, CLASS_NAMES[r.archerClass], AGE_NAMES[r.ageGroup],
       s.total, max, s.averagePerAnimal, r.type === 'WOODSMAN' ? null : s.innerKills, s.kills, s.wounds, s.misses,
       s.byArrow[0], s.byArrow[1], s.byArrow[2], s.overrides, pct(s.firstArrowRate), pct(s.killRate), pct(s.missRate),
-      model && h ? roundPoints(model, h) : null, r.groupId ? 'Yes' : 'No', r.id,
+      h?.handicap ?? null, h ? net(s.total, r.targetCount, h.handicap) : null, mult, mult != null ? applyMultiplier(s.total, mult) : null,
+      r.groupId ? 'Yes' : 'No', r.id,
     ]
   }))
 }
@@ -93,9 +100,9 @@ export function roundsJson(rounds: Round[], exportedUtc: string, appVersion: str
 }
 
 /** The file to save: name, type and text. Excel needs the BOM to read UTF-8 (e.g. é in a location). */
-export function exportFile(format: ExportFormat, rounds: Round[], opts: { today: string; nowUtc: string; appVersion: string; model?: HandicapModel | null }) {
+export function exportFile(format: ExportFormat, rounds: Round[], opts: { today: string; nowUtc: string; appVersion: string; model?: HandicapModel | null; all?: Round[] }) {
   const one = rounds.length === 1 ? `round-${rounds[0].shootDate}` : `rounds-${opts.today}`
   if (format === 'JSON') return { name: `field-archery-${one}.json`, type: 'application/json', text: roundsJson(rounds, opts.nowUtc, opts.appVersion) }
-  const text = '﻿' + (format === 'CSV_ROUNDS' ? roundsCsv(rounds, opts.model) : targetsCsv(rounds))
+  const text = '﻿' + (format === 'CSV_ROUNDS' ? roundsCsv(rounds, opts.model, opts.all ?? rounds) : targetsCsv(rounds))
   return { name: `field-archery-${one}${format === 'CSV_TARGETS' ? '-targets' : ''}.csv`, type: 'text/csv;charset=utf-8', text }
 }

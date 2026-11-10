@@ -32,7 +32,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import uk.co.fnurble.fieldarchery.domain.HandicapStats
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +56,7 @@ fun FriendRoundsScreen(
     onOpenRound: (FriendRoundSummary) -> Unit,
 ) {
     val rounds by vm.rounds.collectAsStateWithLifecycle()
-    val handicap by vm.handicapModel.collectAsStateWithLifecycle()
+    val handicaps by vm.handicaps.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -127,17 +126,23 @@ fun FriendRoundsScreen(
                             )
                         }
                     }
-                    // Their handicap rating (average handicap points of their last 10 Big Game rounds).
-                    val model = handicap
-                    val rating = model?.let { m -> HandicapStats.rating(m, r.value.mapNotNull { it.handicapRound() }) }
-                    if (rating != null) item(key = "rating") {
+                    // Their personal handicaps (2.9).
+                    if (handicaps.isNotEmpty()) item(key = "handicap") {
                         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
-                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Handicap rating", style = MaterialTheme.typography.titleMedium)
-                                    Text("Average handicap of their last ${rating.rounds} Big Game rounds (out of 1000)", style = MaterialTheme.typography.bodySmall)
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Handicap", style = MaterialTheme.typography.titleMedium)
+                                handicaps.forEach { h ->
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(h.bowStyle.displayName, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                                        Text("${h.handicap}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                                Text("${rating.rating}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                                val first = handicaps.first()
+                                Text(
+                                    "Par 960 (40 targets) minus their usual score: the best ${first.counted.size} of their last ${first.considered} " +
+                                        "${first.bowStyle.displayName} rounds" + (if (handicaps.size > 1) ", and the same for each bow." else "."),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                         }
                     }
@@ -164,10 +169,6 @@ fun FriendRoundsScreen(
                                     Text("${round.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                                     Text("points", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    // Handicap points, so rounds with different bows and classes compare.
-                                    val eq = model?.let { m -> round.handicapRound()?.let { HandicapStats.points(m, it) } }
-                                    if (eq != null) Text("Handicap $eq", style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks'
 import { Dialog, today, toast, useData } from './common'
 import { getModel } from '../data/handicap'
+import { finished } from '../data/rounds'
 import { exportFile, type ExportFormat } from '../domain/export'
 import type { Round } from '../domain/round'
 
@@ -25,11 +26,13 @@ function save(name: string, type: string, text: string) {
 export function ExportDialog({ open, rounds, what, onClose }: { open: boolean; rounds: Round[]; what: string; onClose: () => void }) {
   const [format, setFormat] = useState<ExportFormat>('CSV_ROUNDS')
   const model = useData(getModel)
+  // Every finished round, for the personal handicap before each one (2.9).
+  const all = useData(finished)
   return (
     <Dialog open={open} title="Export scores" onClose={onClose}
       actions={<><button onClick={onClose}>Cancel</button>
         <button disabled={!rounds.length} onClick={() => {
-          const f = exportFile(format, rounds, { today: today(), nowUtc: new Date().toISOString(), appVersion: APP_VERSION, model })
+          const f = exportFile(format, rounds, { today: today(), nowUtc: new Date().toISOString(), appVersion: APP_VERSION, model, all })
           save(f.name, f.type, f.text); toast(`Saved ${f.name}`); onClose()
         }}>Export</button></>}>
       <div class="sub">{what}</div>

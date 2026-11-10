@@ -3,9 +3,8 @@ import { Bar, Card, go, one, ukDate, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
-import { getModel } from '../data/handicap'
 import { ROUND_TYPE_NAMES, bowName, classLine, locationStatus, roundTotal, targetsComplete, targetsLine } from '../domain/round'
-import { handicapRound, rating, roundPoints } from '../domain/handicap'
+import { handicapEntry, net, personalHandicap, personalHandicaps } from '../domain/handicap'
 import { bests, personalBestIds, seasons } from '../domain/stats'
 import { normalised, type HomeLayout } from '../domain/homeLayout'
 import { Arrange } from './Home'
@@ -21,13 +20,19 @@ export function Dashboard() {
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
-  const model = useData(getModel)
   const [editing, setEditing] = useState<HomeLayout | null>(null)
   const layout = normalised(stored)
   const admin = isAdmin(account)
   const list = done ?? []
-  const hr = list.map(handicapRound).filter((h): h is NonNullable<typeof h> => !!h)
-  const rt = model ? rating(model, hr) : null
+  // Personal handicaps (2.9), and the net score with the handicap before each round.
+  const entries = list.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
+  const hs = personalHandicaps(entries)
+  const netOf = (r: typeof list[number]) => {
+    if (r.type !== 'BIG_GAME') return null
+    const total = roundTotal(r)
+    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: r.targetCount })
+    return h ? net(total, r.targetCount, h.handicap) : null
+  }
   const pbs = personalBestIds(list)
   const top = bests(list).slice(0, 6)
   const recent = list.slice(0, 10)
@@ -49,11 +54,10 @@ export function Dashboard() {
             <div class="sub" style="color:inherit">Type in a round shot on paper (or scored before): the details, then each target's points.</div>
             <button class="filled" style="align-self:flex-start" onClick={() => go('/add')}>Add a round</button>
           </Card>
-          <Card title="Handicap rating">
-            {!model ? <div class="sub">The handicap downloads from the server the next time there's signal.</div>
-              : rt ? <><div class="big">{rt.rating}</div><div class="sub">Average of your last {rt.rounds} Big Game rounds, out of 1000</div></>
-              : <div class="sub">Add 3 Big Game rounds for a rating.</div>}
-            <button class="outlined" style="align-self:flex-start" onClick={() => go('/stats')}>Stats</button>
+          <Card title="Handicap">
+            {hs.length ? hs.map(h => <div class="row between"><span>{bowName(h.bowStyle)}</span><b class="big">{h.handicap}</b></div>)
+              : <div class="sub">Add 3 fully scored Big Game rounds with the same bow for a handicap.</div>}
+            <button class="outlined" style="align-self:flex-start" onClick={() => go('/handicap')}>Handicaps and multipliers</button>
           </Card>
           <Card title={`${year} so far`}>
             {!season.length ? <div class="sub">No rounds this year yet.</div> : season.map(s => (
@@ -82,15 +86,15 @@ export function Dashboard() {
         <div class="grid2 top">
           <Card title="Recent rounds">
             {!recent.length ? <div class="sub">No finished rounds yet. Add one from a paper scorecard.</div> : <table class="card-table click">
-              <thead><tr><th>Date</th><th>Round</th><th>Location</th>{model && <th class="num">Handicap</th>}<th class="num">Total</th></tr></thead>
+              <thead><tr><th>Date</th><th>Round</th><th>Location</th><th class="num">Net</th><th class="num">Total</th></tr></thead>
               <tbody>{recent.map(r => {
-                const h = model ? handicapRound(r) : null
+                const n = netOf(r)
                 return (
                   <tr onClick={() => go(`/card/${r.id}`)}>
                     <td>{ukDate(r.shootDate)}</td>
                     <td>{r.type === 'WOODSMAN' ? 'Woodsman · ' : ''}{targetsLine(r)}<div class="sub">{classLine(r)}</div></td>
                     <td>{r.locationName ?? <span class="sub">–</span>}</td>
-                    {model && <td class="num">{h ? roundPoints(model, h) : '–'}</td>}
+                    <td class="num">{n ?? '–'}</td>
                     <td class="num"><b>{roundTotal(r)}</b> {pbs.has(r.id) && <span class="pb">PB</span>}</td>
                   </tr>
                 )

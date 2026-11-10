@@ -4,16 +4,18 @@ import { authed, type Friend } from './account'
 import { setKv } from './db'
 import { syncNow } from './rounds'
 import { AGE_NAMES, CLASS_NAMES, roundFromJson, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
-import type { HandicapRound } from '../domain/handicap'
+import type { HEntry } from '../domain/handicap'
 
 export interface FriendSummary {
   archerId: string; username: string; rounds: number; bestTotal: number | null; lastShootDate: string | null
-  averagePerAnimal: number | null; woodsmanRounds: number; woodsmanBest: number | null; recent: HandicapRound[]
+  averagePerAnimal: number | null; woodsmanRounds: number; woodsmanBest: number | null
+  /** Their latest finished Big Game rounds with every target scored, up to 20 per bow (server 2.9): their personal handicaps. */
+  recent: HEntry[]
 }
 export interface FriendsOverview { friends: FriendSummary[]; incoming: Friend[]; outgoing: Friend[] }
 export interface RoundSummary {
   roundId: string; shootDate: string; targetCount: number; classLine: string; totalPoints: number
-  locationName: string | null; targetsLine: string; handicap: HandicapRound | null
+  locationName: string | null; targetsLine: string
 }
 export interface RoundOffer {
   roundId: string; fromUsername: string; shootDate: string; targetCount: number; classLine: string; totalPoints: number
@@ -24,11 +26,11 @@ const cls = (c: string): ArcherClass => (c === 'L' ? 'LADIES' : 'GENTS')
 const classLineOf = (r: any) =>
   `${r.roundType === 'WOODSMAN' ? 'Woodsman · ' : ''}${CLASS_NAMES[cls(r.archerClass)]} ${AGE_NAMES[r.ageGroup as AgeGroup] ?? r.ageGroup} ${r.bowStyle}`
 
-function handicapOf(r: any): HandicapRound | null {
-  if (r.roundType === 'WOODSMAN' || !r.bowStyle || !r.ageGroup) return null
-  const animals = r.animalCount > 0 ? r.animalCount : r.targetCount
-  return { shootDate: String(r.shootDate).slice(0, 10), points: r.totalPoints, maxPoints: 24 * animals,
-    archer: { bowStyle: r.bowStyle, archerClass: cls(r.archerClass), ageGroup: r.ageGroup } }
+/** A friend's round for their personal handicap: Big Game with every target scored (server 2.9 says how many were). */
+function entryOf(r: any, i: number): HEntry | null {
+  if (r.roundType === 'WOODSMAN' || !r.bowStyle || r.targetsScored == null || r.targetsScored !== r.targetCount || !(r.targetCount > 0)) return null
+  // The server lists them newest first; the order tells apart rounds on the same day.
+  return { shootDate: String(r.shootDate).slice(0, 10), order: String(1e6 - i).padStart(7, '0'), bowStyle: r.bowStyle, points: r.totalPoints, targetCount: r.targetCount }
 }
 
 function targetsLineOf(r: any): string {
@@ -46,7 +48,7 @@ export async function overview(): Promise<FriendsOverview> {
       archerId: f.archerId, username: f.username, rounds: f.rounds ?? 0, bestTotal: f.bestTotal ?? null,
       lastShootDate: f.lastShootDate ? String(f.lastShootDate).slice(0, 10) : null, averagePerAnimal: f.averagePerAnimal ?? null,
       woodsmanRounds: f.woodsmanRounds ?? 0, woodsmanBest: f.woodsmanBest ?? null,
-      recent: (f.recent ?? []).map(handicapOf).filter(Boolean),
+      recent: (f.recent ?? []).map(entryOf).filter((e: HEntry | null): e is HEntry => !!e),
     })),
     incoming: j.incoming.map((x: any) => ({ archerId: x.archerId, username: x.username })),
     outgoing: j.outgoing.map((x: any) => ({ archerId: x.archerId, username: x.username })),
@@ -90,7 +92,7 @@ export async function friendRounds(id: string): Promise<RoundSummary[]> {
   const j = await authed(t => request('GET', `/api/friends/${id}/rounds`, undefined, t))
   return j.rounds.map((r: any) => ({
     roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
-    totalPoints: r.totalPoints, locationName: r.locationName ?? null, targetsLine: targetsLineOf(r), handicap: handicapOf(r),
+    totalPoints: r.totalPoints, locationName: r.locationName ?? null, targetsLine: targetsLineOf(r),
   }))
 }
 
@@ -98,4 +100,4 @@ export async function friendRound(id: string, roundId: string): Promise<Round> {
   return roundFromJson(await authed(t => request('GET', `/api/friends/${id}/rounds/${roundId}`, undefined, t)))
 }
 
-export { targetsLineOf, handicapOf, classLineOf }
+export { targetsLineOf, classLineOf }

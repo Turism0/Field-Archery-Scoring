@@ -19,10 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import uk.co.fnurble.fieldarchery.domain.BigGameScoring
 import uk.co.fnurble.fieldarchery.domain.HandicapModel
-import uk.co.fnurble.fieldarchery.domain.HandicapStats
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
+import uk.co.fnurble.fieldarchery.domain.RoundType
+import uk.co.fnurble.fieldarchery.ui.OwnHandicap
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
-import uk.co.fnurble.fieldarchery.domain.handicapRound
 import uk.co.fnurble.fieldarchery.domain.RoundStats
 import uk.co.fnurble.fieldarchery.domain.ordinal
 import java.util.Locale
@@ -87,27 +88,54 @@ private val fadedContent: Color
     @Composable get() = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
 
 /**
- * A finished Big Game round's handicap points (out of 1000, the same for the same performance with any bow or
- * class). Nothing for Woodsman, unfinished rounds, or before the handicap has been downloaded.
+ * Handicap competition scores for a finished Big Game round (2.9): the net score with your personal handicap before
+ * this round ([own]: only for your own rounds; its handicap null when you didn't have one yet), and score × the
+ * multiplier for the bow style and class ([model]; nothing before it's downloaded from a 2.9 server).
  */
 @Composable
-fun HandicapCard(round: Round, model: HandicapModel?, modifier: Modifier = Modifier) {
-    if (model == null || round.status != RoundStatus.COMPLETED) return
-    val h = round.handicapRound() ?: return
-    val points = HandicapStats.points(model, h)
+fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, modifier: Modifier = Modifier) {
+    if (round.type != RoundType.BIG_GAME || round.status != RoundStatus.COMPLETED) return
+    val total = round.totalPoints
+    val mult = model?.multiplier(HandicapModel.Archer(round.bowStyle, round.archerClass, round.ageGroup))
+    if (own == null && mult == null) return
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Handicap", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Out of 1000: the same for the same performance with any bow or class",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Handicap competition", style = MaterialTheme.typography.titleMedium)
+            if (own != null) {
+                val h = own.handicap
+                if (h == null) {
+                    Text(
+                        "No ${round.bowStyle.displayName} handicap before this round: it needs 3 finished, fully scored rounds with that bow.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    val net = PersonalHandicap.net(total, round.targetCount, h.handicap)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Net score", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(
+                                "$total + ${net - total} (${round.bowStyle.displayName} handicap ${h.handicap} before this round" +
+                                    (if (round.targetCount != PersonalHandicap.PAR_TARGETS) ", scaled to ${round.targetCount} targets" else "") +
+                                    "). Par ${PersonalHandicap.parFor(round.targetCount)}.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Text("$net", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
-            Text("$points", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            if (mult != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("With the class multiplier", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text("$total × ${"%.2f".format(java.util.Locale.UK, mult)} (${round.classLine})", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("${HandicapModel.applyMultiplier(total, mult)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

@@ -49,15 +49,29 @@ public static class HandicapEndpoints
     /// z = logit(p) − offset(bow, class, year, 3D); equivalent = 24 × targets / (1 + e^−z), where
     /// offset = BOW[bow] + CLASS[sex-age] + (ladies ? BOWSEX[bow] : 0) + SLOPE[bow] × (year − 2014) / 10 + (3D ? BOW3D[bow] : 0),
     /// year no later than dataThroughYear. Missing factors are 0 (Unlimited Gents is the reference).
+    /// API 2.9: also BASE:ALL (see below); typical share for a bow and class = 1 / (1 + e^−(BASE + offset)), and the
+    /// competition multiplier = 1 / typical share.
     /// </summary>
     private static async Task<IResult> Current(Db db, CancellationToken ct)
     {
         await using var conn = await db.OpenAsync(ct);
         var model = await conn.QuerySingleOrDefaultAsync<ModelInfo>(new CommandDefinition(ModelSql + " WHERE m.Status = 'ACTIVE';", cancellationToken: ct));
         if (model is null) return Error(404, "no_handicap", "There's no handicap yet: the server job hasn't fitted one.");
-        var factors = await conn.QueryAsync<FactorRow>(new CommandDefinition(
+        var factors = (await conn.QueryAsync<FactorRow>(new CommandDefinition(
             "SELECT Kind, Code, Value, Low, High FROM dbo.HandicapFactor WHERE ModelId = @id AND Kind IN ('BOW', 'SLOPE', 'BOW3D', 'CLASS', 'BOWSEX') ORDER BY Kind, Code;",
+            new { id = model.ModelId }, cancellationToken: ct))).ToList();
+        // API 2.9: BASE:ALL, the level of a typical championship (the average of the latest five Nationals and latest five
+        // 3Ds, codes "NATIONALS 2025"): with a bow and class's offset it gives their typical score, for the multipliers.
+        var events = await conn.QueryAsync<FactorRow>(new CommandDefinition(
+            "SELECT Kind, Code, Value, Low, High FROM dbo.HandicapFactor WHERE ModelId = @id AND Kind = 'EVENT';",
             new { id = model.ModelId }, cancellationToken: ct));
+        var latest = events
+            .Select(e => (Champs: e.Code.Split(' ')[0], Year: int.TryParse(e.Code.Split(' ').Last(), out var y) ? y : 0, e.Value))
+            .Where(e => e.Year > 0)
+            .GroupBy(e => e.Champs)
+            .SelectMany(g => g.OrderByDescending(e => e.Year).Take(5))
+            .ToList();
+        if (latest.Count > 0) factors.Add(new FactorRow("BASE", "ALL", latest.Average(e => e.Value), null, null));
         return Results.Ok(new
         {
             modelId = model.ModelId,

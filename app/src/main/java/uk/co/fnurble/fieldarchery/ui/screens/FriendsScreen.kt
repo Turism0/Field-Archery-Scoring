@@ -45,8 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.data.FriendRequest
 import uk.co.fnurble.fieldarchery.data.FriendSummary
-import uk.co.fnurble.fieldarchery.domain.HandicapRating
-import uk.co.fnurble.fieldarchery.domain.HandicapStats
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
 import uk.co.fnurble.fieldarchery.data.RoundOffer
 import uk.co.fnurble.fieldarchery.ui.FriendsViewModel
 import uk.co.fnurble.fieldarchery.ui.Load
@@ -194,9 +193,8 @@ fun FriendsScreen(
                             }
                         }
                         items(data.friends, key = { "f-" + it.archerId }) { f ->
-                            // Their handicap rating (2.4): average of their last 10 Big Game rounds, out of 1000.
-                            val rating = handicap?.let { HandicapStats.rating(it, f.recent) }
-                            FriendCard(f, rating) { onOpenFriend(f) }
+                            // Their personal handicaps (2.9): main bow first.
+                            FriendCard(f, PersonalHandicap.all(f.recent)) { onOpenFriend(f) }
                         }
                     }
                 }
@@ -259,7 +257,7 @@ private fun OfferRow(offer: RoundOffer, busy: Boolean, onOpen: () -> Unit, actio
 
 /** Friend with a summary: rounds, best, average per animal, last shot. */
 @Composable
-private fun FriendCard(f: FriendSummary, rating: HandicapRating?, onClick: () -> Unit) {
+private fun FriendCard(f: FriendSummary, handicaps: List<PersonalHandicap.Handicap>, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -290,10 +288,13 @@ private fun FriendCard(f: FriendSummary, rating: HandicapRating?, onClick: () ->
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            rating?.let {
+            handicaps.firstOrNull()?.let { main ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 8.dp)) {
-                    Text("${it.rating}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("handicap", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${main.handicap}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("handicap ${main.bowStyle.code}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    handicaps.drop(1).forEach { h ->
+                        Text("${h.bowStyle.code} ${h.handicap}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)

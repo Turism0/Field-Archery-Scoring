@@ -10,7 +10,7 @@ import { TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, totalPoi
 import { finished } from '../data/rounds'
 import { getModel } from '../data/handicap'
 import { personalBestIds, previousBest } from '../domain/stats'
-import { handicapRound, roundPoints } from '../domain/handicap'
+import { applyMultiplier, handicapEntry, multiplier, net, parFor, personalHandicap } from '../domain/handicap'
 import { MoreStats } from './Stats'
 import { ExportDialog } from './Export'
 import { bowName, type Round, type RoundStats } from '../domain/round'
@@ -31,7 +31,6 @@ export function Scorecard({ id }: { id: string }) {
   const s = roundStats(round)
   const own = round.groupRole == null || round.groupRole === 'SCORER'
   const beat = own && round.status === 'COMPLETED' && personalBestIds(mine).has(round.id) ? previousBest(round, mine) : undefined
-  const h = round.status === 'COMPLETED' ? handicapRound(round) : null
   const inGroup = group.length > 1
   const mirror = round.groupRole === 'MIRROR'
   const editTarget = (n: number) => go(desktop ? `/grid/${round.id}` : `/score/${round.id}${n ? `?t=${n}` : ''}`)
@@ -55,7 +54,8 @@ export function Scorecard({ id }: { id: string }) {
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {inGroup && <GroupCard group={group} currentId={round.id} />}
         <RunningStats s={s} targetCount={round.targetCount} noTotal />
-        {model && h && <HandicapCard points={roundPoints(model, h)} />}
+        {/* Your own rounds get the net score with your personal handicap; others just the multiplier (2.9). */}
+        <HandicapCard round={round} model={model} mine={own ? mine : undefined} />
         <MoreStats s={s} />
         </div><div>
         <h3 class="section">Targets</h3>
@@ -105,11 +105,28 @@ export function StatsCard({ round, s }: { round: Round; s: RoundStats }) {
   )
 }
 
-export function HandicapCard({ points }: { points: number }) {
+/**
+ * Handicap competition scores for a finished Big Game round (2.9): the net score with the archer's personal handicap
+ * before this round ([mine]: their finished rounds; left out for someone else's round), and score × the multiplier for
+ * their bow style and class.
+ */
+export function HandicapCard({ round, model, mine }: { round: Round; model: HandicapModel | null | undefined; mine?: Round[] }) {
+  if (round.type !== 'BIG_GAME' || round.status !== 'COMPLETED') return null
+  const total = roundTotal(round)
+  const mult = model ? multiplier(model, { bowStyle: round.bowStyle, archerClass: round.archerClass, ageGroup: round.ageGroup }) : null
+  const entries = mine?.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
+  const h = entries ? personalHandicap(entries, round.bowStyle, { shootDate: round.shootDate, order: round.createdUtc, bowStyle: round.bowStyle, points: total, targetCount: round.targetCount }) : null
+  if (!entries && mult == null) return null
   return (
-    <Card>
-      <div class="row between" style="flex-wrap:nowrap"><div><h2>Handicap</h2><div class="sub">Out of 1000: the same for the same performance with any bow or class</div></div>
-        <span class="num-big">{points}</span></div>
+    <Card title="Handicap competition">
+      {entries && (h
+        ? <div class="row between" style="flex-wrap:nowrap"><div><b>Net score</b>
+            <div class="sub">{total} + {net(total, round.targetCount, h.handicap) - total} ({bowName(round.bowStyle)} handicap {h.handicap} before this round{round.targetCount !== 40 ? `, scaled to ${round.targetCount} targets` : ''}). Par {parFor(round.targetCount)}.</div></div>
+            <span class="num-big">{net(total, round.targetCount, h.handicap)}</span></div>
+        : <div class="sub">No {bowName(round.bowStyle)} handicap before this round: it needs 3 finished, fully scored rounds with that bow.</div>)}
+      {mult != null && <div class="row between" style="flex-wrap:nowrap"><div><b>With the class multiplier</b>
+          <div class="sub">{total} × {mult.toFixed(2)} ({classLine(round)})</div></div>
+          <span class="num-big">{applyMultiplier(total, mult)}</span></div>}
     </Card>
   )
 }
@@ -139,12 +156,11 @@ export function TargetTable({ round, onTarget }: { round: Round; onTarget?: (n: 
 /** A round from the server (a friend's, or one scored for you) to look at: no editing. */
 export function ReadOnlySheet({ round, model }: { round: Round; model: HandicapModel | null | undefined }) {
   const s = roundStats(round)
-  const h = round.status === 'COMPLETED' ? handicapRound(round) : null
   return (
     <div class="split"><div>
       <CardHeader r={round} showLocation />
       <RunningStats s={s} targetCount={round.targetCount} noTotal />
-      {model && h && <HandicapCard points={roundPoints(model, h)} />}
+      <HandicapCard round={round} model={model} />
       <MoreStats s={s} />
     </div><div>
       <h3 class="section">Targets</h3>

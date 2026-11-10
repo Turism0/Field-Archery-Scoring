@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.8)
+# Field Archery Scoring – web app (2.9)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -24,6 +24,11 @@ sheet. Live groups aren't offered on desktop.
 
 **In 2.7:** an optional starting target on new rounds, Add a round and Round details, shown on the scorecard (`startTarget` in
 the round JSON; a live group's comes from the host).
+
+**In 2.9:** Handicaps (`ui/Handicap.tsx`: My handicap, Multipliers, Calculator) – personal handicap (par 960 off 40
+targets, best 40% of the last 20 per bow) and class multipliers (maximum ÷ typical score) in `domain/handicap.ts`, tested in
+`test/stats.test.ts`; net score and multiplier on scorecards, net on history cards, friends' handicaps; the out-of-1000
+handicap points and rating removed.
 
 **In 2.8:** live groups carry on with no signal (`data/live.ts` keeps the last copy of the group and this phone's timed
 entries; `offlineState` works out matching with `domain/liveCheck.ts`, a port of the app's `LiveRules`), with checks by hand

@@ -12,8 +12,9 @@ namespace FieldArcheryApi.Friends;
 /// Friends (step 7a). Request by username; the other archer accepts; then each can see the other's
 /// FINISHED rounds, read-only. All calls need "Authorization: Bearer &lt;token&gt;".
 ///   GET    /api/friends                              → { friends: [...summary], incoming: [...], outgoing: [...] }
-///          (API 2.4: each friend has recent: their latest 10 finished Big Game rounds, for the handicap rating:
-///          { shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints })
+///          (each friend has recent: their latest 20 finished Big Game rounds with each bow style, for their personal
+///          handicaps (API 2.9; 10 in all before): { shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle,
+///          totalPoints, targetsScored })
 ///   POST   /api/friends/requests        { username } → 201 { result: "requested" } or 200 { result: "accepted" }
 ///                                                      (accepts straight away if they had already asked you)
 ///   POST   /api/friends/{archerId}/accept            → 200, accept their request
@@ -44,7 +45,7 @@ public static class FriendEndpoints
         int WoodsmanRounds, int? WoodsmanBest);
 
     private sealed record RecentRow(Guid ArcherId, DateTime ShootDate, short TargetCount, int AnimalCount, string ArcherClass,
-        string AgeGroup, string BowStyle, int TotalPoints);
+        string AgeGroup, string BowStyle, int TotalPoints, int TargetsScored);
 
     public sealed record PendingRequest(Guid ArcherId, string Username, DateTime RequestedUtc, bool Outgoing);
 
@@ -98,18 +99,23 @@ public static class FriendEndpoints
             ORDER BY a.Username;
             """, new { me }, cancellationToken: ct))).ToList();
 
-        // Each friend's latest 10 finished Big Game rounds: the phone works out their handicap rating (API 2.4).
+        // Each friend's latest 20 finished Big Game rounds with each bow style: the phone works out their personal
+        // handicap per bow (API 2.9; was the latest 10 for the rating out of 1000). targetsScored: targets with a score
+        // entered (an override, or an animal that isn't still to score); only rounds with every target scored count.
         var recent = (await conn.QueryAsync<RecentRow>(new CommandDefinition("""
             WITH fr AS (SELECT FriendId FROM dbo.vFriend WHERE ArcherId = @me),
             ranked AS (
                 SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.TotalPoints,
-                       ROW_NUMBER() OVER (PARTITION BY r.ArcherId ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC) AS n
+                       ROW_NUMBER() OVER (PARTITION BY r.ArcherId, r.BowStyle ORDER BY r.ShootDate DESC, r.ClientCreatedUtc DESC) AS n
                 FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
                 WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0 AND r.RoundType = 'BIG_GAME')
             SELECT k.ArcherId, CAST(k.ShootDate AS datetime2(3)) AS ShootDate, k.TargetCount,
                    (SELECT COUNT(*) FROM dbo.AnimalScore s WHERE s.RoundId = k.RoundId) AS AnimalCount,
-                   k.ArcherClass, k.AgeGroup, k.BowStyle, k.TotalPoints
-            FROM ranked k WHERE k.n <= 10;
+                   k.ArcherClass, k.AgeGroup, k.BowStyle, k.TotalPoints,
+                   (SELECT COUNT(*) FROM dbo.TargetScore t WHERE t.RoundId = k.RoundId
+                      AND (t.OverridePoints IS NOT NULL
+                           OR EXISTS (SELECT 1 FROM dbo.AnimalScore s WHERE s.RoundId = t.RoundId AND s.TargetNo = t.TargetNo AND s.State <> 'PENDING'))) AS TargetsScored
+            FROM ranked k WHERE k.n <= 20;
             """, new { me }, cancellationToken: ct))).ToLookup(x => x.ArcherId);
 
         var pending = (await conn.QueryAsync<PendingRequest>(new CommandDefinition("""
@@ -132,6 +138,7 @@ public static class FriendEndpoints
                 {
                     shootDate = DateOnly.FromDateTime(x.ShootDate), targetCount = (int)x.TargetCount, animalCount = x.AnimalCount,
                     archerClass = x.ArcherClass.Trim(), ageGroup = x.AgeGroup, bowStyle = x.BowStyle, totalPoints = x.TotalPoints,
+                    targetsScored = x.TargetsScored,
                 }),
             }),
             incoming = pending.Where(p => !p.Outgoing).Select(p => p with { RequestedUtc = Utc(p.RequestedUtc)!.Value }),

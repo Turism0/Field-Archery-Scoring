@@ -4,10 +4,9 @@ import { Bar, go, installed, isIos, toast, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress, syncNow } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
-import { getModel } from '../data/handicap'
 import { getServerState, onServerState, type ServerState } from '../data/api'
 import { roundTotal } from '../domain/round'
-import { handicapRound, rating } from '../domain/handicap'
+import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import {
   DEFAULT_LAYOUT, TILE_TITLES, canHide, isDefault, move, normalised, setHidden, type HomeLayout, type TileId,
 } from '../domain/homeLayout'
@@ -33,7 +32,6 @@ export function Home() {
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
-  const model = useData(getModel)
   const [online, server] = useOnline()
   const [syncing, setSyncing] = useState(false)
   const [editing, setEditing] = useState<HomeLayout | null>(null)
@@ -42,7 +40,8 @@ export function Home() {
   const admin = signedIn && isAdmin(account)
   const shown = layout.order.filter(id => id !== 'ADMIN' || admin)
   const bestBig = done?.length ? Math.max(0, ...done.filter(r => r.type === 'BIG_GAME').map(roundTotal)) : null
-  const rt = model && done ? rating(model, done.map(handicapRound).filter((h): h is NonNullable<typeof h> => !!h)) : null
+  // Personal handicaps (2.9), your main bow's first.
+  const hs = done ? personalHandicaps(done.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)) : []
 
   async function sync() {
     setSyncing(true)
@@ -56,8 +55,9 @@ export function Home() {
       case 'SCORE': return <Tile hi icon="＋" title="Score a round" onClick={() => go('/start')}
         sub={going.length === 1 ? '1 round in progress · continue or start new' : going.length > 1 ? `${going.length} rounds in progress · continue or start new` : 'Start a new round'} />
       case 'HISTORY': return <Tile icon="☰" title="Score history" sub={!done ? ' ' : done.length ? `${done.length} finished round${done.length === 1 ? '' : 's'}${bestBig ? ` · best ${bestBig}` : ''}` : 'No finished rounds yet'} onClick={() => go('/history')} />
-      case 'STATS': return <Tile icon="★" title="Stats" sub={done?.length === 0 ? 'Personal bests, trends and seasons once you finish a round' : rt ? `Handicap rating ${rt.rating} · bests, trends and seasons` : 'Personal bests, trends and season summaries'} onClick={() => go('/stats')} />
-      case 'HANDICAP': return <Tile icon="ⓘ" title="Handicap calculator" sub="Handicap out of 1000, and a score as every other bow and class" onClick={() => go('/handicap')} />
+      case 'STATS': return <Tile icon="★" title="Stats" sub={done?.length === 0 ? 'Personal bests, trends and seasons once you finish a round' : 'Personal bests, trends and season summaries'} onClick={() => go('/stats')} />
+      case 'HANDICAP': return <Tile icon="ⓘ" title="Handicaps" onClick={() => go('/handicap')}
+        sub={hs.length ? `Your handicap: ${hs.map(h => `${h.bowStyle} ${h.handicap}`).join(' · ')} · class multipliers` : 'Your personal handicap, and the class multipliers for handicap competitions'} />
       case 'FRIENDS': return <Tile icon="☺" title="Friends" badge={signedIn ? offers : 0}
         sub={!signedIn ? "Sign in to see friends' scorecards" : offers > 0 ? `${offers} round${offers === 1 ? '' : 's'} scored for you to accept` : "Friends' scorecards and stats, requests"} onClick={() => go('/friends')} />
       case 'LOCATIONS': return <Tile icon="📍" title="Shoot locations" sub={signedIn ? 'Map of locations, your scorecards and stats at each' : 'Sign in to see the map of shoot locations'} onClick={() => go('/map')} />

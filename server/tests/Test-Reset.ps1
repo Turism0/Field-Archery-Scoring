@@ -111,7 +111,7 @@ finally {
     $null = Call POST '/api/auth/logout' -Token $owner
 }
 
-# --- 2.4: friends' latest rounds for the handicap rating ------------------------------------------
+# --- 2.9: friends' latest rounds for their personal handicaps (2.4: rating) --------------------------
 Write-Host "`nFriends' latest rounds"
 $D = New-TestUser; $E = New-TestUser
 $null = Call POST '/api/friends/requests' @{ username = $E.Name } -Token $D.Token
@@ -124,11 +124,19 @@ foreach ($i in 1..12) {
                                animals = @(@{ index = 0; state = 'SCORED'; arrowNo = 1; hit = 'KILL'; points = 20 }) }) }
     $null = Call PUT "/api/rounds/$([guid]::NewGuid())" $round -Token $E.Token
 }
+# 2.9: one Barebow round, and one Longbow round with its only target not scored.
+$round.bowStyle = 'BB'; $round.shootDate = (Get-Date).AddDays(-20).ToString('yyyy-MM-dd')
+$null = Call PUT "/api/rounds/$([guid]::NewGuid())" $round -Token $E.Token
+$round.bowStyle = 'LB'; $round.shootDate = (Get-Date).AddDays(-21).ToString('yyyy-MM-dd'); $round.totalPoints = 0
+$round.targets = @(@{ targetNo = 1; type = 'STANDARD'; overridePoints = $null; points = 0; animals = @(@{ index = 0; state = 'PENDING'; arrowNo = $null; hit = $null; points = 0 }) })
+$null = Call PUT "/api/rounds/$([guid]::NewGuid())" $round -Token $E.Token
 $r = Call GET '/api/friends' -Token $D.Token
 $f = @($r.Body.friends | Where-Object archerId -eq $E.Id)[0]
-Expect 'a friend comes with their latest 10 Big Game rounds' (@($f.recent).Count -eq 10) "($(@($f.recent).Count))"
-$x = @($f.recent)[0]
-Expect '... with what the rating needs' ($x.animalCount -eq 1 -and $x.archerClass -eq 'L' -and $x.bowStyle -eq 'LB' -and $x.totalPoints -eq 20 -and $x.ageGroup -eq 'ADULT') "($($x | ConvertTo-Json -Compress))"
+Expect 'a friend comes with up to 20 finished Big Game rounds per bow (13 LB + 1 BB)' (@($f.recent).Count -eq 14) "($(@($f.recent).Count))"
+$x = @($f.recent | Where-Object bowStyle -eq 'LB')[0]
+Expect '... with what the handicap needs' ($x.targetCount -eq 1 -and $x.targetsScored -eq 1 -and $x.archerClass -eq 'L' -and $x.totalPoints -eq 20 -and $x.ageGroup -eq 'ADULT') "($($x | ConvertTo-Json -Compress))"
+$p = @($f.recent | Where-Object { $_.bowStyle -eq 'LB' -and $_.totalPoints -eq 0 })[0]
+Expect '... and says when a target has no score' ($p -and $p.targetsScored -eq 0) "($($p | ConvertTo-Json -Compress))"
 
 Write-Host ''
 if ($script:problems -eq 0) { Write-Host 'All reset tests passed.' -ForegroundColor Green }

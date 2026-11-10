@@ -122,11 +122,12 @@ fun FieldArcheryNavHost() {
                 onBack = { nav.popBackStack() },
             )
         }
-        // Handicap calculator (2.2.05): a score as every bow style and class.
+        // Handicaps (2.9): personal handicap, class multipliers, and the calculator (2.2.05).
         composable("handicap") {
             HandicapCalculatorScreen(
-                vm = appViewModel { c, _ -> HandicapCalculatorViewModel(c.profileRepository, c.handicapRepository) },
+                vm = appViewModel { c, _ -> HandicapCalculatorViewModel(c.profileRepository, c.handicapRepository, c.roundRepository) },
                 onBack = { nav.popBackStack() },
+                onOpenRound = { id -> nav.navigate(scorecardRoute(id)) },
             )
         }
         composable("adminDuplicates") {

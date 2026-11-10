@@ -1,5 +1,5 @@
-// The handicap model from the server (GET /api/handicap, no sign-in), kept on this device so the calculator and
-// handicap points work with no signal. Refreshed at most once a day. Also the Admin → Handicap calls.
+// The handicap model from the server (GET /api/handicap, no sign-in), kept on this device so the multipliers and
+// calculator work with no signal. Refreshed at most once a day. Also the Admin → Handicap calls.
 import { getKv, setKv } from './db'
 import { request } from './api'
 import { authed } from './account'

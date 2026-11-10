@@ -1,6 +1,13 @@
 package uk.co.fnurble.fieldarchery.ui.screens
 
 import androidx.compose.foundation.background
+import uk.co.fnurble.fieldarchery.domain.handicapEntry
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material3.Tab
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,96 +85,213 @@ private val Classes = listOf(
 )
 
 /**
- * Handicap calculator (Home tile): a score with your bow and class, and the same performance for every bow style
- * and class. Works offline once the handicap has been downloaded.
+ * Handicaps (Home tile, 2.9): your personal handicap for each bow style (like golf, par 960 off 40 targets), the class
+ * multipliers for a handicap competition, and the calculator (a score with your bow and class, × your multiplier, and
+ * the same performance for every bow style and class). Works offline once the handicap has been downloaded.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HandicapCalculatorScreen(vm: HandicapCalculatorViewModel, onBack: () -> Unit) {
+fun HandicapCalculatorScreen(vm: HandicapCalculatorViewModel, onBack: () -> Unit, onOpenRound: (String) -> Unit = {}) {
     val model by vm.model.collectAsStateWithLifecycle()
-    val f by vm.form.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf("My handicap", "Multipliers", "Calculator")
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Handicap calculator") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Handicaps") },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") } },
+                )
+                PrimaryTabRow(selectedTabIndex = tab) {
+                    tabs.forEachIndexed { i, t -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(t) }) }
+                }
+            }
         },
     ) { padding ->
-        val m = model
         Column(
             Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (m == null) {
+            val m = model
+            if (tab == 0) {
+                MyHandicapTab(vm, onOpenRound)
+            } else if (m == null || (tab == 1 && m.base == null)) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("The handicap hasn't been downloaded yet", style = MaterialTheme.typography.titleMedium)
-                        Text("It comes from the server once (no sign-in needed), then works with no signal.", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (m == null) "The handicap hasn't been downloaded yet" else "The multipliers need the latest handicap",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text("It comes from the server (no sign-in needed), then works with no signal.", style = MaterialTheme.typography.bodyMedium)
                         FilledTonalButton(onClick = { vm.download() }, enabled = !refreshing) { Text(if (refreshing) "Downloading…" else "Download now") }
                     }
                 }
-                return@Column
-            }
-            val problem = f.scoreProblem
-            SectionCard(title = "Your score", subtitle = "A whole round or one day: the score and how many targets it was out of.") {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = f.scoreText,
-                        onValueChange = { v -> vm.update { it.copy(scoreText = v.filter(Char::isDigit).take(4)) } },
-                        label = { Text("Score") },
-                        singleLine = true,
-                        isError = f.scoreProblem != null,
-                        supportingText = problem?.let { msg -> @Composable { Text(msg) } },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                    )
-                    NumberField("Targets", f.targetsText, { v -> vm.update { it.copy(targetsText = v) } }, modifier = Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(18, 20, 36, 40).forEach { n -> SuggestionChip(onClick = { vm.update { it.copy(targetsText = "$n") } }, label = { Text("$n") }) }
-                }
-                SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c -> vm.update { it.copy(archerClass = c) } }
-                OptionDropdown("Age group", AgeGroup.entries, f.ageGroup, { it.displayName }, { g -> vm.update { it.copy(ageGroup = g) } })
-                OptionDropdown("Bow style", BowStyle.entries, f.bowStyle, { it.label }, { b -> vm.update { it.copy(bowStyle = b) } })
-            }
-            val from = f.archer; val score = f.score; val targets = f.targets
-            if (from != null && score != null && targets != null && f.scoreProblem == null) {
-                val max = 24.0 * targets
-                val year = m.dataThroughYear
-                val hp = m.handicapPoints(score.toDouble(), max, from, year)
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Handicap ${hp.roundToInt()}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                        Text("out of 1000 – the same for the same performance with any bow and class", style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center)
-                    }
-                }
-                Text("The same performance with every bow style and class", style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary)
-                EquivalentTable(m, score.toDouble(), max, from, year)
-                Text(
-                    "From the NFAS Nationals and 3D Championships since 2002 (paper faces and 3D targets averaged), up to " +
-                        "$year. Equal scores here mean the same standing among archers with that bow and class.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            } else if (tab == 1) {
+                MultipliersTab(vm, m)
+            } else {
+                CalculatorTab(vm, m)
             }
         }
     }
 }
 
+/** Your personal handicap for each bow style, with the rounds that count, and how it works. */
 @Composable
-private fun EquivalentTable(m: HandicapModel, score: Double, max: Double, from: HandicapModel.Archer, year: Int) {
+private fun MyHandicapTab(vm: HandicapCalculatorViewModel, onOpenRound: (String) -> Unit) {
+    val handicaps by vm.handicaps.collectAsStateWithLifecycle()
+    val finished by vm.finished.collectAsStateWithLifecycle()
+    val entries = finished.mapNotNull { it.handicapEntry() }
+    val short = entries.map { it.bowStyle }.distinct().filter { b -> handicaps.none { it.bowStyle == b } }
+    if (handicaps.isEmpty()) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("No handicap yet", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "A handicap needs ${PersonalHandicap.MIN_ROUNDS} finished Big Game rounds with every target scored, all with the same bow style.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                short.forEach { b -> Text("${b.displayName}: ${entries.count { it.bowStyle == b }} of ${PersonalHandicap.MIN_ROUNDS}", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+    handicaps.forEach { h ->
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(h.bowStyle.displayName, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Usual score ${h.usual.roundToInt()} off ${PersonalHandicap.PAR_TARGETS} targets: the best ${h.counted.size} of your " +
+                                "last ${h.considered} ${h.bowStyle.code} round${if (h.considered == 1) "" else "s"}.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("${h.handicap}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                        Text("handicap", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                HorizontalDivider()
+                h.counted.forEach { e ->
+                    val round = finished.firstOrNull { it.shootDate == e.shootDate && it.createdAtMillis == e.order && it.bowStyle == e.bowStyle }
+                    Row(Modifier.fillMaxWidth().clickable(enabled = round != null) { round?.let { onOpenRound(it.id) } }.padding(vertical = 2.dp)) {
+                        Text("${e.shootDate.format(DateTimeFormatter.ofPattern("d MMM yyyy", Locale.UK))} · ${e.points} off ${e.targetCount}",
+                            style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        Text("${e.scaled.roundToInt()}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+    if (short.isNotEmpty() && handicaps.isNotEmpty()) {
+        Text(
+            short.joinToString(" · ") { b -> "${b.displayName}: ${entries.count { it.bowStyle == b }} of ${PersonalHandicap.MIN_ROUNDS} rounds" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    SectionCard(title = "How it works") {
+        Text("Like golf, but par is ${PersonalHandicap.PAR}: the most you can score on a ${PersonalHandicap.PAR_TARGETS}-target course.", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Your usual score is the average of your best 40% (at least ${PersonalHandicap.MIN_ROUNDS}) of your last ${PersonalHandicap.MAX_ROUNDS} " +
+                "finished, fully scored Big Game rounds with that bow – the best 8 of 20 once you have 20. Rounds on other numbers of " +
+                "targets are scaled to ${PersonalHandicap.PAR_TARGETS}.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text("Your handicap is par minus your usual score. Each bow style has its own.", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Your net score is your score plus your handicap (scaled to the targets shot: on 36 targets, 36/40 of it). A usual round " +
+                "nets about par, so in a handicap competition the highest net score wins whatever anyone's standard. Scorecards and " +
+                "Score history show the net score with the handicap you had before each round.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+/** The class multipliers for a handicap competition (score × multiplier), your bow and class highlighted. */
+@Composable
+private fun MultipliersTab(vm: HandicapCalculatorViewModel, m: HandicapModel) {
+    val me by vm.me.collectAsStateWithLifecycle()
+    Text(
+        "For a handicap competition: each archer's score × the multiplier for their bow style and class. Highest wins.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    ClassTable(highlight = me, bold = me?.bowStyle) { to -> m.multiplier(to)?.let { "%.2f".format(Locale.UK, it) } ?: "–" }
+    Text(
+        "Each multiplier is the maximum score ÷ a typical score for that bow style and class – an average archer at recent NFAS " +
+            "Nationals and 3D Championships (paper faces and 3D averaged, results up to ${m.dataThroughYear}) – so a typical archer of " +
+            "any class comes out at about the maximum. Big Game only. They change a little as new results come in each year.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** A score with a bow and class, × its multiplier, and the same performance for every bow style and class. */
+@Composable
+private fun CalculatorTab(vm: HandicapCalculatorViewModel, m: HandicapModel) {
+    val f by vm.form.collectAsStateWithLifecycle()
+    val problem = f.scoreProblem
+    SectionCard(title = "Your score", subtitle = "A whole round or one day: the score and how many targets it was out of.") {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = f.scoreText,
+                onValueChange = { v -> vm.update { it.copy(scoreText = v.filter(Char::isDigit).take(4)) } },
+                label = { Text("Score") },
+                singleLine = true,
+                isError = f.scoreProblem != null,
+                supportingText = problem?.let { msg -> @Composable { Text(msg) } },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            NumberField("Targets", f.targetsText, { v -> vm.update { it.copy(targetsText = v) } }, modifier = Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(18, 20, 36, 40).forEach { n -> SuggestionChip(onClick = { vm.update { it.copy(targetsText = "$n") } }, label = { Text("$n") }) }
+        }
+        SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c -> vm.update { it.copy(archerClass = c) } }
+        OptionDropdown("Age group", AgeGroup.entries, f.ageGroup, { it.displayName }, { g -> vm.update { it.copy(ageGroup = g) } })
+        OptionDropdown("Bow style", BowStyle.entries, f.bowStyle, { it.label }, { b -> vm.update { it.copy(bowStyle = b) } })
+    }
+    val from = f.archer; val score = f.score; val targets = f.targets
+    if (from != null && score != null && targets != null && f.scoreProblem == null) {
+        val max = 24.0 * targets
+        val year = m.dataThroughYear
+        m.multiplier(from)?.let { mult ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${HandicapModel.applyMultiplier(score, mult)}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        "$score × ${"%.2f".format(Locale.UK, mult)}, the ${from.archerClass.displayName} ${from.ageGroup.displayName} ${from.bowStyle.displayName} multiplier",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
+        Text("The same performance with every bow style and class", style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary)
+        ClassTable(highlight = from, bold = from.bowStyle) { to -> "${m.convert(score.toDouble(), max, from, year, to = to).roundToInt()}" }
+        Text(
+            "From the NFAS Nationals and 3D Championships since 2002 (paper faces and 3D targets averaged), up to " +
+                "$year. Equal scores here mean the same standing among archers with that bow and class.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Every bow style × class, with [value] in each cell; [highlight]'s cell and [bold]'s row stand out. */
+@Composable
+private fun ClassTable(highlight: HandicapModel.Archer?, bold: BowStyle?, value: (HandicapModel.Archer) -> String) {
     val scroll = rememberScrollState()
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(vertical = 8.dp)) {
             // Bow names stay put; the class columns scroll sideways.
             Column {
                 TableCell("Bow", 132, header = true, start = true)
-                BowStyle.entries.forEach { b -> TableCell(b.displayName, 132, start = true, bold = b == from.bowStyle) }
+                BowStyle.entries.forEach { b -> TableCell(b.displayName, 132, start = true, bold = b == bold) }
             }
             Column(Modifier.horizontalScroll(scroll)) {
                 Row { Classes.forEach { (label, _) -> TableCell(label, 76, header = true) } }
@@ -175,9 +299,8 @@ private fun EquivalentTable(m: HandicapModel, score: Double, max: Double, from: 
                     Row {
                         Classes.forEach { (_, ca) ->
                             val to = HandicapModel.Archer(b, ca.first, ca.second)
-                            val v = m.convert(score, max, from, year, to = to).roundToInt()
-                            val mine = to == from
-                            TableCell("$v", 76, bold = mine, highlight = if (mine) MaterialTheme.colorScheme.tertiaryContainer else null)
+                            val mine = to == highlight
+                            TableCell(value(to), 76, bold = mine, highlight = if (mine) MaterialTheme.colorScheme.tertiaryContainer else null)
                         }
                     }
                 }

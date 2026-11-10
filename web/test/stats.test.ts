@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { newTarget, withOverride, type RoundType } from '../src/domain/scoring'
 import { newRound, type Round } from '../src/domain/round'
 import { bestAverages, bests, inPeriod, personalBestIds, previousBest, seasons, trend, years } from '../src/domain/stats'
-import { convert, handicapPoints, neutralOffset, offset, rating, REFERENCE, type HArcher, type HandicapModel } from '../src/domain/handicap'
+import { REFERENCE, allowance, applyMultiplier, convert, counting, multiplier, net, parFor, personalHandicap, personalHandicaps, typicalShare, type HArcher, type HEntry, type HandicapModel } from '../src/domain/handicap'
 import { DEFAULT_LAYOUT, TILES, isDefault, move, normalised, setHidden } from '../src/domain/homeLayout'
 
 function round(id: string, date: string, perTarget: number, o: { targets?: number; bow?: string; created?: string; status?: 'COMPLETED' | 'IN_PROGRESS'; scored?: number; type?: RoundType; location?: string } = {}): Round {
@@ -104,23 +104,55 @@ describe('handicap', () => {
     const asLb = convert(m, 800, 960, REFERENCE, 2020, lb)
     expect(convert(m, asLb, 960, lb, 2020, REFERENCE)).toBeCloseTo(800, 6); expect(asLb).toBeLessThan(800)
   })
-  it('handicap points are the same for the same performance', () => {
-    const asUl = convert(m, 600, 960, lb, 2026)
-    expect(handicapPoints(m, 600, 960, lb, 2026)).toBeCloseTo(handicapPoints(m, asUl, 960, REFERENCE, 2026), 6)
-    expect(handicapPoints(m, 700, 960, lb, 2026)).toBeGreaterThan(handicapPoints(m, 600, 960, lb, 2026))
+  // Multipliers (2.9): the same cases as the app's HandicapTest.
+  const mb: HandicapModel = { ...m, factors: { ...m.factors, 'BASE:ALL': 1.2 } }
+  it('multiplier is the maximum over a typical score', () => {
+    expect(multiplier(mb, REFERENCE)).toBe(1.30)
+    const share = 1 / (1 + Math.exp(-(1.2 - 1.36 - 0.25 * 1.2 + 0.5 * -0.07)))
+    expect(multiplier(mb, lb)).toBe(Math.round(100 / share) / 100)
+    expect(multiplier(mb, lb)!).toBeGreaterThan(multiplier(mb, REFERENCE)!)
+    expect(multiplier(mb, lbLady)!).toBeGreaterThan(multiplier(mb, lb)!)
   })
-  it('neutral is the middle', () => {
-    const n = neutralOffset(m, 2026)
-    expect(handicapPoints(m, 480, 960, REFERENCE, 2026)).toBeCloseTo(1000 / (1 + Math.exp(-(0 + n))), 6)
-    expect(offset(m, lb, 2026)).toBeLessThan(0)
+  it('a typical score times its multiplier is about the maximum', () => {
+    expect(Math.abs(applyMultiplier(Math.floor(typicalShare(mb, lb)! * 960), multiplier(mb, lb)!) - 960)).toBeLessThanOrEqual(6)
   })
-  it('rating averages the latest ten', () => {
-    const rs = Array.from({ length: 12 }, (_, i) => ({ shootDate: `2026-01-${String(i + 1).padStart(2, '0')}`, points: 481 + i, maxPoints: 960, archer: lb }))
-    const r = rating(m, rs)!
-    expect(r.rounds).toBe(10)
-    const exp = rs.slice(2).reduce((s, h) => s + handicapPoints(m, h.points, 960, lb, 2026), 0) / 10
-    expect(r.rating).toBe(Math.round(exp))
-    expect(rating(m, rs.slice(0, 2))).toBeNull()
+  it('no multipliers from an older server', () => expect(multiplier(m, lb)).toBeNull())
+})
+
+describe('personal handicap', () => {
+  const day = (n: number) => new Date(Date.UTC(2026, 0, 1 + n)).toISOString().slice(0, 10)
+  const e = (d: number, points: number, targets = 40, bow = 'LB', order = '0'): HEntry => ({ shootDate: day(d), order, bowStyle: bow, points, targetCount: targets })
+  it('how many rounds count', () => {
+    expect([1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 17, 18, 20].map(counting)).toEqual([0, 0, 3, 3, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8])
+  })
+  it('no handicap until three rounds', () => {
+    expect(personalHandicap([e(1, 600), e(2, 620)], 'LB')).toBeNull()
+    const h = personalHandicap([e(1, 600), e(2, 620), e(3, 640)], 'LB')!
+    expect(h.handicap).toBe(960 - 620); expect(h.counted.length).toBe(3)
+  })
+  it('best eight of the last twenty', () => {
+    const old = [1, 2, 3, 4, 5].map(d => e(d, 900))
+    const recent = Array.from({ length: 20 }, (_, i) => e(10 + i, 500 + i * 10))
+    const h = personalHandicap([...old, ...recent], 'LB')!
+    expect(h.considered).toBe(20); expect(h.counted.length).toBe(8)
+    expect(h.usual).toBeCloseTo(655, 9); expect(h.handicap).toBe(960 - 655)
+  })
+  it('rounds are scaled to 40 targets', () => {
+    const h = personalHandicap([e(1, 540, 36), e(2, 600), e(3, 300, 20)], 'LB')!
+    expect(h.usual).toBeCloseTo(600, 9); expect(h.handicap).toBe(360)
+  })
+  it('one per bow style', () => {
+    const all = personalHandicaps([e(1, 600), e(2, 600), e(3, 600), e(4, 800, 40, 'UL'), e(5, 800, 40, 'UL')])
+    expect(all.map(h => h.bowStyle)).toEqual(['LB']); expect(all[0].handicap).toBe(360)
+  })
+  it('handicap before a round', () => {
+    const list = [e(1, 600), e(2, 600), e(3, 600), e(4, 900), e(4, 300, 40, 'LB', '5')]
+    expect(personalHandicap(list, 'LB', list[2])).toBeNull()
+    expect(personalHandicap(list, 'LB', list[4])!.handicap).toBe(960 - 700)
+  })
+  it('net score scales the handicap to the targets', () => {
+    expect(net(600, 40, 360)).toBe(960); expect(net(540, 36, 360)).toBe(540 + 324)
+    expect(allowance(360, 36)).toBe(324); expect(parFor(36)).toBe(864)
   })
 })
 

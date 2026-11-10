@@ -30,9 +30,12 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-/** A round in a list: date, class line, total; "in progress" badge or upload state. */
+/**
+ * A round in a list: date, class line, total; "in progress" badge or upload state. [net] (2.9): the net score with the
+ * personal handicap before this round, and that handicap.
+ */
 @Composable
-fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false, onClick: () -> Unit) {
+fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false, net: Pair<Int, Int>? = null, onClick: () -> Unit) {
     val inProgress = r.status == RoundStatus.IN_PROGRESS
     val scheme = MaterialTheme.colorScheme
     Card(
@@ -72,6 +75,7 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false,
             Column(horizontalAlignment = Alignment.End) {
                 Text("${r.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("points", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                net?.let { (n, h) -> Text("net $n (hcp $h)", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
             }
         }
     }

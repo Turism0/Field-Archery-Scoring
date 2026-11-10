@@ -53,8 +53,7 @@ import uk.co.fnurble.fieldarchery.domain.PersonalStats
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundType
 import uk.co.fnurble.fieldarchery.domain.BowStyle
-import uk.co.fnurble.fieldarchery.domain.HandicapModel
-import uk.co.fnurble.fieldarchery.domain.HandicapRating
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
 import uk.co.fnurble.fieldarchery.ui.StatsViewModel
 import uk.co.fnurble.fieldarchery.ui.components.FilterMenuChip
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
@@ -116,11 +115,9 @@ private fun BestsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     val averages by vm.bestAverages.collectAsStateWithLifecycle()
     // One card per round type and bow style.
     val groups = bests.groupBy { it.key.type to it.key.bowStyle }
-    val rating by vm.rating.collectAsStateWithLifecycle()
-    val ratingRounds by vm.ratingRounds.collectAsStateWithLifecycle()
-    val model by vm.handicapModel.collectAsStateWithLifecycle()
+    val handicaps by vm.handicaps.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item(key = "rating") { RatingCard(rating, ratingRounds, model != null, onOpenRound) }
+        item(key = "handicap") { HandicapSummary(handicaps) }
         item(key = "about") {
             Text(
                 "Best totals for each round type, bow style and number of targets, from fully scored rounds. " +
@@ -176,36 +173,25 @@ private fun BestsCard(type: RoundType, bow: BowStyle, list: List<PersonalBest>, 
     }
 }
 
-/** Handicap rating: average handicap points (out of 1000) of your last 10 Big Game rounds. */
+/** Your personal handicap for each bow style (2.9); how it works and the class multipliers are on Handicaps. */
 @Composable
-private fun RatingCard(rating: HandicapRating?, rounds: List<Pair<Round, Int>>, haveModel: Boolean, onOpenRound: (String) -> Unit) {
+private fun HandicapSummary(handicaps: List<PersonalHandicap.Handicap>) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Handicap rating", style = MaterialTheme.typography.titleMedium)
-            when {
-                !haveModel -> Text("The handicap downloads from the server the next time there's signal.", style = MaterialTheme.typography.bodyMedium)
-                rating == null -> Text(
-                    "Finish ${HandicapModel.RATING_MIN_ROUNDS - rounds.size} more Big Game round${if (HandicapModel.RATING_MIN_ROUNDS - rounds.size == 1) "" else "s"} for a rating.",
+            Text("Handicap", style = MaterialTheme.typography.titleMedium)
+            if (handicaps.isEmpty()) {
+                Text(
+                    "No handicap yet: it needs 3 finished Big Game rounds with every target scored, with the same bow style.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                else -> {
-                    Text("${rating.rating}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Average handicap of your last ${rating.rounds} Big Game round${if (rating.rounds == 1) "" else "s"}, out of 1000: " +
-                            "the same for the same performance whatever the bow or class.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+            }
+            handicaps.forEach { h ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(h.bowStyle.displayName, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Text("${h.handicap}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
             }
-            if (rounds.isNotEmpty()) {
-                HorizontalDivider()
-                rounds.forEach { (r, eq) ->
-                    Row(Modifier.fillMaxWidth().clickable { onOpenRound(r.id) }.padding(vertical = 2.dp)) {
-                        Text("${r.shootDate.format(UkDate)} · ${r.bowStyle.code} · ${r.totalPoints}", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Text("Handicap $eq", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
+            Text("How it works, and the class multipliers: Handicaps on Home.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

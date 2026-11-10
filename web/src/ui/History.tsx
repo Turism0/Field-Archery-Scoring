@@ -7,7 +7,8 @@ import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
 import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
-import type { RoundType } from '../domain/scoring'
+import { handicapEntry, net, personalHandicap } from '../domain/handicap'
+import { totalPoints, type RoundType } from '../domain/scoring'
 
 interface Filter { type?: RoundType; bow?: string; location?: string; period: Period }
 const NONE: Filter = { period: { kind: 'all' } }
@@ -28,6 +29,14 @@ export function History() {
   const desktop = useDesktop()
   if (!rounds) return <Bar title="Score history" />
   const pbs = personalBestIds(rounds)
+  // Net score with the personal handicap you had before each Big Game round (2.9).
+  const entries = rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
+  const netOf = (r: typeof rounds[number]) => {
+    if (r.type !== 'BIG_GAME') return null
+    const total = r.targets.reduce((x, t) => x + totalPoints(t), 0)
+    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: r.targetCount })
+    return h ? { net: net(total, r.targetCount, h.handicap), handicap: h.handicap } : null
+  }
   const now = today()
   const list = rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
     (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now))
@@ -68,7 +77,7 @@ export function History() {
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
           {!list.length && <p class="sub" style="text-align:center">No rounds match these filters.</p>}
           <div class="grid2">{list.map(r => (
-            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} onClick={() => go(`/card/${r.id}`)} />
+            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} net={netOf(r)} onClick={() => go(`/card/${r.id}`)} />
           ))}</div>
         </>}
       </main>

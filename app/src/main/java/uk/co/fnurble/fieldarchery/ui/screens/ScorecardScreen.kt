@@ -79,6 +79,7 @@ fun ScorecardScreen(
     val group by vm.group.collectAsStateWithLifecycle()
     val personalBest by vm.personalBest.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
+    val ownHandicap by vm.handicapBefore.collectAsStateWithLifecycle()
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == vm.roundId }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -149,7 +150,7 @@ fun ScorecardScreen(
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
                     RunningStats(r.stats, showTotal = false)
-                    HandicapCard(r, handicap)
+                    HandicapCard(r, handicap, ownHandicap)
                     MoreStats(r.stats)
                     Text(
                         "Targets",

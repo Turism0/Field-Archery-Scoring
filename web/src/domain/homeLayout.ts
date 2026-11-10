@@ -2,7 +2,7 @@
 export const TILES = ['SCORE', 'HISTORY', 'STATS', 'HANDICAP', 'FRIENDS', 'LOCATIONS', 'ADMIN'] as const
 export type TileId = typeof TILES[number]
 export const TILE_TITLES: Record<TileId, string> = {
-  SCORE: 'Score a round', HISTORY: 'Score history', STATS: 'Stats', HANDICAP: 'Handicap calculator',
+  SCORE: 'Score a round', HISTORY: 'Score history', STATS: 'Stats', HANDICAP: 'Handicaps',
   FRIENDS: 'Friends', LOCATIONS: 'Shoot locations', ADMIN: 'Admin',
 }
 export const canHide = (id: TileId) => id !== 'SCORE'

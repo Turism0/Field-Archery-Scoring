@@ -1,10 +1,9 @@
 import { useState } from 'preact/hooks'
 import { Bar, Card, Seg, Select, Tabs, go, one, ukDate, useData } from './common'
 import { finished } from '../data/rounds'
-import { getModel } from '../data/handicap'
 import { ROUND_TYPE_NAMES, bowName, roundTotal, type Round, type RoundStats } from '../domain/round'
 import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, bowOrder, seasons, trend, type TrendPoint } from '../domain/stats'
-import { RATING_MIN_ROUNDS, RATING_ROUNDS, handicapRound, rating, roundPoints, type HandicapModel } from '../domain/handicap'
+import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import type { RoundType } from '../domain/scoring'
 
 const perWhat = (t: RoundType) => (t === 'WOODSMAN' ? 'per target' : 'per animal')
@@ -13,7 +12,6 @@ const roundLine = (r: Round) => ukDate(r.shootDate) + (r.locationName ? ` · ${r
 /** Stats from your own finished rounds: bests, trends and seasons (calendar years). */
 export function Stats() {
   const rounds = useData(finished)
-  const model = useData(getModel)
   const [tab, setTab] = useState(0)
   return (
     <>
@@ -21,19 +19,19 @@ export function Stats() {
       <Tabs tabs={['Bests', 'Trends', 'Seasons']} value={tab} onChange={setTab} />
       <main>
         {rounds && !rounds.length ? <p class="sub" style="text-align:center">Finish a round to see your stats.</p>
-          : rounds && (tab === 0 ? <Bests rounds={rounds} model={model ?? null} /> : tab === 1 ? <Trends rounds={rounds} /> : <Seasons rounds={rounds} />)}
+          : rounds && (tab === 0 ? <Bests rounds={rounds} /> : tab === 1 ? <Trends rounds={rounds} /> : <Seasons rounds={rounds} />)}
       </main>
     </>
   )
 }
 
-function Bests({ rounds, model }: { rounds: Round[]; model: HandicapModel | null }) {
+function Bests({ rounds }: { rounds: Round[] }) {
   const list = bests(rounds)
   const avgs = bestAverages(rounds)
   const groups = new Map<string, typeof list>()
   for (const b of list) { const k = `${b.type}|${b.bowStyle}`; groups.set(k, [...(groups.get(k) ?? []), b]) }
   return <>
-    <RatingCard rounds={rounds} model={model} />
+    <HandicapSummary rounds={rounds} />
     <div class="sub">Best totals for each round type, bow style and number of targets, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
     {!groups.size && <p>No fully scored rounds yet.</p>}
     <div class="grid2">{[...groups.entries()].map(([k, l]) => {
@@ -56,21 +54,14 @@ function Bests({ rounds, model }: { rounds: Round[]; model: HandicapModel | null
   </>
 }
 
-/** Average handicap points (out of 1000) of your last 10 Big Game rounds. */
-export function RatingCard({ rounds, model }: { rounds: Round[]; model: HandicapModel | null }) {
-  const hr = rounds.map(r => ({ r, h: handicapRound(r) })).filter(x => x.h).sort((a, b) => b.r.shootDate.localeCompare(a.r.shootDate))
-  const latest = hr.slice(0, RATING_ROUNDS)
-  const rt = model ? rating(model, hr.map(x => x.h!)) : null
+/** Your personal handicap for each bow style (2.9; the details are on Handicaps). */
+function HandicapSummary({ rounds }: { rounds: Round[] }) {
+  const hs = personalHandicaps(rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e))
   return (
-    <Card title="Handicap rating" cls="hi">
-      {!model ? <div>The handicap downloads from the server the next time there's signal.</div>
-        : !rt ? <div>Finish {RATING_MIN_ROUNDS - latest.length} more Big Game round{RATING_MIN_ROUNDS - latest.length === 1 ? '' : 's'} for a rating.</div>
-        : <><div class="big">{rt.rating}</div>
-          <div class="sub" style="color:inherit">Average handicap of your last {rt.rounds} Big Game round{rt.rounds === 1 ? '' : 's'}, out of 1000: the same for the same performance whatever the bow or class.</div></>}
-      {model && latest.map(({ r, h }) => (
-        <button class="row between plain small" onClick={() => go(`/card/${r.id}`)}>
-          <span>{ukDate(r.shootDate)} · {r.bowStyle} · {roundTotal(r)}</span><b>Handicap {roundPoints(model, h!)}</b></button>
-      ))}
+    <Card title="Handicap" cls="hi">
+      {!hs.length ? <div>No handicap yet: it needs 3 finished Big Game rounds with every target scored, with the same bow style.</div>
+        : hs.map(h => <div class="row between"><span>{bowName(h.bowStyle)}</span><b class="big">{h.handicap}</b></div>)}
+      <button class="plain" style="align-self:flex-start;color:inherit;text-decoration:underline" onClick={() => go('/handicap')}>How it works, and the class multipliers ›</button>
     </Card>
   )
 }

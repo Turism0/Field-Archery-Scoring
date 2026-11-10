@@ -67,9 +67,8 @@ import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
 import uk.co.fnurble.fieldarchery.domain.NearbyLocation
 import uk.co.fnurble.fieldarchery.domain.HandicapModel
-import uk.co.fnurble.fieldarchery.domain.HandicapRating
-import uk.co.fnurble.fieldarchery.domain.HandicapStats
-import uk.co.fnurble.fieldarchery.domain.handicapRound
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
+import uk.co.fnurble.fieldarchery.domain.handicapEntry
 import uk.co.fnurble.fieldarchery.domain.BestAverage
 import uk.co.fnurble.fieldarchery.domain.PersonalBest
 import uk.co.fnurble.fieldarchery.domain.PersonalStats
@@ -187,11 +186,10 @@ class HomeViewModel(
         _editing.value = null
     }
 
-    /** Your handicap rating, for the Stats tile (null until there's a model and 3+ Big Game rounds). */
-    val rating: StateFlow<HandicapRating?> = handicap?.let { h ->
-        combine(roundRepo.finishedRounds, h.model) { rounds, m -> m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-    } ?: MutableStateFlow(null)
+    /** Your personal handicaps (2.9), for the Handicaps tile: one per bow style, most rounds first. */
+    val handicaps: StateFlow<List<PersonalHandicap.Handicap>> = roundRepo.finishedRounds
+        .map { rounds -> PersonalHandicap.all(rounds.mapNotNull { it.handicapEntry() }) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** For the "Device offline" / "Server unavailable" notices. */
     val online: StateFlow<Boolean> = network.online
@@ -285,23 +283,29 @@ class HistoryViewModel(
     /** Rounds that were a new personal best when shot (marked "PB"). */
     val personalBests: StateFlow<Set<String>> = roundRepo.finishedRounds.map { PersonalStats.personalBestIds(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** Big Game rounds' net score with the personal handicap before each (2.9): round id → (net, handicap). */
+    val nets: StateFlow<Map<String, Pair<Int, Int>>> = roundRepo.finishedRounds.map { rounds -> netScores(rounds) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+}
+
+/** Each Big Game round's net score with the personal handicap you had before it (2.9): round id → (net, handicap). */
+internal fun netScores(rounds: List<Round>): Map<String, Pair<Int, Int>> {
+    val entries = rounds.mapNotNull { it.handicapEntry() }
+    return rounds.filter { it.type == RoundType.BIG_GAME }.mapNotNull { r ->
+        val here = PersonalHandicap.Entry(r.shootDate, r.createdAtMillis, r.bowStyle, r.totalPoints, r.targetCount)
+        PersonalHandicap.of(entries, r.bowStyle, before = here)?.let { h -> r.id to (PersonalHandicap.net(r.totalPoints, r.targetCount, h.handicap) to h.handicap) }
+    }.toMap()
 }
 
 /** Stats (2.2): personal bests, trends and season summaries from your finished rounds. */
 class StatsViewModel(roundRepo: RoundRepository, handicap: HandicapRepository? = null) : ViewModel() {
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
-    /** Your rating: average handicap points (out of 1000) of your last 10 Big Game rounds. */
-    val rating: StateFlow<HandicapRating?> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
-        m?.let { HandicapStats.rating(it, rounds.mapNotNull { r -> r.handicapRound() }) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    /** Your latest Big Game rounds with their equivalents (what the rating is made of). */
-    val ratingRounds: StateFlow<List<Pair<Round, Int>>> = combine(roundRepo.finishedRounds, handicapModel) { rounds, m ->
-        if (m == null) emptyList()
-        else rounds.mapNotNull { r -> r.handicapRound()?.let { h -> r to HandicapStats.points(m, h) } }
-            .sortedByDescending { it.first.shootDate }.take(HandicapModel.RATING_ROUNDS)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Your personal handicaps (2.9): one per bow style, most rounds first. */
+    val handicaps: StateFlow<List<PersonalHandicap.Handicap>> = roundRepo.finishedRounds
+        .map { rounds -> PersonalHandicap.all(rounds.mapNotNull { it.handicapEntry() }) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val rounds: StateFlow<List<Round>?> = roundRepo.finishedRounds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -849,6 +853,10 @@ class FriendRoundsViewModel(private val friends: FriendsRepository, saved: Saved
     private val _rounds = MutableStateFlow<Load<List<FriendRoundSummary>>>(Load.Loading)
     val rounds: StateFlow<Load<List<FriendRoundSummary>>> = _rounds.asStateFlow()
 
+    /** Their personal handicaps (2.9), from the friends overview; empty if it can't be had. */
+    private val _handicaps = MutableStateFlow<List<PersonalHandicap.Handicap>>(emptyList())
+    val handicaps: StateFlow<List<PersonalHandicap.Handicap>> = _handicaps.asStateFlow()
+
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
@@ -869,6 +877,12 @@ class FriendRoundsViewModel(private val friends: FriendsRepository, saved: Saved
                 Load.Failed(e.friendlyMessage())
             } finally {
                 _refreshing.value = false
+            }
+            _handicaps.value = try {
+                PersonalHandicap.all(friends.overview().friends.firstOrNull { it.archerId == archerId }?.recent.orEmpty())
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                emptyList()
             }
         }
     }
@@ -2002,6 +2016,9 @@ class ScoringViewModel(
 
 // ---------------- Scorecard (end of round / reviewing a past round) ----------------
 
+/** Your personal handicap before one of your own rounds (2.9); [handicap] null when you didn't have one yet. */
+data class OwnHandicap(val handicap: PersonalHandicap.Handicap?)
+
 class ScorecardViewModel(
     private val rounds: RoundRepository,
     saved: SavedStateHandle,
@@ -2024,6 +2041,16 @@ class ScorecardViewModel(
         val me = all.firstOrNull { it.id == roundId } ?: return@map null
         if (me.id !in PersonalStats.personalBestIds(all)) return@map null
         PersonalStats.previousBest(me, all)?.let { me to it }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Your own finished round (2.9): the personal handicap with its bow before it was shot (null inside when there
+     * wasn't one yet). Null for anyone else's round in a group.
+     */
+    val handicapBefore: StateFlow<OwnHandicap?> = rounds.finishedRounds.map { all ->
+        val me = all.firstOrNull { it.id == roundId } ?: return@map null
+        val here = PersonalHandicap.Entry(me.shootDate, me.createdAtMillis, me.bowStyle, me.totalPoints, me.targetCount)
+        OwnHandicap(PersonalHandicap.of(all.mapNotNull { it.handicapEntry() }, me.bowStyle, before = here))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun reopen() = viewModelScope.launch { rounds.setGroupStatus(roundId, RoundStatus.IN_PROGRESS) }

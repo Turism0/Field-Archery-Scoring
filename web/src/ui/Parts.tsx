@@ -43,7 +43,8 @@ export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundSta
 }
 
 /** A round in a list: date, class line, total; IN PROGRESS badge, PB, or whether it's backed up. */
-export function RoundCard({ r, showSync, pb, groupSize = 1, onClick }: { r: Round; showSync?: boolean; pb?: boolean; groupSize?: number; onClick: () => void }) {
+/** [net] (2.9): the net score with the personal handicap before this round, and that handicap. */
+export function RoundCard({ r, showSync, pb, groupSize = 1, net, onClick }: { r: Round; showSync?: boolean; pb?: boolean; groupSize?: number; net?: { net: number; handicap: number } | null; onClick: () => void }) {
   const going = r.status === 'IN_PROGRESS'
   return (
     <button class={`tile roundcard ${going ? 'going' : ''}`} onClick={onClick}>
@@ -54,7 +55,8 @@ export function RoundCard({ r, showSync, pb, groupSize = 1, onClick }: { r: Roun
         {r.locationName && <span class="sub">{r.locationName}</span>}
         {showSync && !going && <SyncLabel r={r} />}
       </span>
-      <span style="text-align:right"><span class="num-big">{roundTotal(r)}</span><span class="sub" style="display:block">points</span></span>
+      <span style="text-align:right"><span class="num-big">{roundTotal(r)}</span><span class="sub" style="display:block">points</span>
+        {net && <span class="sub" style="display:block">net {net.net} <span style="opacity:.8">(hcp {net.handicap})</span></span>}</span>
     </button>
   )
 }

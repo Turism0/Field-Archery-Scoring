@@ -7,8 +7,7 @@ import uk.co.fnurble.fieldarchery.data.sync.toRoundData
 import uk.co.fnurble.fieldarchery.domain.AgeGroup
 import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
-import uk.co.fnurble.fieldarchery.domain.HandicapModel
-import uk.co.fnurble.fieldarchery.domain.HandicapRound
+import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.targetsDescription
 import java.time.LocalDate
@@ -23,8 +22,11 @@ data class FriendSummary(
     val averagePerAnimal: Double?,
     val woodsmanRounds: Int = 0,
     val woodsmanBest: Int? = null,
-    /** Their latest finished Big Game rounds (up to 10, server 2.4), for their handicap rating on the friends list. */
-    val recent: List<HandicapRound> = emptyList(),
+    /**
+     * Their latest finished Big Game rounds with every target scored, up to 20 per bow style (server 2.9): their
+     * personal handicaps on the friends list.
+     */
+    val recent: List<PersonalHandicap.Entry> = emptyList(),
 )
 
 data class FriendRequest(val archerId: String, val username: String)
@@ -51,15 +53,7 @@ data class FriendRoundSummary(
     val bowStyle: BowStyle? = null,
     /** Animals in the round (predator/prey = 2, fan = n); 0 if the server didn't say (then targets are used). */
     val animalCount: Int = 0,
-) {
-    /** The handicap's view of this round, or null for Woodsman / unknown bow. */
-    fun handicapRound(): HandicapRound? {
-        if (!isBigGame) return null
-        val archer = HandicapModel.Archer(bowStyle ?: return null, archerClass ?: return null, ageGroup ?: return null)
-        val max = 24 * (if (animalCount > 0) animalCount else targetCount)
-        return HandicapRound(shootDate, totalPoints, max, archer)
-    }
-}
+)
 
 /** Extra fields for the handicap from a server round summary. */
 internal fun FriendRoundSummary.withHandicapFields(r: JSONObject): FriendRoundSummary = copy(
@@ -112,12 +106,15 @@ class FriendsRepository(
                     averagePerAnimal = if (f.isNull("averagePerAnimal")) null else f.getDouble("averagePerAnimal"),
                     woodsmanRounds = f.optInt("woodsmanRounds"),
                     woodsmanBest = f.intOrNull("woodsmanBest"),
-                    recent = f.optJSONArray("recent")?.objects().orEmpty().mapNotNull { r ->
+                    // Only rounds with every target scored count (servers before 2.9 don't say: none then).
+                    recent = f.optJSONArray("recent")?.objects().orEmpty().mapIndexedNotNull { i, r ->
                         runCatching {
-                            FriendRoundSummary(
-                                roundId = "", shootDate = LocalDate.parse(r.getString("shootDate").take(10)),
-                                targetCount = r.getInt("targetCount"), classLine = "", totalPoints = r.getInt("totalPoints"),
-                            ).withHandicapFields(r).handicapRound()
+                            val targets = r.getInt("targetCount")
+                            val bow = BowStyle.fromCode(r.getString("bowStyle"))
+                            if (bow == null || r.optString("roundType", "BIG_GAME") == "WOODSMAN" || !r.has("targetsScored") ||
+                                r.getInt("targetsScored") != targets || targets <= 0) null
+                            // Newest first from the server: the order tells apart rounds on the same day.
+                            else PersonalHandicap.Entry(LocalDate.parse(r.getString("shootDate").take(10)), (1_000_000 - i).toLong(), bow, r.getInt("totalPoints"), targets)
                         }.getOrNull()
                     },
                 )

@@ -69,31 +69,26 @@ bow × ladies terms were no better.
 Missing factors are 0. A round's equivalent is the sum over its days (or the formula on the whole round with its
 total targets). It isn't a flat percentage: e.g. in 2026 a Longbow day of 480 / 600 / 720 is about 811 / 864 / 904.
 
-## In the app (2.2.05; handicap points from 2.2.06)
+## In the app (2.9: multipliers and personal handicap)
 
-- **Handicap points (2.2.06):** what's shown is never "as Unlimited Gents" (Pete: traditional archers don't want to be
-  measured against Unlimited). Handicap points = 1000 / (1 + e^−(logit(p) − off[bow, class] + neutral)), where
-  neutral is the median offset over every bow style × class × age group in that year: a neutral yardstick in the
-  middle of all of them. Out of 1000; the same for the same performance with any bow and class. The rating is the
-  average handicap points of the last 10 Big Game rounds. (Unlimited Gents being zero in the model is only the fit's
-  arithmetic.)
+Pete (Nov 2026): for handicap competitions. The out-of-1000 handicap points and rating (2.2.06–2.8) were removed.
 
-- The model is downloaded from `GET /api/handicap` (no sign-in) at most once a day and kept on the phone.
-- **Paper faces and 3D targets are averaged** (Pete): half of each bow's BOW3D term is always included, so there's one
-  handicap; it's at most about 5–8 points a day from either.
-- **Equivalent of a round:** its points and maximum (24 × animals on fully scored targets) through the formula, out of
-  the same maximum. Friends' rounds use their animal count (or targets) from the server.
-- **Rating:** the average equivalent share of your last 10 finished Big Game rounds × 24 × 40 (a 40-target Unlimited
-  Gents score); 3 rounds needed. Shown on Stats → Bests and the Stats tile; friends' ratings on their rounds page and (2.4) the friends list.
-- **Calculator tile:** a score, targets, bow and class → the Unlimited Gents score and a table for every bow style
-  (rows) and class (columns), using the latest year's factors.
-- **Location pages:** each bow's 40-target average in handicap points (all classes: each taken as Gents; 2.4: filter by
-  class to use that class) and an "All bows" average weighted by rounds.
-- Woodsman rounds have no handicap (the championships are Big Game).
-
-## First results (Nov 2026, 2026 factors, Nationals, Gents, 40 targets: a 600 day as Unlimited Gents)
-
-Primitive 870, Longbow 864, American Flatbow 846, Hunting Tackle 840, Thumb Draw 831, Barebow 829, Traditional
-Bowhunter 826, Bowhunter 802, Traditional Crossbow 790, Freestyle 786, Compound Limited 733, Unlimited 600,
-Crossbow 541. 3Ds are 5–15 kinder to traditional bows. Classes (Unlimited 600): Junior Boys 628, U12 Boys 631,
-Ladies 686, Junior / U12 Girls about 693.
+- **Multipliers** (class / bow style competitions: score × multiplier, highest wins). Every bow style and class is
+  measured against the maximum for the round: multiplier = maximum ÷ that bow and class's typical score, so a typical
+  archer of any class scores about the maximum × 1. Typical = an average archer of that bow and class at a recent
+  championship: typical share = 1 / (1 + e^−(BASE + off[bow, class, year])), with `off` as above (year = the model's
+  last year) and **BASE:ALL** (API 2.9, worked out by `GET /api/handicap` from the stored EVENT factors) = the average
+  of the latest five Nationals' and latest five 3Ds' championship levels. Shown and used to 2 decimals. Exact at each
+  bow and class's typical score, close either side (the model isn't a flat ratio). Big Game only. Shown on Handicaps →
+  Multipliers (bow × class table), on scorecards (score × multiplier), in the CSV export, and on location pages
+  (Avg 40 × multiplier).
+- **Personal handicap** (like golf; Pete: "par as a maximum possible score off a 40 course"). Per bow style, Big Game,
+  from finished rounds with every target scored. Each round scaled to 40 targets (score × 40 ÷ targets); usual score =
+  average of the best 40% (at least 3; 8 of 20) of the latest 20 with that bow; none until 3 rounds. Handicap =
+  960 − usual score (rounded). Net score = score + handicap × targets ÷ 40 (rounded). Scorecards and Score history use
+  the handicap from rounds before that one (same day: started earlier). Friends' handicaps come from
+  `GET /api/friends` → `recent` (API 2.9: latest 20 finished Big Game rounds per bow, with `targetsScored`; only rounds
+  with every target scored count). Rules in `domain/Handicap.kt` (`PersonalHandicap`) and web `domain/handicap.ts`,
+  same tests.
+- **Calculator** (unchanged): a score with any bow and class as the same performance for every other, plus × its
+  multiplier.

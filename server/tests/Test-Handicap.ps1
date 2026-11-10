@@ -58,6 +58,15 @@ if ($r.Status -eq 404 -and $r.Body.error -eq 'no_handicap') {
     Expect 'Ladies class factor present' (@($f | Where-Object { $_.kind -eq 'CLASS' -and $_.code -eq 'F-ADULT' }).Count -eq 1)
     Expect 'factors have 90% ranges' (@($f | Where-Object { $null -ne $_.low -and $null -ne $_.high }).Count -ge $bows.Count)
     Expect "data runs to $($r.Body.dataThroughYear)" ($r.Body.dataThroughYear -ge 2025)
+    # API 2.9: the typical championship level, for the competition multipliers.
+    $base = $f | Where-Object { $_.kind -eq 'BASE' -and $_.code -eq 'ALL' }
+    Expect 'BASE:ALL level present (2.9)' ($null -ne $base) "($($base.value))"
+    if ($base) {
+        $ul = 1 / (1 + [math]::Exp(-$base.value))
+        Expect "a typical Unlimited Gents score is 50–95% of the maximum ($([math]::Round($ul * 100))%)" ($ul -gt 0.5 -and $ul -lt 0.95)
+        $lbShare = 1 / (1 + [math]::Exp(-($base.value + $lb.value)))
+        Expect "Longbow's multiplier is higher than Unlimited's ($([math]::Round(1 / $lbShare, 2)) > $([math]::Round(1 / $ul, 2)))" ((1 / $lbShare) -gt (1 / $ul))
+    }
 }
 
 # --- Admin calls ---------------------------------------------------------------------------------

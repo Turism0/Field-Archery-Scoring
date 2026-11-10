@@ -13,7 +13,7 @@ import { Scoring } from './ui/Scoring'
 import { Scorecard } from './ui/Scorecard'
 import { Join, Lobby } from './ui/Live'
 import { Stats } from './ui/Stats'
-import { HandicapCalculator } from './ui/Handicap'
+import { Handicaps } from './ui/Handicap'
 import { FriendRounds, FriendScorecard, Friends, Offer } from './ui/Friends'
 import { LocationMap, LocationPageScreen } from './ui/Locations'
 import { EditRound } from './ui/EditRound'
@@ -36,7 +36,7 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
     case 'join': return desktop ? <PhoneOnly /> : <Join code={q.get('code') ?? ''} />
     case 'lobby': return desktop ? <PhoneOnly /> : <Lobby groupId={parts[1]} />
     case 'stats': return <><Stats /></>
-    case 'handicap': return <><HandicapCalculator /></>
+    case 'handicap': return <><Handicaps /></>
     case 'friends': return <><Friends /></>
     case 'friend': return <><FriendRounds id={parts[1]} name={q.get('name') ?? ''} /></>
     case 'friendcard': return <><FriendScorecard id={parts[1]} roundId={parts[2]} name={q.get('name') ?? ''} /></>

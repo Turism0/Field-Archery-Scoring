@@ -7,7 +7,7 @@ import { getModel } from '../data/handicap'
 import { getRound } from '../data/db'
 import * as loc from '../data/locations'
 import { BOW_STYLES, ROUND_TYPE_NAMES, locationStatus, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
-import { handicapPoints, type HandicapModel } from '../domain/handicap'
+import { multiplier, type HandicapModel } from '../domain/handicap'
 
 /** One line showing where the round is; tap for the location sheet. */
 export function LocationChip({ round, signedIn, onClick }: { round: Round; signedIn: boolean; onClick: () => void }) {
@@ -246,7 +246,7 @@ export function LocationPageScreen({ id }: { id: string }) {
               </>)}
               <div class="sub">Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, a fan as its animals);
                 Woodsman is per target, out of 30. Avg 36 and Avg 40 are that average over a whole 36- or 40-target round, so rounds of any length compare fairly.
-                {model ? ` Handicap is Avg 40 in handicap points (out of 1000, the same for the same performance with any bow; ${chosen ? `for ${loc.classChoiceLabel(chosen.archerClass, chosen.ageGroup)}` : 'each bow taken as Gents'}), so bow styles compare directly; All bows is their average, by rounds.` : ''}</div>
+                {model ? ` × multiplier is Avg 40 times the class multiplier for each bow (${chosen ? `for ${loc.classChoiceLabel(chosen.archerClass, chosen.ageGroup)}` : 'each bow taken as Gents'}), as in a handicap competition, so bow styles compare directly; All bows is their average, by rounds.` : ''}</div>
             </>}
           </>}
         </div></div>
@@ -265,14 +265,18 @@ function SummaryRow({ r, onClick }: { r: { shootDate: string; classLine: string;
 }
 
 function BowStyleTable({ rows, model }: { rows: loc.BowStyleStats[]; model: HandicapModel | null }) {
-  const hp = (b: loc.BowStyleStats) => model && b.average40 != null && BOW_STYLES.some(x => x.code === b.bowStyle)
-    ? handicapPoints(model, b.average40, 960, { bowStyle: b.bowStyle, archerClass: b.archerClass ?? 'GENTS', ageGroup: b.ageGroup ?? 'ADULT' }, model.dataThroughYear) : null
+  // 2.9: Avg 40 × the class multiplier (was handicap points out of 1000).
+  const hp = (b: loc.BowStyleStats) => {
+    const m = model && b.average40 != null && BOW_STYLES.some(x => x.code === b.bowStyle)
+      ? multiplier(model, { bowStyle: b.bowStyle, archerClass: b.archerClass ?? 'GENTS', ageGroup: b.ageGroup ?? 'ADULT' }) : null
+    return m != null ? b.average40! * m : null
+  }
   const withHp = rows.map(b => ({ v: hp(b), n: b.rounds })).filter((x): x is { v: number; n: number } => x.v != null)
   const f0 = (v: number | null) => (v == null ? '–' : Math.round(v).toString())
   return (
     <div class="card low scroll-x" style="padding:8px 0">
       <table class="equiv">
-        <thead><tr><th>Bow</th><th>Archers</th><th>Rounds</th><th>Best</th><th>Avg 36</th><th>Avg 40</th><th>Per animal</th>{model && <th>Handicap</th>}</tr></thead>
+        <thead><tr><th>Bow</th><th>Archers</th><th>Rounds</th><th>Best</th><th>Avg 36</th><th>Avg 40</th><th>Per animal</th>{model && <th>× multiplier</th>}</tr></thead>
         <tbody>
           {rows.map(b => (
             <tr><td>{BOW_STYLES.find(x => x.code === b.bowStyle)?.name ?? b.bowStyle}</td><td>{b.archers}</td><td>{b.rounds}</td><td>{b.bestTotal ?? '–'}</td>

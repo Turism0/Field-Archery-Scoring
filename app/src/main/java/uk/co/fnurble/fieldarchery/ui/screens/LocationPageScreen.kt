@@ -166,7 +166,7 @@ fun LocationPageScreen(
                                     Muted("Everyone's finished rounds here. Big Game average per animal is out of 24 (predator/prey counts as 2, " +
                                         "a fan as its animals); Woodsman is per target, out of 30. Avg 36 and Avg 40 are that " +
                                         "average over a whole 36- or 40-target round, so rounds of any length compare fairly." +
-                                        (if (handicap != null) " Handicap is Avg 40 in handicap points (out of 1000, the same for the same performance with any bow; " +
+                                        (if (handicap != null) " × mult. is Avg 40 times the class multiplier for each bow (as in a handicap competition; " +
                                             (if (chosen == null) "each bow taken as Gents" else "for ${chosen.label}") +
                                             "), so bow styles compare directly; All bows is their average, by rounds." else ""))
                                 }
@@ -264,13 +264,14 @@ private fun FriendCard(f: LocationFriend, onOpenRound: (FriendRoundSummary) -> U
 
 @Composable
 private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = null) {
-    // Handicap points of each bow's 40-target average: for the class filtered on (2.4), else taken as Gents.
+    // Each bow's 40-target average × its class multiplier (2.9; was handicap points out of 1000): for the class
+    // filtered on, else taken as Gents.
     fun ul(b: BowStyleStats): Double? {
         val m = handicap ?: return null
         val bow = BowStyle.fromCode(b.bowStyle) ?: return null
         val avg = b.average40 ?: return null
         val archer = HandicapModel.Archer(bow, b.archerClass ?: ArcherClass.GENTS, b.ageGroup ?: AgeGroup.ADULT)
-        return m.handicapPoints(avg, 960.0, archer, m.dataThroughYear)
+        return m.multiplier(archer)?.let { avg * it }
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(vertical = 8.dp)) {
@@ -283,7 +284,7 @@ private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = 
                 Cell("Avg 36", header = true)
                 Cell("Avg 40", header = true)
                 Cell("Per animal", weight = 1.2f, header = true)
-                if (handicap != null) Cell("Handicap", weight = 1.2f, header = true)
+                if (handicap != null) Cell("× mult.", weight = 1.2f, header = true)
             }
             rows.forEach { b ->
                 HorizontalDivider()
@@ -298,7 +299,7 @@ private fun BowStyleTable(rows: List<BowStyleStats>, handicap: HandicapModel? = 
                     if (handicap != null) Cell(ul(b)?.let { String.format(Locale.UK, "%.0f", it) } ?: "–", weight = 1.2f)
                 }
             }
-            // All bow styles together (handicap points, weighted by rounds).
+            // All bow styles together (Avg 40 × multiplier, weighted by rounds).
             val withUl = rows.mapNotNull { b -> ul(b)?.let { it to b.rounds } }
             if (handicap != null && withUl.size > 1) {
                 HorizontalDivider()

@@ -96,7 +96,7 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
-| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest, recent }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game; `recent` (API 2.4): their latest 10 finished Big Game rounds `{ shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints }` for the handicap rating |
+| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest, recent }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game; `recent` (API 2.9): their latest 20 finished Big Game rounds with each bow style `{ shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints, targetsScored }` for their personal handicaps (2.4–2.8: latest 10 in all) |
 | POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
 | POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
 | DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
@@ -130,7 +130,7 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | POST | `/api/admin/locations/duplicates/approve` | Admin or Owner; `{ aId, bId }` | 204: they're different places, stop flagging them |
 | PUT | `/api/admin/locations/{locationId}` | Admin or Owner; `{ name, isPrivate? }` | `{ locationId, name }`; 409 `name_taken`; 404 `no_such_location` (also for someone else's private location); 403 `not_creator` if making someone else's location private |
 | POST | `/api/admin/locations/{locationId}/merge` | Admin or Owner; `{ intoId }` | `{ locationId, name, roundsMoved }`: the duplicate's rounds move to `intoId`; 400 `same_location`; 404 if either is missing or already merged |
-| GET | `/api/handicap` | (no sign-in) | 2.2.01: the active handicap model for the app: `{ modelId, fittedUtc, dataThroughYear, reference, scale: "logit", maxPerTarget: 24, yearZero: 2014, factors: [{ kind, code, value, low, high }] }` (kinds BOW, SLOPE, BOW3D, CLASS, BOWSEX); 404 `no_handicap` until the job has fitted one. Formula in `docs/HANDICAP.md` |
+| GET | `/api/handicap` | (no sign-in) | 2.2.01: the active handicap model for the app: `{ modelId, fittedUtc, dataThroughYear, reference, scale: "logit", maxPerTarget: 24, yearZero: 2014, factors: [{ kind, code, value, low, high }] }` (kinds BOW, SLOPE, BOW3D, CLASS, BOWSEX); 404 `no_handicap` until the job has fitted one. Formula in `docs/HANDICAP.md` 2.9: also `BASE:ALL`, the typical championship level (average of the latest five Nationals' and five 3Ds' EVENT factors), for the class multipliers |
 | GET | `/api/admin/handicap` | Admins and Owner | `{ events, models, runs }`: every championship (status, targets per day and where that came from), the last 20 models with their test results, the last 10 job runs |
 | PUT | `/api/admin/handicap/events/{NATIONALS\|3DS}/{year}` | Admins and Owner; `{ targetsPerDay: 36 \| 40 \| null }` | Sets the target count by hand (`null` = back to the job's); the job refits on its next weekly run. 400 `invalid_targets`, 404 `no_such_event` |
 | POST | `/api/admin/handicap/fetch` | Admins and Owner | 202: the job's next weekly run reads nfas.net; 409 `already_requested` |
@@ -213,7 +213,7 @@ Run `sql/012_password_reset.sql` in SSMS first (schema 8), then publish API 2.4.
 .\Test-Reset.ps1 -Username Turismo
 ```
 
-Recovery codes (with a new account, used once, renewed, a new one from Profile needs the password), wrong codes and the lock-out, every other phone signed out, the Owner's reset codes (once, not for yourself, not by a User), and friends' latest 10 rounds for the rating. `Test-LocationPage.ps1` also checks the per-class rows. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+Recovery codes (with a new account, used once, renewed, a new one from Profile needs the password), wrong codes and the lock-out, every other phone signed out, the Owner's reset codes (once, not for yourself, not by a User), and friends' latest rounds per bow for their handicaps (2.9). `Test-LocationPage.ps1` also checks the per-class rows. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing account deletion and the privacy page (2.4.02)
 
