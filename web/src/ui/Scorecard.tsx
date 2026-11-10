@@ -12,6 +12,7 @@ import { getModel } from '../data/handicap'
 import { personalBestIds, previousBest } from '../domain/stats'
 import { handicapRound, roundPoints } from '../domain/handicap'
 import { MoreStats } from './Stats'
+import { ExportDialog } from './Export'
 import { bowName, type Round, type RoundStats } from '../domain/round'
 import type { HandicapModel } from '../domain/handicap'
 
@@ -25,6 +26,7 @@ export function Scorecard({ id }: { id: string }) {
   const desktop = useDesktop()
   const [locOpen, setLocOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [exporting, setExporting] = useState(false)
   if (!round) return <Bar title="Scorecard" onBack={() => go('/')} />
   const s = roundStats(round)
   const own = round.groupRole == null || round.groupRole === 'SCORER'
@@ -40,6 +42,7 @@ export function Scorecard({ id }: { id: string }) {
         {!mirror && <Menu items={[
           round.status === 'COMPLETED' && { text: inGroup ? 'Reopen group round' : 'Reopen round', onClick: () => setStatus(round, 'IN_PROGRESS') },
           { text: 'Edit round details', onClick: () => go(`/edit/${round.id}`) },
+          desktop && { text: 'Export…', onClick: () => setExporting(true) },
           { text: inGroup ? 'Delete group round' : 'Delete round', onClick: () => setConfirmDelete(true), danger: true },
         ]} />}
       </Bar>
@@ -65,6 +68,8 @@ export function Scorecard({ id }: { id: string }) {
       </main>
       {!mirror && <button class="fab" onClick={() => editTarget(0)}>✎ Edit scores</button>}
       <LocationSheet roundId={round.id} open={locOpen} onClose={() => setLocOpen(false)} />
+      <ExportDialog open={exporting} rounds={[round]} onClose={() => setExporting(false)}
+        what={`This round: ${ukDate(round.shootDate)}, ${targetsLine(round)}, ${roundTotal(round)} points.`} />
       <Dialog open={confirmDelete} title={inGroup ? 'Delete group round?' : 'Delete round?'} onClose={() => setConfirmDelete(false)}
         actions={<><button onClick={() => setConfirmDelete(false)}>Cancel</button>
           <button class="danger" onClick={async () => { setConfirmDelete(false); await deleteRound(round); replace('/') }}>Delete</button></>}>

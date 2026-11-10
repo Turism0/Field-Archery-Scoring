@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact'
+import { APP_VERSION } from '../version'
 import { useState } from 'preact/hooks'
 import { go, toast, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
@@ -57,7 +58,7 @@ export function Shell({ section, children }: { section: string; children: Compon
           {account && <button class="tonal" disabled={syncing} onClick={async () => {
             setSyncing(true); const r = await syncNow(); setSyncing(false); toast(r.ok ? 'Up to date.' : r.message ?? "Couldn't sync.")
           }}>{syncing ? 'Syncing…' : 'Sync now'}</button>}
-          <div class="sub" style="text-align:center">Web app 2.7.02</div>
+          <div class="sub" style="text-align:center">Web app {APP_VERSION}</div>
         </div>
       </nav>
       <div class="content">{children}</div>

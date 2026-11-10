@@ -2,7 +2,8 @@ import { getAccount } from '../data/account'
 import { allRounds, getKv } from '../data/db'
 import { RoundCard } from './Parts'
 import { useState } from 'preact/hooks'
-import { Bar, Dialog, Field, go, today, ukDate, useData } from './common'
+import { Bar, Dialog, Field, go, today, ukDate, useData, useDesktop } from './common'
+import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
 import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
@@ -23,6 +24,8 @@ export function History() {
   }) ?? {}
   const [f, setF] = useState<Filter>(NONE)
   const [dates, setDates] = useState<{ from?: string; to?: string } | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const desktop = useDesktop()
   if (!rounds) return <Bar title="Score history" />
   const pbs = personalBestIds(rounds)
   const now = today()
@@ -38,7 +41,9 @@ export function History() {
 
   return (
     <>
-      <Bar title="Score history" />
+      <Bar title="Score history">
+        {desktop && rounds.length > 0 && <button class="tonal" disabled={!list.length} onClick={() => setExporting(true)}>⤓ Export</button>}
+      </Bar>
       <main>
         {!rounds.length ? <div style="text-align:center;padding-top:48px"><h2 style="font-weight:400">No finished rounds yet</h2><p class="sub">Rounds appear here once you finish them.</p></div> : <>
           {account && <div class="sub" style="text-align:center">{lastSync ? `Last synced ${new Date(lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Not synced yet'}</div>}
@@ -67,6 +72,8 @@ export function History() {
           ))}</div>
         </>}
       </main>
+      <ExportDialog open={exporting} rounds={list} onClose={() => setExporting(false)}
+        what={active ? `The ${list.length} round${list.length === 1 ? '' : 's'} matching your filters.` : `All ${list.length} finished round${list.length === 1 ? '' : 's'}.`} />
       <Dialog open={!!dates} title="Rounds between" onClose={() => setDates(null)}
         actions={<><button onClick={() => setDates(null)}>Cancel</button>
           <button onClick={() => { setF({ ...f, period: { kind: 'between', ...dates } }); setDates(null) }}>Show</button></>}>
