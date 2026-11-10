@@ -16,7 +16,7 @@ export interface HArcher { bowStyle: string; archerClass: ArcherClass; ageGroup:
 /** The class columns of the tables (multipliers, calculator). */
 export const CLASS_COLUMNS: [string, ArcherClass, AgeGroup][] = [
   ['Gents', 'GENTS', 'ADULT'], ['Ladies', 'LADIES', 'ADULT'], ['Jr Boys', 'GENTS', 'JUNIOR'], ['Jr Girls', 'LADIES', 'JUNIOR'],
-  ['U12 Boys', 'GENTS', 'CUB'], ['U12 Girls', 'LADIES', 'CUB'],
+  ['Cub Boys', 'GENTS', 'CUB'], ['Cub Girls', 'LADIES', 'CUB'],
 ]
 export const REFERENCE: HArcher = { bowStyle: 'UL', archerClass: 'GENTS', ageGroup: 'ADULT' }
 

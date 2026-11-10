@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fnurble.fieldarchery"
         minSdk = 26
         targetSdk = 36
-        versionCode = 46
-        versionName = "2.9"
+        versionCode = 47
+        versionName = "2.9.02"
     }
 
     buildTypes {

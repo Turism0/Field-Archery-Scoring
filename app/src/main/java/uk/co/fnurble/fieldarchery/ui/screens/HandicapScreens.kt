@@ -81,7 +81,7 @@ import kotlin.math.roundToInt
 private val Classes = listOf(
     "Gents" to (ArcherClass.GENTS to AgeGroup.ADULT), "Ladies" to (ArcherClass.LADIES to AgeGroup.ADULT),
     "Jr Boys" to (ArcherClass.GENTS to AgeGroup.JUNIOR), "Jr Girls" to (ArcherClass.LADIES to AgeGroup.JUNIOR),
-    "U12 Boys" to (ArcherClass.GENTS to AgeGroup.CUB), "U12 Girls" to (ArcherClass.LADIES to AgeGroup.CUB),
+    "Cub Boys" to (ArcherClass.GENTS to AgeGroup.CUB), "Cub Girls" to (ArcherClass.LADIES to AgeGroup.CUB),
 )
 
 /**
