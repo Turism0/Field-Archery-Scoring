@@ -58,13 +58,13 @@ export function useDesktop(): boolean {
 const TOP_LEVEL = ['/', '/add', '/new', '/join', '/history', '/stats', '/handicap', '/friends', '/map', '/admin', '/profile']
 const isTopLevel = () => TOP_LEVEL.includes((location.hash.slice(1) || '/').split('?')[0])
 
-export function Bar({ title, onBack, children }: { title: string; onBack?: (() => void) | false; children?: ComponentChildren }) {
+export function Bar({ title, sub, onBack, children }: { title: string; sub?: string; onBack?: (() => void) | false; children?: ComponentChildren }) {
   const desktop = useDesktop()
   if (desktop && onBack === undefined && isTopLevel()) onBack = false
   return (
     <header class="bar">
       {onBack !== false && <button class="icon" aria-label="Back" onClick={onBack ?? back}>←</button>}
-      <h1>{title}</h1>
+      {sub ? <div class="titles"><h1>{title}</h1><div class="sub">{sub}</div></div> : <h1>{title}</h1>}
       {children}
     </header>
   )
@@ -171,4 +171,24 @@ export function Loading<T>({ load, retry, children }: { load: Load<T>; retry: ()
   if (load.state === 'loading') return <p class="sub" style="text-align:center">Loading…</p>
   if (load.state === 'failed') return <div class="card err">{load.message}<button class="tonal" onClick={retry}>Try again</button></div>
   return <>{children(load.value)}</>
+}
+
+/** A ⋮ menu: a list of actions that opens below the button. */
+export function Menu({ items, label = 'More' }: { items: ({ text: string; onClick: () => void; danger?: boolean } | false | null | undefined)[]; label?: string }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    const t = setTimeout(() => addEventListener('click', close), 0)
+    return () => { clearTimeout(t); removeEventListener('click', close) }
+  }, [open])
+  return (
+    <span class="menu-wrap">
+      <button class="icon" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>⋮</button>
+      {open && <div class="menu" role="menu">
+        {items.filter((x): x is { text: string; onClick: () => void; danger?: boolean } => !!x).map(i =>
+          <button role="menuitem" class={i.danger ? 'danger' : ''} onClick={() => { setOpen(false); i.onClick() }}>{i.text}</button>)}
+      </div>}
+    </span>
+  )
 }

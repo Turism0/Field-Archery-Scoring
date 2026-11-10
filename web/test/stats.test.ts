@@ -128,7 +128,7 @@ describe('home layout', () => {
   it('usual order by default', () => { expect(DEFAULT_LAYOUT.order).toEqual([...TILES]); expect(isDefault(DEFAULT_LAYOUT)).toBe(true) })
   it('moves up and down', () => {
     const l = move(DEFAULT_LAYOUT, 'STATS', -1, [...TILES])
-    expect(l.order.slice(1, 4)).toEqual(['JOIN', 'STATS', 'HISTORY'])
+    expect(l.order.slice(0, 3)).toEqual(['SCORE', 'STATS', 'HISTORY'])
     expect(move(l, 'SCORE', -1, [...TILES])).toBe(l)
     expect(isDefault(l)).toBe(false)
   })
@@ -141,8 +141,8 @@ describe('home layout', () => {
     expect(l.hidden).toEqual(['HANDICAP'])
   })
   it('new tiles go in at their usual place', () => {
-    const l = normalised({ order: ['SCORE', 'STATS', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN', 'OLD' as never], hidden: ['SCORE'] })
-    expect(l.order).toEqual(['SCORE', 'JOIN', 'STATS', 'HANDICAP', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN'])
+    const l = normalised({ order: ['SCORE', 'JOIN' as never, 'STATS', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN', 'OLD' as never], hidden: ['SCORE'] })
+    expect(l.order).toEqual(['SCORE', 'STATS', 'HANDICAP', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN'])
     expect(l.hidden).toEqual([])
   })
 })

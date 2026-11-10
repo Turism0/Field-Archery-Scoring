@@ -1,8 +1,8 @@
 // How Home is arranged (as the app's HomeLayout.kt): the tiles' order and any hidden. Kept on this device only.
-export const TILES = ['SCORE', 'JOIN', 'HISTORY', 'STATS', 'HANDICAP', 'FRIENDS', 'LOCATIONS', 'ADMIN'] as const
+export const TILES = ['SCORE', 'HISTORY', 'STATS', 'HANDICAP', 'FRIENDS', 'LOCATIONS', 'ADMIN'] as const
 export type TileId = typeof TILES[number]
 export const TILE_TITLES: Record<TileId, string> = {
-  SCORE: 'Score a round', JOIN: 'Join a live group', HISTORY: 'Score history', STATS: 'Stats', HANDICAP: 'Handicap calculator',
+  SCORE: 'Score a round', HISTORY: 'Score history', STATS: 'Stats', HANDICAP: 'Handicap calculator',
   FRIENDS: 'Friends', LOCATIONS: 'Shoot locations', ADMIN: 'Admin',
 }
 export const canHide = (id: TileId) => id !== 'SCORE'
@@ -13,6 +13,7 @@ export const DEFAULT_LAYOUT: HomeLayout = { order: [...TILES], hidden: [] }
 /** Every tile once (new ones at their usual place); Score a round never hidden. */
 export function normalised(l: HomeLayout | undefined | null): HomeLayout {
   if (!l) return DEFAULT_LAYOUT
+  // Saved by an older version (e.g. with Join a live group, 2.6): unknown tiles are dropped.
   const known = [...new Set(l.order)].filter(id => TILES.includes(id))
   TILES.forEach((id, i) => {
     if (known.includes(id)) return

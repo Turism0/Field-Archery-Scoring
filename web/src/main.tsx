@@ -8,6 +8,7 @@ import { Home } from './ui/Home'
 import { AccountScreen, ProfileScreen } from './ui/Account'
 import { History } from './ui/History'
 import { NewRound } from './ui/NewRound'
+import { RoundTypeScreen, ScoreRound } from './ui/ScoreRound'
 import { Scoring } from './ui/Scoring'
 import { Scorecard } from './ui/Scorecard'
 import { Join, Lobby } from './ui/Live'
@@ -26,7 +27,9 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
     case 'account': return <><AccountScreen /></>
     case 'profile': return <><ProfileScreen /></>
     case 'history': return <><History /></>
-    case 'new': case 'add': return desktop ? <PaperEntry key="new" /> : <NewRound />
+    case 'new': case 'add': return desktop ? <PaperEntry key="new" /> : <NewRound type={q.get('type') === 'WOODSMAN' ? 'WOODSMAN' : 'BIG_GAME'} />
+    case 'start': return desktop ? <PaperEntry key="new" /> : <ScoreRound />
+    case 'type': return desktop ? <PaperEntry key="new" /> : <RoundTypeScreen />
     case 'grid': return desktop ? <PaperEntry key={parts[1]} id={parts[1]} /> : <Scoring id={parts[1]} />
     case 'score': return desktop ? <PaperEntry key={parts[1]} id={parts[1]} /> : <Scoring id={parts[1]} target={Number(q.get('t')) || undefined} />
     case 'card': return <><Scorecard id={parts[1]} /></>

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { Bar, go, installed, isIos, toast, useData, ukDate } from './common'
+import { Bar, go, installed, isIos, toast, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress, syncNow } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
 import { getModel } from '../data/handicap'
 import { getServerState, onServerState, type ServerState } from '../data/api'
-import { classLine, roundTotal, targetsComplete, ROUND_TYPE_NAMES } from '../domain/round'
+import { roundTotal } from '../domain/round'
 import { handicapRound, rating } from '../domain/handicap'
 import {
   DEFAULT_LAYOUT, TILE_TITLES, canHide, isDefault, move, normalised, setHidden, type HomeLayout, type TileId,
@@ -52,14 +52,8 @@ export function Home() {
 
   const tile = (id: TileId) => {
     switch (id) {
-      case 'SCORE': return <>
-        <Tile hi icon="＋" title="Score a round" sub={going.length ? `${going.length} round${going.length === 1 ? '' : 's'} in progress · continue below or start new` : 'Start a new round'} onClick={() => go('/new')} />
-        {going.map(r => (
-          <Tile icon="🎯" title={`Continue: ${ROUND_TYPE_NAMES[r.type]}${r.groupId ? ' (group)' : ''}`}
-            sub={`${ukDate(r.shootDate)} · ${classLine(r)} · ${targetsComplete(r)} of ${r.targetCount} targets · ${roundTotal(r)} points`} onClick={() => go(`/score/${r.id}`)} />
-        ))}
-      </>
-      case 'JOIN': return <Tile icon="👥" title="Join a live group" sub={signedIn ? "Type the code from the host's phone" : 'Sign in to join a live group'} onClick={() => go('/join')} />
+      case 'SCORE': return <Tile hi icon="＋" title="Score a round" onClick={() => go('/start')}
+        sub={going.length === 1 ? '1 round in progress · continue or start new' : going.length > 1 ? `${going.length} rounds in progress · continue or start new` : 'Start a new round'} />
       case 'HISTORY': return <Tile icon="☰" title="Score history" sub={!done ? ' ' : done.length ? `${done.length} finished round${done.length === 1 ? '' : 's'}${bestBig ? ` · best ${bestBig}` : ''}` : 'No finished rounds yet'} onClick={() => go('/history')} />
       case 'STATS': return <Tile icon="★" title="Stats" sub={done?.length === 0 ? 'Personal bests, trends and seasons once you finish a round' : rt ? `Handicap rating ${rt.rating} · bests, trends and seasons` : 'Personal bests, trends and season summaries'} onClick={() => go('/stats')} />
       case 'HANDICAP': return <Tile icon="ⓘ" title="Handicap calculator" sub="Handicap out of 1000, and a score as every other bow and class" onClick={() => go('/handicap')} />
@@ -89,11 +83,11 @@ export function Home() {
         {!online ? <div class="banner"><b>Device offline</b><span>Scoring works as normal. Rounds back up when you're online again.</span></div>
           : server === 'UNAVAILABLE' && <div class="banner bad"><b>Server unavailable</b><span>Scoring works as normal. Rounds back up when the server is back.</span></div>}
         <div class="card low row between">
-          <div class="grow">
-            {account ? <><b>{account.username}</b>{admin && <span class="sub"> · {account.role === 'OWNER' ? 'Owner' : 'Admin'}</span>}
-              <div class="sub">{lastSync ? `Last synced ${new Date(lastSync).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}` : 'Not synced yet'}</div></>
-              : <><b>Not signed in</b><div class="sub">Rounds stay on this phone. Sign in to back them up and use live groups.</div></>}
-          </div>
+          <button class="grow plain" style="padding:0" onClick={() => go('/profile')}>
+            {account ? <><b>Signed in as {account.username}{admin ? ` · ${account.role === 'OWNER' ? 'Owner' : 'Admin'}` : ''}</b>
+              <div class="sub">{syncText(lastSync)}</div></>
+              : <><b>Not signed in</b><div class="sub">Scoring works offline. Sign in (Profile) to back up your rounds and use Friends.</div></>}
+          </button>
           {account ? <button class="tonal" disabled={syncing} onClick={sync}>{syncing ? 'Syncing…' : 'Sync'}</button>
             : <button class="filled" onClick={() => go('/account')}>Sign in</button>}
         </div>
@@ -102,7 +96,7 @@ export function Home() {
           : <>
             {shown.filter(id => !layout.hidden.includes(id)).map(tile)}
             <button style="align-self:center" onClick={() => setEditing(layout)}>⇅ Arrange tiles</button>
-            <p class="sub" style="text-align:center">Web app 2.7</p>
+            <p class="sub" style="text-align:center">Web app 2.7.01</p>
           </>}
       </main>
     </>
@@ -162,4 +156,13 @@ export function Arrange({ layout, shown, onChange }: { layout: HomeLayout; shown
     })}
     {!isDefault(layout) && <button style="align-self:center" onClick={() => onChange(DEFAULT_LAYOUT)}>Back to the usual order</button>}
   </>
+}
+
+/** "Last synced 21:45" (time only for today, date and time otherwise), as the app. */
+export function syncText(lastSync: string | null | undefined): string {
+  if (!lastSync) return 'Not synced yet'
+  const d = new Date(lastSync)
+  const today = d.toDateString() === new Date().toDateString()
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return `Last synced ${today ? time : `${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${time}`}`
 }

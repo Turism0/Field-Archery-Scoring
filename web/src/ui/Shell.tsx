@@ -8,8 +8,7 @@ import { normalised, TILE_TITLES, type HomeLayout, type TileId } from '../domain
 import { useOnline } from './Home'
 
 const ROUTES: Record<TileId, { path: string; icon: string; match: string[] }> = {
-  SCORE: { path: '/add', icon: '＋', match: ['add', 'new', 'grid', 'score', 'join', 'lobby'] },
-  JOIN: { path: '/join', icon: '👥', match: ['join'] },
+  SCORE: { path: '/add', icon: '＋', match: ['add', 'new', 'grid', 'score', 'join', 'lobby', 'start', 'type'] },
   HISTORY: { path: '/history', icon: '☰', match: ['history', 'card', 'edit'] },
   STATS: { path: '/stats', icon: '★', match: ['stats'] },
   HANDICAP: { path: '/handicap', icon: 'ⓘ', match: ['handicap'] },
@@ -30,7 +29,7 @@ export function Shell({ section, children }: { section: string; children: Compon
   const layout = normalised(stored)
   const admin = isAdmin(account)
   // Desktop is for typing in paper rounds, not live scoring: no Join a live group (2.6.02).
-  const items = layout.order.filter(id => id !== 'JOIN' && (id !== 'ADMIN' || admin) && !layout.hidden.includes(id))
+  const items = layout.order.filter(id => (id !== 'ADMIN' || admin) && !layout.hidden.includes(id))
   const badge = (id: TileId) => (id === 'FRIENDS' && account ? offers : id === 'ADMIN' ? duplicates : 0)
 
   return (
@@ -58,7 +57,7 @@ export function Shell({ section, children }: { section: string; children: Compon
           {account && <button class="tonal" disabled={syncing} onClick={async () => {
             setSyncing(true); const r = await syncNow(); setSyncing(false); toast(r.ok ? 'Up to date.' : r.message ?? "Couldn't sync.")
           }}>{syncing ? 'Syncing…' : 'Sync now'}</button>}
-          <div class="sub" style="text-align:center">Web app 2.7</div>
+          <div class="sub" style="text-align:center">Web app 2.7.01</div>
         </div>
       </nav>
       <div class="content">{children}</div>

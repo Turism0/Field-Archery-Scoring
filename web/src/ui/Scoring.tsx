@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
-import { Bar, Dialog, errorText, go, replace, toast, useData } from './common'
+import { Bar, Dialog, Menu, errorText, go, replace, toast, ukDate, useData } from './common'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
-import { groupOf, saveTarget, setStatus, setTypeForGroup, syncNow } from '../data/rounds'
+import { deleteRound, groupOf, saveTarget, setStatus, setTypeForGroup, syncNow } from '../data/rounds'
 import * as live from '../data/live'
-import { canGoTo, firstUnscored, roundTotal, target, targetsComplete, type Round } from '../domain/round'
+import { canGoTo, firstUnscored, locationStatus, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
 import {
-  HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, allowedHits, animalLabel, arrowsAvailable, cleared, isComplete, sameResult,
-  totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow, type AnimalResult, type TargetScore, type TargetType,
+  HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, WOODSMAN_MAX, animalLabel, animalPoints, arrowsAvailable, bigGamePoints, calculatedPoints,
+  cleared, isComplete, maxPoints, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
+  woodsmanFinished, type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from '../domain/scoring'
+import { RunningStats, TargetRow, memberName, typeAndClass } from './Parts'
 
-/** Scoring a round target by target; in a group, archer by archer on each target. */
+/**
+ * Scoring a round target by target; in a group, archer by archer on each target. Laid out as the Android app's
+ * scoring screen (2.7.01): running stats, the target with its points tiles, Prev / Next at the bottom.
+ */
 export function Scoring({ id, target: startTarget }: { id: string; target?: number }) {
   const [current, setCurrent] = useState(id)
   const round = useData(() => getRound(current), [current])
@@ -19,7 +24,10 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const [n, setN] = useState(startTarget ?? 0)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [overrideText, setOverrideText] = useState('')
-  const [finishOpen, setFinishOpen] = useState(false)
+  const [ask, setAsk] = useState<'finish' | 'delete' | 'takeover' | 'card' | null>(null)
+  const account = useData(getAccount)
+  const [locOpen, setLocOpen] = useState(false)
+  const [askedName, setAskedName] = useState(false)
 
   // ---- live group (through the server) ----
   const gid = group[0]?.groupId
@@ -40,7 +48,13 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     return () => { alive = false; clearInterval(t) }
   }, [gid, hasInfo])
 
-  useEffect(() => { if (round && (n === 0 || !canGoTo(round, n))) setN(firstUnscored(round) ?? 1) }, [round?.id])
+  useEffect(() => { if (round && (n === 0 || n > round.targetCount || !canGoTo(round, n))) setN(firstUnscored(round) ?? 1) }, [round?.id, round?.targetCount])
+
+  const own = group.find(m => m.groupRole == null || m.groupRole === 'SCORER') ?? round
+  // Nothing known nearby: ask for the location's name once (the location line works any time).
+  useEffect(() => {
+    if (own && locationStatus(own) === 'NEEDS_NAME' && !askedName && account) { setAskedName(true); setLocOpen(true) }
+  }, [own?.locationState, !!account])
 
   const isLive = !!info
   const s = state
@@ -57,15 +71,19 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     return { ...round, targets: [...byNo.values()].sort((a, b) => a.targetNo - b.targetNo) }
   }, [round, mine, checked, canScore])
 
-  if (!round || !shown || n === 0) return <Bar title="Scoring" onBack={() => go('/')} />
+  if (!round || !shown || n === 0) return <Bar title="Round" onBack={() => go('/')} />
   const t = target(shown, n)
+  const inGroup = group.length > 1
   const me = group.find(m => m.id === round.id)
-  const name = me?.groupRole && me.groupRole !== 'SCORER' ? me.groupName : group.length > 1 ? 'You' : null
+  const name = me ? memberName(me) : 'You'
+  const what = inGroup ? 'group round' : 'round'
   const whyNot = !isLive ? null : !s ? 'Connecting to the group…' : s.status === 'CLOSED' ? 'The group is closed.'
     : s.status !== 'STARTED' ? 'Waiting for the host to start.' : canScore ? null
     : (() => { const who = live.scorerNames(s, current); return who.length ? `${who.join(' and ')} ${who.length > 1 ? 'score' : 'scores'} this card.` : 'Someone else scores this card.' })()
   const check = s ? live.checkText(s, n, current, canScore && !!mine[`${n}|${current}`]) : null
   const mismatch = !!s && live.cell(s, n, current) === 'MISMATCH'
+  const youScore = s && s.status === 'STARTED' && s.method === 'MULTI'
+    ? s.members.filter(m => live.canScore(s, m.memberId)).map(m => m.name) : []
 
   async function edit(change: (t: TargetScore) => TargetScore) {
     if (!canScore) { toast(whyNot ?? "You can't score this card."); return }
@@ -78,154 +96,257 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   async function setType(type: TargetType, fan = MIN_FAN) {
     await edit(x => withType(x, type, fan))
     // One phone scoring everyone: the others on this target get the same type.
-    if (group.length > 1 && (!isLive || (s && !checked && s.members.every(m => live.canScore(s, m.memberId))))) {
+    if (inGroup && (!isLive || (s && !checked && s.members.every(m => live.canScore(s, m.memberId))))) {
       await setTypeForGroup(round!, withType(t, type, fan))
     }
   }
 
   const toggle = (i: number, a: AnimalResult) => edit(x => withAnimalResult(x, i, sameResult(x.animals[i], a) ? { state: 'PENDING' } : a))
 
-  /** Archer by archer: next archer on this target, then the first archer on the next target. */
+  /** Group: the next archer on this target, then the first archer on the next target (and back the other way). */
+  function neighbour(by: 1 | -1): [Round, number] | null {
+    const i = group.findIndex(m => m.id === current)
+    let j = i + by, nn = n
+    if (j >= group.length) { j = 0; nn = n + 1 } else if (j < 0) { j = group.length - 1; nn = n - 1 }
+    return group[j] ? [group[j], nn] : null
+  }
+  const next = inGroup ? neighbour(1) : null
+  const prev = inGroup ? neighbour(-1) : null
+  const scored = isComplete(t)
+  const last = inGroup ? !next || next[1] > round.targetCount : n >= round.targetCount
+  const prevOk = inGroup ? !!prev && prev[1] >= 1 : n > 1
+  const finished = round.status === 'COMPLETED'
   function step(by: 1 | -1) {
-    if (group.length > 1) {
-      const i = group.findIndex(m => m.id === current)
-      let j = i + by, nn = n
-      if (j >= group.length) { j = 0; nn = n + 1 } else if (j < 0) { j = group.length - 1; nn = n - 1 }
-      if (nn < 1 || nn > round!.targetCount) return
-      setCurrent(group[j].id); setN(nn)
+    if (inGroup) {
+      const to = by === 1 ? next : prev
+      if (!to || to[1] < 1 || to[1] > round!.targetCount) return
+      setCurrent(to[0].id); setN(to[1])
     } else {
       const nn = n + by
       if (canGoTo(shown!, nn)) setN(nn)
     }
   }
+  const nextLabel = !scored ? `Score target ${n} to continue`
+    : last ? (finished ? 'Done' : 'Finish round')
+    : next ? (next[1] === n ? `Next: ${memberName(next[0])}` : `Target ${next[1]}: ${memberName(next[0])}`) : 'Next target'
 
-  const account = useData(getAccount)
-  const [locOpen, setLocOpen] = useState(false)
-  const own = group.find(m => m.groupRole == null || m.groupRole === 'SCORER') ?? round
-  const allDone = group.every(m => targetsComplete(m) === m.targetCount)
+  async function finish() {
+    setAsk(null)
+    if (isLive && gid && s && live.isHost(s)) { try { await live.close(gid) } catch (e) { toast(`Couldn't close the group (${errorText(e)}).`) } }
+    await setStatus(round!, 'COMPLETED')
+    syncNow()   // backed up straight away if there's signal
+    replace(`/card/${round!.id}`)
+  }
+
+  const unscored = round.targetCount - targetsComplete(round)
+  const left = group.reduce((x, m) => x + m.targetCount - targetsComplete(m), 0)
+  const friends = group.filter(m => m.groupRole === 'FRIEND').length
 
   return (
     <>
-      <Bar title={`Target ${n} of ${round.targetCount}${name ? ` · ${name}` : ''}`} onBack={() => go('/')}>
-        <button onClick={() => go(`/card/${round.id}`)}>Card</button>
+      <Bar title={inGroup ? `Target ${n} · ${name}` : `Target ${n} of ${round.targetCount}`}
+        sub={(inGroup ? `of ${round.targetCount} · ` : '') + `${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onBack={() => go('/')}>
+        <button class="icon" aria-label="Scorecard" onClick={() => setAsk('card')}>☰</button>
+        <Menu items={[
+          finished ? { text: `Reopen ${what}`, onClick: () => setStatus(round, 'IN_PROGRESS') } : { text: `Finish ${what}`, onClick: () => setAsk('finish') },
+          { text: inGroup ? `Round details – ${name}` : 'Round details', onClick: () => go(`/edit/${current}`) },
+          !!s && live.canTakeOver(s) && { text: 'Take over as host', onClick: () => setAsk('takeover') },
+          { text: `Delete ${what}`, onClick: () => setAsk('delete'), danger: true },
+        ]} />
       </Bar>
+      <div class="progress"><div style={`width:${(targetsComplete(round) / round.targetCount) * 100}%`} /></div>
+      {own && <LocationChip round={own} signedIn={!!account} onClick={() => setLocOpen(true)} />}
+      {inGroup && (
+        <div class="strip" style="padding:8px 16px 0">
+          {group.map(m => (
+            <button class={`${m.id === current ? 'on' : ''} ${isComplete(target(m, n)) ? 'done' : ''}`}
+              onClick={() => { setCurrent(m.id); if (!canGoTo(m, n)) setN(firstUnscored(m) ?? n) }}>
+              {memberName(m)}<br /><b>{roundTotal(m)}</b>
+            </button>
+          ))}
+        </div>
+      )}
+      {isLive && (
+        <div class={`banner ${problem || mismatch ? 'bad' : ''}`} style="margin:8px 16px 0">
+          <b>Live group{s ? ` · ${s.code} · ${s.status === 'CLOSED' ? 'finished' : s.status === 'STARTED' ? live.methodOf(s.method)?.name : 'waiting to start'}` : ''}</b>
+          {problem && <span>Can't reach the server ({problem}). Keep scoring: scores are sent when it's back.</span>}
+          {whyNot && <span>{whyNot}</span>}
+          {youScore.length > 0 && <span>You score: {youScore.join(', ')}</span>}
+          {check && <span style={mismatch ? 'font-weight:600' : ''}>{check}</span>}
+          {s && s.status === 'OPEN' && <button onClick={() => go(`/lobby/${s.groupId}`)}>{live.isHost(s) ? 'Show code and start' : 'Show the group'}</button>}
+        </div>
+      )}
       <main class="form">
-        {isLive && (
-          <div class={`banner ${problem || mismatch ? 'bad' : ''}`}>
-            <b>Live group{s ? ` · ${s.code} · ${s.status === 'CLOSED' ? 'finished' : s.status === 'STARTED' ? live.methodOf(s.method)?.name : 'waiting to start'}` : ''}</b>
-            {problem && <span>Can't reach the server ({problem}). Keep scoring: scores are sent when it's back.</span>}
-            {whyNot && <span>{whyNot}</span>}
-            {check && <span style={mismatch ? 'font-weight:600' : ''}>{check}</span>}
-            {s && s.status === 'OPEN' && <button onClick={() => go(`/lobby/${s.groupId}`)}>{live.isHost(s) ? 'Show code and start' : 'Show the group'}</button>}
-            {s && s.status === 'STARTED' && live.canTakeOver(s) && <button onClick={async () => {
-              if (confirm("Take over as host? Only if the host's phone has stopped working or gone.")) {
-                try { await live.takeOver(s.groupId); toast("You're the host now.") } catch (e) { toast(errorText(e)) }
-              }
-            }}>Host's phone gone? Take over</button>}
-          </div>
-        )}
-        {own && <LocationChip round={own} signedIn={!!account} onClick={() => setLocOpen(true)} />}
-        {group.length > 1 && (
-          <div class="strip">
-            {group.map(m => (
-              <button class={m.id === current ? 'on' : ''} onClick={() => { setCurrent(m.id); if (!canGoTo(m, n)) setN(firstUnscored(m) ?? n) }}>
-                {m.groupRole === 'SCORER' ? 'You' : m.groupName}<br /><b>{roundTotal(m)}</b> {isComplete(target(m, n)) ? '✓' : ''}
-              </button>
-            ))}
-          </div>
-        )}
-        <div class="row between">
-          <div><div class="sub">Round total</div><div class="big">{roundTotal(shown)}</div></div>
-          <div style="text-align:right"><div class="sub">This target</div><div class="big">{totalPoints(t)}</div></div>
+        <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact />
+        <div class="col" style={canScore ? '' : 'opacity:.55'}>
+          {round.type === 'WOODSMAN'
+            ? <WoodsmanEditor t={t} onArrow={a => edit(x => withArrow(x, a))} onUndo={() => edit(withoutLastArrow)}
+                onOverride={() => { setOverrideText(String(totalPoints(t))); setOverrideOpen(true) }} onRemoveOverride={() => edit(x => withOverride(x, null))}
+                onClear={() => edit(cleared)} />
+            : <TargetEditor t={t} onType={setType} onResult={toggle}
+                onOverride={() => { setOverrideText(String(totalPoints(t))); setOverrideOpen(true) }} onRemoveOverride={() => edit(x => withOverride(x, null))}
+                onClear={() => edit(cleared)} />}
         </div>
-
-        {round.type === 'BIG_GAME' && (
-          <div class="card low" style={canScore ? '' : 'opacity:.55'}>
-            <div class="row">
-              {(['STANDARD', 'PREDATOR_PREY', 'FAN'] as TargetType[]).map(tt => (
-                <button class={`chip ${t.type === tt ? 'on' : ''}`} onClick={() => setType(tt)}>{TARGET_TYPE_NAMES[tt]}</button>
-              ))}
-            </div>
-            {t.type === 'FAN' && (
-              <div class="row">Animals:
-                {Array.from({ length: MAX_FAN - MIN_FAN + 1 }, (_, i) => i + MIN_FAN).map(k =>
-                  <button class={`chip ${t.animals.length === k ? 'on' : ''}`} onClick={() => setType('FAN', k)}>{k}</button>)}
-              </div>
-            )}
-            {t.overridePoints != null
-              ? <div class="row between"><span>Score entered by hand: <b>{t.overridePoints}</b></span><button onClick={() => edit(x => withOverride(x, null))}>Remove</button></div>
-              : t.animals.map((a, i) => <AnimalPanel t={t} index={i} result={a} onPick={r => toggle(i, r)} />)}
-          </div>
-        )}
-
-        {round.type === 'WOODSMAN' && (
-          <div class="card low" style={canScore ? '' : 'opacity:.55'}>
-            <div>Arrows: <b>{t.arrows ? [...t.arrows].map(c => ({ W: 'Wound', K: 'Kill', M: 'Miss' })[c]).join(', ') : 'none yet'}</b></div>
-            {t.overridePoints != null
-              ? <div class="row between"><span>Score entered by hand: <b>{t.overridePoints}</b></span><button onClick={() => edit(x => withOverride(x, null))}>Remove</button></div>
-              : <div class="wood">
-                  <button onClick={() => edit(x => withArrow(x, 'W'))}>Wound</button>
-                  <button onClick={() => edit(x => withArrow(x, 'K'))}>Kill</button>
-                  <button onClick={() => edit(x => withArrow(x, 'M'))}>Miss</button>
-                </div>}
-            {t.arrows && <button onClick={() => edit(withoutLastArrow)}>Undo last arrow</button>}
-          </div>
-        )}
-
-        <div class="row">
-          <button onClick={() => { setOverrideText(String(totalPoints(t))); setOverrideOpen(true) }}>Enter a score by hand</button>
-          <button onClick={() => edit(cleared)}>Clear target</button>
-        </div>
-        {allDone && round.status === 'IN_PROGRESS' && <button class="filled wide" onClick={() => setFinishOpen(true)}>Finish {group.length > 1 ? 'group round' : 'round'}</button>}
       </main>
       {own && <LocationSheet roundId={own.id} open={locOpen} onClose={() => setLocOpen(false)} />}
 
       <div class="nav">
-        <button class="tonal" onClick={() => step(-1)}>‹ Previous</button>
-        <button class="filled" onClick={() => step(1)}>Next ›</button>
+        <button class="outlined" disabled={!prevOk} onClick={() => step(-1)}>‹ Prev</button>
+        <button class="filled" disabled={!scored} onClick={() => (!last ? step(1) : finished ? go('/') : setAsk('finish'))}>
+          {nextLabel}{scored && !last ? ' ›' : ''}</button>
       </div>
 
-      <Dialog open={overrideOpen} title="Score by hand" onClose={() => setOverrideOpen(false)}
+      <Dialog open={overrideOpen} title="Override score" onClose={() => setOverrideOpen(false)}
         actions={<><button onClick={() => setOverrideOpen(false)}>Cancel</button>
-          <button onClick={() => { const v = Number(overrideText); setOverrideOpen(false); if (Number.isInteger(v) && v >= 0) edit(x => withOverride(x, v)) }}>Save</button></>}>
-        <p class="sub">For a target scored some other way. Replaces the hits on this target.</p>
-        <input inputMode="numeric" value={overrideText} onInput={e => setOverrideText((e.target as HTMLInputElement).value.replace(/\D/g, ''))} />
+          <button disabled={overrideText === ''} onClick={() => { const v = Number(overrideText); setOverrideOpen(false); if (Number.isInteger(v) && v >= 0) edit(x => withOverride(x, v)) }}>Save</button></>}>
+        <p>For non-standard scoring. The scorecard will show this target as overridden.</p>
+        <label class="field">Score<input inputMode="numeric" value={overrideText} onInput={e => setOverrideText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></label>
       </Dialog>
-      <Dialog open={finishOpen} title={group.length > 1 ? 'Finish group round?' : 'Finish round?'} onClose={() => setFinishOpen(false)}
-        actions={<><button onClick={() => setFinishOpen(false)}>Cancel</button><button onClick={async () => {
-          setFinishOpen(false)
-          if (isLive && gid && s && live.isHost(s)) { try { await live.close(gid) } catch (e) { toast(`Couldn't close the group (${errorText(e)}).`) } }
-          await setStatus(round, 'COMPLETED')
-          syncNow()   // backed up straight away if there's signal
-          replace(`/card/${round.id}`)
-        }}>Finish</button></>}>
-        Total {roundTotal(round)}. {group.length > 1 ? "Everyone's round is finished; friends' rounds are sent to them to accept. " : ''}You can reopen it later if needed.
+      <Dialog open={ask === 'finish'} title={inGroup ? 'Finish group round?' : 'Finish round?'} onClose={() => setAsk(null)}
+        actions={<><button onClick={() => setAsk(null)}>Cancel</button><button onClick={finish}>Finish</button></>}>
+        {inGroup
+          ? `${left > 0 ? `${left} score(s) still to enter across the group. ` : ''}Everyone's round is finished${friends > 0 ? "; friends' rounds are sent to them to accept" : ''}. You can reopen it later if needed.`
+          : unscored > 0 ? `${unscored} target(s) aren't scored yet. Total ${roundTotal(round)}.` : `Total ${roundTotal(round)}. You can reopen it later if needed.`}
+      </Dialog>
+      <Dialog open={ask === 'delete'} title={inGroup ? 'Delete group round?' : 'Delete round?'} onClose={() => setAsk(null)}
+        actions={<><button onClick={() => setAsk(null)}>Cancel</button><button class="danger" onClick={async () => { setAsk(null); await deleteRound(round); replace('/') }}>Delete</button></>}>
+        {inGroup ? "This removes everyone's round in the group and all their scores. Requests already sent to friends are taken back." : 'This removes the round and all its scores.'}
+      </Dialog>
+      <Dialog open={ask === 'takeover'} title="Take over as host?" onClose={() => setAsk(null)}
+        actions={<><button onClick={() => setAsk(null)}>Cancel</button><button onClick={async () => {
+          setAsk(null)
+          try { await live.takeOver(s!.groupId); toast("You're the host now.") } catch (e) { toast(errorText(e)) }
+        }}>Take over</button></>}>
+        Only if the host's phone has stopped working or gone. Your phone keeps the group going: the others follow it, the host's card is scored by the rest of you, and who scores which card may be shared out again. The host can join again with the code on any phone to get their card back.
+      </Dialog>
+      <Dialog open={ask === 'card'} title={`${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onClose={() => setAsk(null)}
+        actions={<><button onClick={() => { setAsk(null); go(`/card/${round.id}`) }}>Full scorecard</button><button onClick={() => setAsk(null)}>Close</button></>}>
+        <div class="col">
+          <RunningStats s={roundStats(shown)} targetCount={round.targetCount} />
+          <div>{Array.from({ length: round.targetCount }, (_, i) => target(shown, i + 1)).map(x => (
+            <TargetRow t={x} current={x.targetNo === n} locked={!canGoTo(shown, x.targetNo)} onGoTo={() => { setN(x.targetNo); setAsk(null) }} />
+          ))}</div>
+          {!finished && <button class="filled wide" onClick={() => setAsk('finish')}>Finish round</button>}
+        </div>
       </Dialog>
     </>
   )
 }
 
-/** One animal: arrow 1 inner kill / kill / wound, arrows 2 and 3 kill / wound, or miss. Tap again to clear. */
-function AnimalPanel({ t, index, result, onPick }: { t: TargetScore; index: number; result: AnimalResult; onPick: (r: AnimalResult) => void }) {
-  const available = arrowsAvailable(t.type, t.animals, index)
-  const on = (r: AnimalResult) => sameResult(result, r)
+function TargetMenu({ t, onOverride, onClear }: { t: TargetScore; onOverride: () => void; onClear: () => void }) {
+  return <Menu label="Target options" items={[
+    { text: t.overridePoints != null ? 'Edit override' : 'Override score', onClick: onOverride },
+    { text: 'Clear target', onClick: onClear },
+  ]} />
+}
+
+function Overridden({ t, onEdit, onRemove }: { t: TargetScore; onEdit: () => void; onRemove: () => void }) {
   return (
-    <div class="animal">
-      {t.animals.length > 1 && <b>{animalLabel(t, index)}</b>}
-      {available === 0 ? <div class="sub">No arrows left for this animal.</div> : (
-        <div class="hits">
-          {[1, 2, 3].filter(a => a <= available).map(a => <>
-            <span>Arrow {a}</span>
-            {allowedHits(a).length === 2 && <span />}
-            {allowedHits(a).map(h => {
-              const r: AnimalResult = { state: 'SCORED', arrowNo: a, hit: h }
-              return <button class={on(r) ? 'on' : ''} aria-pressed={on(r)} onClick={() => onPick(r)}>{HIT_NAMES[h]}</button>
-            })}
-          </>)}
-          <span />
-          <button class={`miss ${on({ state: 'MISSED' }) ? 'on' : ''}`} onClick={() => onPick({ state: 'MISSED' })}>Miss</button>
+    <div class="override-note">
+      <span class="grow">Overridden to {t.overridePoints} (calculated {calculatedPoints(t)})</span>
+      <button onClick={onEdit}>Edit</button><button onClick={onRemove}>Remove</button>
+    </div>
+  )
+}
+
+/** "20 / 24", scored or not, the target type and options; then a scorer per animal. */
+function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onClear }: {
+  t: TargetScore; onType: (type: TargetType, fan?: number) => void; onResult: (i: number, r: AnimalResult) => void
+  onOverride: () => void; onRemoveOverride: () => void; onClear: () => void
+}) {
+  const multi = t.animals.length > 1
+  return (
+    <>
+      <div class="target-head">
+        <div class="grow">
+          <span class="pts">{totalPoints(t)}</span><span class="of"> / {maxPoints(t)}</span>
+          <div class="sub" style={isComplete(t) ? 'color:var(--primary)' : ''}>{isComplete(t) ? 'Target scored' : 'Not scored yet'}</div>
+        </div>
+        <select class="chip-select" aria-label="Change target type" value={t.type} onChange={e => {
+          const v = (e.target as HTMLSelectElement).value as TargetType
+          if (v !== t.type) onType(v, MIN_FAN)
+        }}>
+          {(['STANDARD', 'PREDATOR_PREY', 'FAN'] as TargetType[]).map(x => <option value={x}>{TARGET_TYPE_NAMES[x]}</option>)}
+        </select>
+        <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />
+      </div>
+      {t.type === 'FAN' && (
+        <div class="stepper">
+          <span class="grow">Animals in fan</span>
+          <button disabled={t.animals.length <= MIN_FAN} onClick={() => onType('FAN', t.animals.length - 1)}>–</button>
+          <b style="width:32px;text-align:center;font-size:20px">{t.animals.length}</b>
+          <button disabled={t.animals.length >= MAX_FAN} onClick={() => onType('FAN', t.animals.length + 1)}>+</button>
         </div>
       )}
+      {t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} />
+        : t.animals.map((a, i) => {
+          const waiting = t.type === 'PREDATOR_PREY' && i === 1 && t.animals[0].state === 'PENDING'
+          const body = <AnimalScorer result={a} available={arrowsAvailable(t.type, t.animals, i)} waiting={waiting} onResult={r => onResult(i, r)} />
+          return multi
+            ? <div class="animal-card"><div class="row between"><b>{animalLabel(t, i)}</b><b style="font-size:20px">{animalPoints(a)}</b></div><hr style="border:none;border-top:1px solid var(--outline-v);margin:0" />{body}</div>
+            : body
+        })}
+    </>
+  )
+}
+
+const HITS: Hit[] = ['INNER_KILL', 'KILL', 'WOUND']
+
+/** Points tiles laid out like a Big Game card: inner kill, kill, wound across; 1st, 2nd, 3rd arrow down; miss below. */
+function AnimalScorer({ result, available, waiting, onResult }: { result: AnimalResult; available: number; waiting: boolean; onResult: (r: AnimalResult) => void }) {
+  if (waiting) return <div class="sub">Score the predator first</div>
+  if (available === 0) return <div class="sub">No arrows left for this animal</div>
+  return (
+    <div class="col" style="gap:8px">
+      <div class="scorer-grid">
+        {[1, 2, 3].filter(a => a <= available).map(a => <>
+          <span class="ord">{ordinal(a)}</span>
+          {HITS.map(h => {
+            if (a > 1 && h === 'INNER_KILL') return <span />
+            const r: AnimalResult = { state: 'SCORED', arrowNo: a, hit: h }
+            const on = sameResult(result, r)
+            return <button class={`tile-score ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => onResult(r)}>
+              <b>{bigGamePoints(a, h)}</b><span>{HIT_NAMES[h]}</span></button>
+          })}
+        </>)}
+      </div>
+      <button class={`miss-tile ${result.state === 'MISSED' ? 'on' : ''}`} aria-pressed={result.state === 'MISSED'} onClick={() => onResult({ state: 'MISSED' })}>Miss · 0</button>
     </div>
+  )
+}
+
+const ARROW_NAMES: Record<string, string> = { K: 'Kill', W: 'Wound', M: 'Miss' }
+
+/** Woodsman: one animal, each arrow in order until a kill or 3 arrows; the next arrow's tiles show what it scores. */
+function WoodsmanEditor({ t, onArrow, onUndo, onOverride, onRemoveOverride, onClear }: {
+  t: TargetScore; onArrow: (a: 'K' | 'W' | 'M') => void; onUndo: () => void; onOverride: () => void; onRemoveOverride: () => void; onClear: () => void
+}) {
+  const done = woodsmanFinished(t.arrows)
+  const nextNo = t.arrows.length + 1
+  return (
+    <>
+      <div class="target-head">
+        <div class="grow"><div style="font-size:22px">Target {t.targetNo}</div><div class="sub">Woodsman · shoot until you kill it</div></div>
+        <b style="font-size:22px">{totalPoints(t)} / {WOODSMAN_MAX}</b>
+        <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />
+      </div>
+      {t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} /> : <>
+        <div class="arrows3">
+          {[0, 1, 2].map(i => {
+            const a = t.arrows[i]
+            return <div class={a ?? ''}><span>{ordinal(i + 1)} arrow</span><b>{a ? ARROW_NAMES[a] : done ? '–' : ''}</b></div>
+          })}
+        </div>
+        {!done ? <>
+          <h3 class="section">{ordinal(nextNo)} arrow</h3>
+          <div class="row" style="flex-wrap:nowrap">
+            <button class="tile-score grow" onClick={() => onArrow('K')}><b>{WOODSMAN_MAX - (nextNo - 1) * 10}</b><span>Kill</span></button>
+            <button class="tile-score grow" onClick={() => onArrow('W')}><b>5</b><span>Wound</span></button>
+          </div>
+          <button class="miss-tile" onClick={() => onArrow('M')}>Miss · 0</button>
+        </> : <div class="sub">{t.arrows.endsWith('K') ? `Killed with the ${ordinal(t.arrows.length)} arrow.` : 'All three arrows shot.'}</div>}
+        {t.arrows && <button style="align-self:flex-start" onClick={onUndo}>Undo last arrow</button>}
+      </>}
+    </>
   )
 }

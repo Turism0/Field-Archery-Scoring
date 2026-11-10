@@ -1,7 +1,10 @@
+import { getAccount } from '../data/account'
+import { allRounds, getKv } from '../data/db'
+import { RoundCard } from './Parts'
 import { useState } from 'preact/hooks'
 import { Bar, Dialog, Field, go, today, ukDate, useData } from './common'
 import { finished } from '../data/rounds'
-import { ROUND_TYPE_NAMES, bowName, classLine, roundTotal, targetsLine } from '../domain/round'
+import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
 import type { RoundType } from '../domain/scoring'
 
@@ -11,6 +14,13 @@ const NONE: Filter = { period: { kind: 'all' } }
 /** Finished rounds, newest first, with filters and PB marks; tap for the scorecard. */
 export function History() {
   const rounds = useData(finished)
+  const account = useData(getAccount)
+  const lastSync = useData(() => getKv<string>('lastSync'))
+  const sizes = useData(async () => {
+    const c: Record<string, number> = {}
+    for (const r of await allRounds()) if (r.groupId) c[r.groupId] = (c[r.groupId] ?? 0) + 1
+    return c
+  }) ?? {}
   const [f, setF] = useState<Filter>(NONE)
   const [dates, setDates] = useState<{ from?: string; to?: string } | null>(null)
   if (!rounds) return <Bar title="Score history" />
@@ -30,7 +40,8 @@ export function History() {
     <>
       <Bar title="Score history" />
       <main>
-        {!rounds.length ? <p class="sub" style="text-align:center">No finished rounds yet. Rounds appear here once you finish them.</p> : <>
+        {!rounds.length ? <div style="text-align:center;padding-top:48px"><h2 style="font-weight:400">No finished rounds yet</h2><p class="sub">Rounds appear here once you finish them.</p></div> : <>
+          {account && <div class="sub" style="text-align:center">{lastSync ? `Last synced ${new Date(lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Not synced yet'}</div>}
           <div class="filters">
             {(types.length > 1 || f.type) && <select class={f.type ? 'on' : ''} value={f.type ?? ''} onChange={e => setF({ ...f, type: ((e.target as HTMLSelectElement).value || undefined) as RoundType | undefined })}>
               <option value="">Type: All</option>{types.map(t => <option value={t}>{ROUND_TYPE_NAMES[t]}</option>)}</select>}
@@ -52,13 +63,7 @@ export function History() {
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
           {!list.length && <p class="sub" style="text-align:center">No rounds match these filters.</p>}
           <div class="grid2">{list.map(r => (
-            <button class="tile" onClick={() => go(`/card/${r.id}`)}>
-              <span class="grow">
-                <b>{roundTotal(r)} <span class="sub">{r.type === 'WOODSMAN' ? ROUND_TYPE_NAMES.WOODSMAN : ''}</span> {pbs.has(r.id) && <span class="pb">PB</span>}</b>
-                <span class="sub">{ukDate(r.shootDate)} · {classLine(r)} · {targetsLine(r)}{r.locationName ? ` · ${r.locationName}` : ''}</span>
-                <span class="sub">{r.pending ? 'Waiting to back up' : r.failed ? "Couldn't back up" : r.groupId ? 'Group' : ''}</span>
-              </span>
-            </button>
+            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} onClick={() => go(`/card/${r.id}`)} />
           ))}</div>
         </>}
       </main>

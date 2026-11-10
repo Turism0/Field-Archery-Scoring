@@ -37,7 +37,7 @@ export function Dashboard() {
 
   if (editing) return <>
     <Bar title="Arrange the menu"><button onClick={async () => { await setKv('homeLayout', normalised(editing)); setEditing(null) }}>Done</button></Bar>
-    <main class="narrow"><Arrange layout={editing} shown={layout.order.filter(id => id !== 'JOIN' && (id !== 'ADMIN' || admin))} onChange={setEditing} /></main>
+    <main class="narrow"><Arrange layout={editing} shown={layout.order.filter(id => id !== 'ADMIN' || admin)} onChange={setEditing} /></main>
   </>
 
   return (

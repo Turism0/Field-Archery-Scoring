@@ -63,6 +63,7 @@ export function AccountScreen() {
             <Field label="Password"><input type="password" autocomplete="current-password" value={password} onInput={e => setPassword((e.target as HTMLInputElement).value)} /></Field>
             <button class="filled wide" disabled={busy || !password} onClick={() => run(async () => { await login(username, password); done() })}>Sign in</button>
             <button onClick={() => { setStep('reset'); setPassword('') }}>Forgot your password?</button>
+            <button onClick={() => { setStep('name'); setPassword('') }}>Use a different username</button>
           </Card>
         )}
         {step === 'new' && (
@@ -72,14 +73,15 @@ export function AccountScreen() {
             <div class="sub">At least 8 characters. Next you'll get a recovery code to keep, in case you forget it.</div>
             <button class="filled wide" disabled={busy} onClick={() => newPasswordProblem()
               ? setError(newPasswordProblem()) : run(async () => setRecovery(await register(username, password)))}>Create account</button>
+            <button onClick={() => { setStep('name'); setPassword(''); setConfirm('') }}>Use a different username</button>
           </Card>
         )}
         {step === 'reset' && (
-          <Card title="Forgot your password?" sub={`Enter the recovery code you saved when you made your account (or a reset code from the owner or an admin), and a new password for ${username}.`}>
+          <Card title="Forgot your password?" sub={`Enter the recovery code you saved when you made your account (or a reset code from the owner or an admin), and choose a new password for ${username}.`}>
             <Field label="Recovery or reset code"><input autocapitalize="characters" value={code} onInput={e => setCode((e.target as HTMLInputElement).value)} /></Field>
             <Field label="New password"><input type="password" autocomplete="new-password" value={password} onInput={e => setPassword((e.target as HTMLInputElement).value)} /></Field>
             <Field label="Type the new password again"><input type="password" autocomplete="new-password" value={confirm} onInput={e => setConfirm((e.target as HTMLInputElement).value)} /></Field>
-            <div class="sub">Your other phones are signed out, and you get a new recovery code.</div>
+            <div class="sub">Your other phones are signed out, and you get a new recovery code (the old one stops working). No code? Ask the owner or an admin for a reset code: they'll check it's you.</div>
             <button class="filled wide" disabled={busy || !code} onClick={() => newPasswordProblem()
               ? setError(newPasswordProblem()) : run(async () => setRecovery(await resetPassword(username, code, password)))}>Set new password</button>
           </Card>
@@ -100,6 +102,7 @@ export function ProfileScreen() {
   const [password, setPassword] = useState('')
   const [recovery, setRecovery] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [deleted, setDeleted] = useState(false)
   if (!p) return null
   const update = (change: Partial<Profile>) => setP({ ...p, ...change })
   const fromDob = p.dateOfBirth ? ageGroupFor(p.dateOfBirth, today()) : null
@@ -109,7 +112,7 @@ export function ProfileScreen() {
     setAsk(null); setPassword('')
     try {
       if (what === 'recovery') setRecovery(await newRecoveryCode(pw))
-      else { await deleteAccount(pw); toast('Your account and everything the server kept about it have been deleted. Your rounds are still on this phone.') }
+      else { await deleteAccount(pw); setDeleted(true) }
     } catch (e) { toast(errorText(e)) }
   }
 
@@ -121,40 +124,45 @@ export function ProfileScreen() {
           {account ? <>
             <div class="row between"><div><div class="sub">Signed in as</div><b style="font-size:20px">{account.username}</b></div>
               <button class="outlined" onClick={() => setSigningOut(true)}>Sign out</button></div>
+            <div class="sub">Lost your recovery code, or made your account before there was one? Make a new one (the old one stops working).</div>
             <button class="outlined" onClick={() => setAsk('recovery')}>New recovery code</button>
             <button class="danger" onClick={() => setAsk('delete')}>Delete account</button>
           </> : <>
-            <div>Sign in to back up your rounds and use live groups.</div>
+            <div>Sign in to back up your rounds to the server and share scorecards with friends.</div>
             <button class="filled wide" onClick={() => go('/account')}>Sign in or create account</button>
           </>}
         </Card>
-        <Card title="About you" sub="Kept on this phone only. Never sent anywhere.">
+        <Card title="About you" sub="Stored on this phone only. Never sent anywhere.">
           <Field label="Your name"><input value={p.realName ?? ''} onInput={e => update({ realName: (e.target as HTMLInputElement).value })} /></Field>
           <Field label="Date of birth (optional)" help="Used to work out your age group on each shoot day">
             <input type="date" value={p.dateOfBirth ?? ''} onInput={e => update({ dateOfBirth: (e.target as HTMLInputElement).value || undefined })} />
           </Field>
         </Card>
-        <Card title="Archery" sub="Copied onto each round.">
+        <Card title="Archery" sub="Copied onto each round, and shared with your scores when signed in.">
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={p.archerClass} label={c => CLASS_NAMES[c]} onChange={c => update({ archerClass: c })} />
           <Select<AgeGroup> label="Age group" value={p.ageGroupManual} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]}
             none={fromDob ? `Automatic (${AGE_NAMES[fromDob]} today)` : 'Not set'} onChange={a => update({ ageGroupManual: a })} />
+          <div class="sub">Leave on automatic to work it out from your date of birth</div>
           <Select label="Main bow style" value={p.bowStyle} options={BOW_STYLES.map(b => b.code)} none="Not set"
             optionLabel={c => `${BOW_STYLES.find(b => b.code === c)!.name} (${c})`} onChange={b => update({ bowStyle: b })} />
         </Card>
       </main>
       <Dialog open={signingOut} title="Sign out?" onClose={() => setSigningOut(false)}
         actions={<><button onClick={() => setSigningOut(false)}>Cancel</button><button onClick={async () => { setSigningOut(false); await signOut() }}>Sign out</button></>}>
-        Your rounds stay on this phone. Sign in again any time.
+        Your rounds stay on this phone. Sign in again any time with your username and password.
       </Dialog>
       <Dialog open={!!ask} title={ask === 'delete' ? 'Delete your account?' : 'New recovery code'} onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Cancel</button>
           <button class={ask === 'delete' ? 'danger' : ''} disabled={!password} onClick={confirmAsk}>{ask === 'delete' ? 'Delete account' : 'Make code'}</button></>}>
         <p>{ask === 'delete'
           ? 'This deletes your account and everything the server keeps about it: your rounds and scores there, friends, round requests and your place in live groups. It can\'t be undone. Rounds on this phone stay here.'
-          : 'Enter your password to make a new recovery code (the old one stops working).'}</p>
+          : 'Enter your password to make a new recovery code.'}</p>
         <input type="password" autocomplete="current-password" placeholder="Password" value={password} onInput={e => setPassword((e.target as HTMLInputElement).value)} />
       </Dialog>
       <RecoveryDialog code={recovery} onDone={() => setRecovery(null)} />
+      <Dialog open={deleted} title="Account deleted" onClose={() => setDeleted(false)} actions={<button onClick={() => setDeleted(false)}>OK</button>}>
+        Your account and everything the server kept about it have been deleted. Your rounds are still on this phone.
+      </Dialog>
     </>
   )
 }

@@ -1,10 +1,11 @@
 import { useState } from 'preact/hooks'
-import { Bar, Card, Dialog, go, replace, ukDate, useData, useDesktop } from './common'
+import { Bar, Card, Dialog, Menu, go, replace, ukDate, useData, useDesktop } from './common'
+import { CardHeader, GroupCard, RunningStats, TargetRow, memberName, roleLabel } from './Parts'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
 import { deleteRound, groupOf, setStatus } from '../data/rounds'
-import { ROUND_TYPE_NAMES, classLine, roundStats, roundTotal, target, targetsLine } from '../domain/round'
+import { ROUND_TYPE_NAMES, canGoTo, classLine, roundStats, roundTotal, target, targetsLine } from '../domain/round'
 import { TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, totalPoints } from '../domain/scoring'
 import { finished } from '../data/rounds'
 import { getModel } from '../data/handicap'
@@ -14,7 +15,7 @@ import { MoreStats } from './Stats'
 import { bowName, type Round, type RoundStats } from '../domain/round'
 import type { HandicapModel } from '../domain/handicap'
 
-/** A round's scorecard: every target, the stats, and (in a group) everyone's totals. */
+/** A round's scorecard (as the app's): header, PB, location, the group, stats, handicap, and every target. */
 export function Scorecard({ id }: { id: string }) {
   const round = useData(() => getRound(id), [id])
   const group = useData(async () => { const r = await getRound(id); return r ? groupOf(r) : [] }, [id]) ?? []
@@ -29,46 +30,45 @@ export function Scorecard({ id }: { id: string }) {
   const own = round.groupRole == null || round.groupRole === 'SCORER'
   const beat = own && round.status === 'COMPLETED' && personalBestIds(mine).has(round.id) ? previousBest(round, mine) : undefined
   const h = round.status === 'COMPLETED' ? handicapRound(round) : null
-  const name = round.groupRole && round.groupRole !== 'SCORER' ? round.groupName : null
+  const inGroup = group.length > 1
+  const mirror = round.groupRole === 'MIRROR'
+  const editTarget = (n: number) => go(desktop ? `/grid/${round.id}` : `/score/${round.id}${n ? `?t=${n}` : ''}`)
   return (
     <>
-      <Bar title={name ? `${name}'s card` : 'Scorecard'} onBack={() => go('/')} />
+      <Bar title="Scorecard" sub={inGroup ? (own ? `You · group of ${group.length}` : `${memberName(round)} · ${roleLabel(round)}`) : undefined} onBack={() => go('/')}>
+        {!mirror && <button class="icon" aria-label="Edit scores" onClick={() => editTarget(0)}>✎</button>}
+        {!mirror && <Menu items={[
+          round.status === 'COMPLETED' && { text: inGroup ? 'Reopen group round' : 'Reopen round', onClick: () => setStatus(round, 'IN_PROGRESS') },
+          { text: 'Edit round details', onClick: () => go(`/edit/${round.id}`) },
+          { text: inGroup ? 'Delete group round' : 'Delete round', onClick: () => setConfirmDelete(true), danger: true },
+        ]} />}
+      </Bar>
       <main>
         <div class="split"><div>
-        <RoundHeader round={round} />
+        <CardHeader r={round} />
         {beat && <Card title="New personal best" cls="hi">
           <div>{roundTotal(round)} beats your previous best of {roundTotal(beat)} ({ukDate(beat.shootDate)}) for {round.targetCount}-target {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}. +{roundTotal(round) - roundTotal(beat)} points.</div>
         </Card>}
-        {round.groupRole !== 'MIRROR' && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
-        <StatsCard round={round} s={s} />
+        {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
+        {inGroup && <GroupCard group={group} currentId={round.id} />}
+        <RunningStats s={s} targetCount={round.targetCount} />
         {model && h && <HandicapCard points={roundPoints(model, h)} />}
         <MoreStats s={s} />
-        {group.length > 1 && (
-          <Card title="The group">
-            {group.map(m => (
-              <button class="row between" style="padding:6px 0;color:inherit" onClick={() => go(`/card/${m.id}`)}>
-                <span>{m.groupRole === 'SCORER' ? 'You' : m.groupName} <span class="sub">{classLine(m)}</span></span><b>{roundTotal(m)}</b>
-              </button>
-            ))}
-          </Card>
-        )}
-        {round.groupRole !== 'MIRROR' && <div class="row">
-          {desktop ? <button class="filled" onClick={() => go(`/grid/${round.id}`)}>Edit scores</button>
-            : round.status === 'COMPLETED'
-            ? <button class="tonal" onClick={async () => { await setStatus(round, 'IN_PROGRESS'); go(`/score/${group[0]?.id ?? round.id}`) }}>Reopen to edit</button>
-            : <button class="filled" onClick={() => go(`/score/${group[0]?.id ?? round.id}`)}>Carry on scoring</button>}
-          <button class="outlined" onClick={() => go(`/edit/${round.id}`)}>Edit round details</button>
-          <button class="danger" onClick={() => setConfirmDelete(true)}>Delete</button>
-        </div>}
         </div><div>
-        <TargetTable round={round} onTarget={round.groupRole === 'MIRROR' ? undefined : desktop ? () => go(`/grid/${round.id}`) : n => go(`/score/${group[0]?.id ?? round.id}?t=${n}`)} />
+        <h3 class="section">Targets</h3>
+        <div class="card low" style="padding:0;overflow:hidden">
+          {Array.from({ length: round.targetCount }, (_, i) => target(round, i + 1)).map(t => (
+            <TargetRow t={t} locked={!canGoTo(round, t.targetNo)} readOnly={mirror} onGoTo={mirror ? undefined : () => editTarget(t.targetNo)} goToLabel={`Edit target ${t.targetNo}`} />
+          ))}
+        </div>
         </div></div>
       </main>
+      {!mirror && <button class="fab" onClick={() => editTarget(0)}>✎ Edit scores</button>}
       <LocationSheet roundId={round.id} open={locOpen} onClose={() => setLocOpen(false)} />
-      <Dialog open={confirmDelete} title="Delete this round?" onClose={() => setConfirmDelete(false)}
-        actions={<><button onClick={() => setConfirmDelete(false)}>Keep</button>
+      <Dialog open={confirmDelete} title={inGroup ? 'Delete group round?' : 'Delete round?'} onClose={() => setConfirmDelete(false)}
+        actions={<><button onClick={() => setConfirmDelete(false)}>Cancel</button>
           <button class="danger" onClick={async () => { setConfirmDelete(false); await deleteRound(round); replace('/') }}>Delete</button></>}>
-        {group.length > 1 ? "Everyone's round in this group is deleted." : 'It\'s deleted here and, once synced, from the server.'}
+        {inGroup ? "This removes everyone's round in the group and all their scores. Requests already sent to friends are taken back." : 'This removes the round and all its scores.'}
       </Dialog>
     </>
   )
@@ -137,12 +137,15 @@ export function ReadOnlySheet({ round, model }: { round: Round; model: HandicapM
   const h = round.status === 'COMPLETED' ? handicapRound(round) : null
   return (
     <div class="split"><div>
-      <RoundHeader round={round} />
-      <StatsCard round={round} s={s} />
+      <CardHeader r={round} showLocation />
+      <RunningStats s={s} targetCount={round.targetCount} />
       {model && h && <HandicapCard points={roundPoints(model, h)} />}
       <MoreStats s={s} />
     </div><div>
-      <TargetTable round={round} />
+      <h3 class="section">Targets</h3>
+      <div class="card low" style="padding:0;overflow:hidden">
+        {Array.from({ length: round.targetCount }, (_, i) => target(round, i + 1)).map(t => <TargetRow t={t} readOnly />)}
+      </div>
     </div></div>
   )
 }
