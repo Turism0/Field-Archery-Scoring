@@ -8,7 +8,7 @@ import * as live from '../data/live'
 import { canGoTo, firstUnscored, locationStatus, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
 import {
   HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, WOODSMAN_MAX, animalLabel, animalPoints, arrowsAvailable, bigGamePoints, calculatedPoints,
-  cleared, isComplete, maxPoints, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
+  cleared, isComplete, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
   woodsmanFinished, type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from '../domain/scoring'
 import { RunningStats, TargetRow, memberName, typeAndClass } from './Parts'
@@ -258,10 +258,8 @@ function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onCle
   return (
     <>
       <div class="target-head">
-        <div class="grow">
-          <span class="pts">{totalPoints(t)}</span><span class="of"> / {maxPoints(t)}</span>
-          <div class="sub" style={isComplete(t) ? 'color:var(--primary)' : ''}>{isComplete(t) ? 'Target scored' : 'Not scored yet'}</div>
-        </div>
+        {/* 2.7.04 (Pete): no "20 / 24 · Target scored"; it read like the target number, and Next waits for a scored target anyway. */}
+        <div class="grow" />
         <select class="chip-select" aria-label="Change target type" value={t.type} onChange={e => {
           const v = (e.target as HTMLSelectElement).value as TargetType
           if (v !== t.type) onType(v, MIN_FAN)
@@ -327,7 +325,6 @@ function WoodsmanEditor({ t, onArrow, onUndo, onOverride, onRemoveOverride, onCl
     <>
       <div class="target-head">
         <div class="grow"><div style="font-size:22px">Target {t.targetNo}</div><div class="sub">Woodsman · shoot until you kill it</div></div>
-        <b style="font-size:22px">{totalPoints(t)} / {WOODSMAN_MAX}</b>
         <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />
       </div>
       {t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} /> : <>

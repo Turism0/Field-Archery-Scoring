@@ -351,7 +351,6 @@ private fun WoodsmanEditor(
                 Text("Target ${target.targetNo}", style = MaterialTheme.typography.titleLarge)
                 Text("Woodsman · shoot until you kill it", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
             }
-            Text("${target.totalPoints} / ${WoodsmanScoring.MAX_PER_TARGET}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Box {
                 IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Target options") }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -526,7 +525,7 @@ private fun TargetEditor(
 }
 
 /**
- * "Target 5 · 20 / 24" plus a small type chip and an overflow menu. Changing the target type,
+ * A small type chip and an overflow menu (2.7.04: no points line). Changing the target type,
  * override and clear are tucked away here as they're rarely needed.
  */
 @Composable
@@ -539,22 +538,8 @@ private fun TargetHeader(
     var typeMenu by remember { mutableStateOf(false) }
     var moreMenu by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("${target.totalPoints}", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                Text(
-                    " / ${target.maxPoints}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-            }
-            Text(
-                if (target.isComplete) "Target scored" else "Not scored yet",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (target.isComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // 2.7.04 (Pete): no "20 / 24 · Target scored" here; it read like the target number, and Next waits for a scored target anyway.
+        Spacer(Modifier.weight(1f))
         Box {
             AssistChip(
                 onClick = { typeMenu = true },
