@@ -67,6 +67,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.Dp
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.domain.AnimalResult
 import uk.co.fnurble.fieldarchery.domain.BigGameScoring
@@ -254,15 +260,19 @@ fun ScoringScreen(
             return@Scaffold
         }
         val target = r.target(targetNo)
+        // 2.9.03 (Pete): the tiles take their size from the height there is, so the target fills the screen on any
+        // phone; on short screens the stats go to one line first.
+        BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+        val sizes = scoreSizes(maxHeight, multi = target.animals.size > 1)
+        CompositionLocalProvider(LocalScoreSizes provides sizes) {
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 16.dp, vertical = sizes.gap),
+            verticalArrangement = Arrangement.spacedBy(sizes.gap),
         ) {
-            RunningStats(r.stats, compact = true)
+            RunningStats(r.stats, compact = true, oneLine = sizes.oneLineStats)
             if (target.isWoodsman) WoodsmanEditor(
                 target = target,
                 onArrow = { vm.addArrow(it) },
@@ -278,6 +288,8 @@ fun ScoringScreen(
                 onRemoveOverride = { vm.setOverride(null) },
                 onClear = { vm.clearTarget() },
             )
+        }
+        }
         }
 
         if (showOverride) {
@@ -407,7 +419,7 @@ private fun WoodsmanEditor(
                 val arrow = target.arrows.getOrNull(n - 1)
                 val unused = arrow == null && WoodsmanScoring.isFinished(target.arrows)
                 Surface(
-                    modifier = Modifier.weight(1f).height(64.dp),
+                    modifier = Modifier.weight(1f).height(LocalScoreSizes.current.tile),
                     shape = MaterialTheme.shapes.medium,
                     color = when (arrow) {
                         WoodsmanArrow.KILL -> scheme.primary
@@ -520,7 +532,7 @@ private fun TargetEditor(
     onRemoveOverride: () -> Unit,
     onClear: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(LocalScoreSizes.current.gap)) {
         TargetHeader(target, onType, onOverride, onClear)
 
         if (target.type == TargetType.FAN) FanCountStepper(target.animals.size) { onType(TargetType.FAN, it) }
@@ -703,18 +715,19 @@ private fun AnimalScorer(
 @Composable
 private fun ScoreTile(points: Int, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
+    val sizes = LocalScoreSizes.current
     Surface(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.height(64.dp),
+        modifier = modifier.height(sizes.tile),
         shape = MaterialTheme.shapes.medium,
         color = if (selected) scheme.primary else scheme.surfaceContainerHigh,
         contentColor = if (selected) scheme.onPrimary else scheme.onSurface,
         tonalElevation = if (selected) 2.dp else 0.dp,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text("$points", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text("$points", style = MaterialTheme.typography.titleLarge, fontSize = sizes.points, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontSize = sizes.label, maxLines = 1)
         }
     }
 }
@@ -725,7 +738,7 @@ private fun MissTile(selected: Boolean, onClick: () -> Unit) {
     Surface(
         selected = selected,
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
+        modifier = Modifier.fillMaxWidth().height(LocalScoreSizes.current.miss),
         shape = MaterialTheme.shapes.medium,
         color = if (selected) scheme.error else scheme.surface,
         contentColor = if (selected) scheme.onError else scheme.onSurfaceVariant,
@@ -941,4 +954,30 @@ private fun LiveBanner(poll: LivePoll, whyNot: String?, check: String?, mismatch
             }
         }
     }
+}
+
+/**
+ * Sizes on the scoring screen (2.9.03), from the height it has: tiles grow on tall phones and shrink on short ones,
+ * with the points and labels in proportion; predator/prey and fans (several animals) get smaller tiles. Short screens
+ * put the running stats on one line.
+ */
+private data class ScoreSizes(
+    val tile: Dp = 64.dp,
+    val miss: Dp = 48.dp,
+    val points: TextUnit = 22.sp,
+    val label: TextUnit = 11.sp,
+    val gap: Dp = 12.dp,
+    val oneLineStats: Boolean = false,
+)
+
+private val LocalScoreSizes = staticCompositionLocalOf { ScoreSizes() }
+
+@Composable
+private fun scoreSizes(height: Dp, multi: Boolean): ScoreSizes {
+    val tile = (height * (if (multi) 0.085f else 0.11f)).coerceIn(48.dp, 112.dp)
+    val miss = (height * 0.07f).coerceIn(44.dp, 72.dp)
+    // In sp at the same rate as the tile, so the user's text size setting still counts.
+    val points = (tile.value * 0.34f).coerceIn(18f, 34f).sp
+    val label = (tile.value * 0.17f).coerceIn(10f, 15f).sp
+    return ScoreSizes(tile, miss, points, label, gap = if (height < 560.dp) 8.dp else 12.dp, oneLineStats = height < 600.dp)
 }

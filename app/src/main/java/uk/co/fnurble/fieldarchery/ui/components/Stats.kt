@@ -32,9 +32,27 @@ import java.util.Locale
  * Running totals for a round: total, average, progress, hit counts and which arrow scored.
  * [compact] drops the per-arrow row to save space on the scoring screen.
  * [showTotal] false on scorecards (2.7.06), whose header already shows the total in large type.
+ * [oneLine] (2.9.03): short screens while scoring – just "Total · avg · scored" on one line.
  */
 @Composable
-fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true) {
+fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true, oneLine: Boolean = false) {
+    if (oneLine) {
+        val avg = stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–"
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Total ${stats.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Avg $avg", style = MaterialTheme.typography.titleMedium)
+                Text("${stats.targetsScored}/${stats.targetCount} scored", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        return
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

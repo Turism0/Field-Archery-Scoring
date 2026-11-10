@@ -153,7 +153,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const friends = group.filter(m => m.groupRole === 'FRIEND').length
 
   return (
-    <>
+    // 2.9.03 (Pete): the page is the phone's height; the target area scrolls only if it really can't fit.
+    <div class="scoring">
       <Bar title={inGroup ? `Target ${n} · ${name}` : `Target ${n} of ${round.targetCount}`}
         sub={(inGroup ? `of ${round.targetCount} · ` : '') + `${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onBack={() => go('/')}>
         <button class="icon" aria-label="Scorecard" onClick={() => setAsk('card')}>☰</button>
@@ -189,7 +190,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       )}
       <main class="form">
         <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact />
-        <div class="col" style={canScore ? '' : 'opacity:.55'}>
+        <div class={`col score-area ${t.animals.length > 1 ? 'multi' : ''}`} style={canScore ? '' : 'opacity:.55'}>
           {round.type === 'WOODSMAN'
             ? <WoodsmanEditor t={t} onArrow={a => edit(x => withArrow(x, a))} onUndo={() => edit(withoutLastArrow)}
                 onOverride={() => { setOverrideText(String(totalPoints(t))); setOverrideOpen(true) }} onRemoveOverride={() => edit(x => withOverride(x, null))}
@@ -241,7 +242,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           {!finished && <button class="filled wide" onClick={() => setAsk('finish')}>Finish round</button>}
         </div>
       </Dialog>
-    </>
+    </div>
   )
 }
 
@@ -284,7 +285,7 @@ function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onCle
         <div class="stepper">
           <span class="grow">Animals in fan</span>
           <button disabled={t.animals.length <= MIN_FAN} onClick={() => onType('FAN', t.animals.length - 1)}>–</button>
-          <b style="width:32px;text-align:center;font-size:20px">{t.animals.length}</b>
+          <b class="fan-count">{t.animals.length}</b>
           <button disabled={t.animals.length >= MAX_FAN} onClick={() => onType('FAN', t.animals.length + 1)}>+</button>
         </div>
       )}
@@ -293,7 +294,7 @@ function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onCle
           const waiting = t.type === 'PREDATOR_PREY' && i === 1 && t.animals[0].state === 'PENDING'
           const body = <AnimalScorer result={a} available={arrowsAvailable(t.type, t.animals, i)} waiting={waiting} onResult={r => onResult(i, r)} />
           return multi
-            ? <div class="animal-card"><div class="row between"><b>{animalLabel(t, i)}</b><b style="font-size:20px">{animalPoints(a)}</b></div><hr style="border:none;border-top:1px solid var(--outline-v);margin:0" />{body}</div>
+            ? <div class="animal-card"><div class="row between"><b>{animalLabel(t, i)}</b><b class="animal-pts">{animalPoints(a)}</b></div><hr style="border:none;border-top:1px solid var(--outline-v);margin:0" />{body}</div>
             : body
         })}
     </>

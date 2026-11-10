@@ -4,8 +4,12 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 2.9.02
+## Version 2.9.03
 
+- **2.9.03 (app and web app; API version only): screens scale to the phone (Pete).**
+  - **Everything scales:** text, spacing, tiles and buttons are laid out for a typical phone (about 390 × 800–844) and scaled to fit this one – down to 0.85 on small phones, up to 1.2 on big ones. The phone's own text size setting still applies on top. App: in the theme (`screenScale`, tablets not scaled); web: font sizes as `calc(N * var(--k))` (computers stay at 1).
+  - **The scoring screen fills the screen:** the tiles, their points and labels, the Woodsman arrow boxes and the Miss tile take their size from the screen height, so there's no empty space on big phones and nothing hidden under Prev / Next on small ones. Predator/prey and fans get smaller tiles. On short screens the running stats go to one line (Total · Avg · Scored). If a target still can't fit (predator/prey on a small phone), only the target area scrolls. Web: phone turned sideways shows the stats and the target side by side.
+  - App versionCode 48, versionName 2.9.03.
 - **2.9.02 (app and web app; API version only):** the Multipliers and Calculator tables say **Cub Boys / Cub Girls** (were "U12 Boys / U12 Girls"), as the age group is called everywhere else. App versionCode 47, versionName 2.9.02.
 - **2.9.01 (web app fix; API version only):** Handicaps → Multipliers highlighted Longbow Gents when your profile has no bow style or class (e.g. a browser that isn't signed in): that was only the calculator's starting point, not yours. Now nothing is highlighted until the profile says your bow and class (as the Android app already did). The calculator still starts on Longbow Gents Adult, and its table highlights whatever bow and class you're calculating for.
 - **2.9 (app, web app and API): handicaps for competitions (Pete).** The Home tile is now **Handicaps** (the old "Handicap calculator – Handicap out of 1000…" wording didn't make sense), with three tabs:

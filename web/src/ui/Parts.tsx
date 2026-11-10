@@ -24,7 +24,7 @@ export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundSta
     <div class="card hi runstats">
       <div class={`stats ${noTotal ? 'two' : ''}`}>
         {!noTotal && <div><b class="lg">{s.total}</b><span>Total</span></div>}
-        <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>{big ? 'Avg per animal' : 'Avg per target'}</span></div>
+        <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>Avg<span class="long">{big ? ' per animal' : ' per target'}</span></span></div>
         <div><b class="lg">{s.targetsScored}/{targetCount}</b><span>Scored</span></div>
       </div>
       <hr />

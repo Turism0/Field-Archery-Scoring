@@ -12,6 +12,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.dp
 
 /**
@@ -96,5 +101,24 @@ fun FieldArcheryTheme(content: @Composable () -> Unit) {
         dark -> Dark
         else -> Light
     }
-    MaterialTheme(colorScheme = scheme, shapes = AppShapes, content = content)
+    // 2.9.03 (Pete: screens should scale to the phone): everything (text, spacing, tiles, buttons) is laid out for a
+    // typical phone, about 390 × 800 dp, and scaled to fit this one – smaller phones scale down, bigger ones up, within
+    // 0.85–1.2. The phone's own text size setting still applies on top. Tablets and big landscape windows aren't scaled.
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current
+    val factor = remember(config.screenWidthDp, config.screenHeightDp, density.density) {
+        screenScale(config.screenWidthDp, config.screenHeightDp)
+    }
+    CompositionLocalProvider(LocalDensity provides Density(density.density * factor, density.fontScale)) {
+        MaterialTheme(colorScheme = scheme, shapes = AppShapes, content = content)
+    }
+}
+
+/** How much to scale the layout for a screen of [widthDp] × [heightDp] (see [FieldArcheryTheme]). */
+internal fun screenScale(widthDp: Int, heightDp: Int): Float {
+    if (widthDp <= 0 || heightDp <= 0) return 1f
+    val short = minOf(widthDp, heightDp).toFloat()
+    val long = maxOf(widthDp, heightDp).toFloat()
+    if (short >= 600f) return 1f   // a tablet: lay out as it is
+    return minOf(short / 390f, long / 800f).coerceIn(0.85f, 1.2f)
 }
