@@ -4,8 +4,9 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
-## Version 2.9
+## Version 2.9.01
 
+- **2.9.01 (web app fix; API version only):** Handicaps → Multipliers highlighted Longbow Gents when your profile has no bow style or class (e.g. a browser that isn't signed in): that was only the calculator's starting point, not yours. Now nothing is highlighted until the profile says your bow and class (as the Android app already did). The calculator still starts on Longbow Gents Adult, and its table highlights whatever bow and class you're calculating for.
 - **2.9 (app, web app and API): handicaps for competitions (Pete).** The Home tile is now **Handicaps** (the old "Handicap calculator – Handicap out of 1000…" wording didn't make sense), with three tabs:
   - **My handicap** – a personal handicap like golf, but par is **960**, the maximum on a 40-target course. One per bow style. Your usual score is the average of your best 40% (at least 3) of your last 20 finished Big Game rounds with every target scored, each scaled to 40 targets – the best 8 of 20 once you have 20. **Handicap = 960 − usual score**; **net score = score + handicap** (scaled to the targets shot: 36/40 of it on 36 targets), so a usual round nets about par and the highest net wins whatever anyone's standard.
   - **Multipliers** – for a class / bow style handicap competition: score × multiplier. Every bow style and class is measured against the maximum score (Pete): multiplier = maximum ÷ a typical score for that bow and class (an average archer at recent Nationals and 3Ds), so everyone has one and a typical archer of any class comes out at about the maximum. A table of every bow style × class, yours highlighted.

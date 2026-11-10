@@ -9,14 +9,17 @@ import {
   type HArcher, type HandicapModel,
 } from '../domain/handicap'
 
-/** Your bow style and class from the profile (for highlighting your row and filling in the calculator). */
-function useMe(): HArcher {
-  const [me, setMe] = useState<HArcher>({ bowStyle: 'LB', archerClass: 'GENTS', ageGroup: 'ADULT' })
+/**
+ * Your bow style and class from the profile, or null when it doesn't say (2.9.01: nothing is highlighted then; it used
+ * to fall back to Longbow Gents, which looked like yours). The calculator still starts on Longbow Gents Adult.
+ */
+function useMe(): HArcher | null {
+  const [me, setMe] = useState<HArcher | null>(null)
   useEffect(() => {
-    getProfile().then(p => setMe({
-      bowStyle: p.bowStyle ?? 'LB', archerClass: p.archerClass ?? 'GENTS',
-      ageGroup: p.ageGroupManual ?? (p.dateOfBirth ? ageGroupFor(p.dateOfBirth, today()) ?? 'ADULT' : 'ADULT'),
-    }))
+    getProfile().then(p => {
+      const age = p.ageGroupManual ?? (p.dateOfBirth ? ageGroupFor(p.dateOfBirth, today()) : null)
+      setMe(p.bowStyle && p.archerClass && age ? { bowStyle: p.bowStyle, archerClass: p.archerClass, ageGroup: age } : null)
+    })
   }, [])
   return me
 }
@@ -78,11 +81,11 @@ export function MyHandicap({ rounds }: { rounds: Round[] }) {
 }
 
 /** The class multipliers for a handicap competition (score × multiplier). */
-function Multipliers({ model, me }: { model: HandicapModel | null | undefined; me: HArcher }) {
+function Multipliers({ model, me }: { model: HandicapModel | null | undefined; me: HArcher | null }) {
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   if (model === undefined) return null
-  if (!model || multiplier(model, me) == null) return (
+  if (!model || model.factors['BASE:ALL'] === undefined) return (
     <Card title={model ? 'The multipliers need the latest handicap' : "The handicap hasn't been downloaded yet"} sub="It comes from the server (no sign-in needed), then works with no signal.">
       {failed && <div class="error">Couldn't download it. Check you have signal and try again, or the server may need updating.</div>}
       <button class="tonal" style="align-self:flex-start" disabled={busy} onClick={async () => { setBusy(true); setFailed(!(await refreshModel())); setBusy(false) }}>{busy ? 'Downloading…' : 'Download now'}</button>
@@ -94,9 +97,9 @@ function Multipliers({ model, me }: { model: HandicapModel | null | undefined; m
       <table class="equiv">
         <thead><tr><th>Bow</th>{CLASS_COLUMNS.map(c => <th>{c[0]}</th>)}</tr></thead>
         <tbody>{BOW_STYLES.map(b => (
-          <tr><td style={b.code === me.bowStyle ? 'font-weight:700' : ''}>{b.name}</td>
+          <tr><td style={b.code === me?.bowStyle ? 'font-weight:700' : ''}>{b.name}</td>
             {CLASS_COLUMNS.map(([, c, a]) => {
-              const mine = b.code === me.bowStyle && c === me.archerClass && a === me.ageGroup
+              const mine = !!me && b.code === me.bowStyle && c === me.archerClass && a === me.ageGroup
               return <td class={mine ? 'mine' : ''}>{multiplier(model, { bowStyle: b.code, archerClass: c, ageGroup: a })!.toFixed(2)}</td>
             })}</tr>
         ))}</tbody>
@@ -107,15 +110,16 @@ function Multipliers({ model, me }: { model: HandicapModel | null | undefined; m
 }
 
 /** A score with your bow and class, × your multiplier, and the same performance for every bow style and class. */
-function Calculator({ model, me }: { model: HandicapModel | null | undefined; me: HArcher }) {
+function Calculator({ model, me }: { model: HandicapModel | null | undefined; me: HArcher | null }) {
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const [score, setScore] = useState('')
   const [targets, setTargets] = useState('36')
-  const [cls, setCls] = useState<ArcherClass>(me.archerClass)
-  const [age, setAge] = useState<AgeGroup>(me.ageGroup)
-  const [bow, setBow] = useState<string>(me.bowStyle)
-  useEffect(() => { setCls(me.archerClass); setAge(me.ageGroup); setBow(me.bowStyle) }, [me.bowStyle, me.archerClass, me.ageGroup])
+  const [cls, setCls] = useState<ArcherClass>('GENTS')
+  const [age, setAge] = useState<AgeGroup>('ADULT')
+  const [bow, setBow] = useState<string>('LB')
+  // Start on your own bow and class when the profile says (else Longbow Gents Adult, just a starting point).
+  useEffect(() => { if (me) { setCls(me.archerClass); setAge(me.ageGroup); setBow(me.bowStyle) } }, [me?.bowStyle, me?.archerClass, me?.ageGroup])
 
   if (model === undefined) return null
   const n = Number(targets), sc = Number(score)
