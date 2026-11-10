@@ -1,7 +1,7 @@
 {
   "name": "field-archery-scoring-web",
   "private": true,
-  "version": "2.7.5",
+  "version": "2.8.0",
   "type": "module",
   "description": "Field Archery Scoring web app (PWA) for iPhones and anything with a browser. Served by the API at /app/.",
   "scripts": {
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "idb": "^8.0.4",
+    "jsqr": "^1.4.0",
     "leaflet": "^1.9.4",
     "preact": "^10.29.8",
     "qrcode-generator": "^1.5.2"

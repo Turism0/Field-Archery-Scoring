@@ -148,7 +148,7 @@ fun ScorecardScreen(
                     personalBest?.let { (me, beat) -> PersonalBestCard(me, beat) }
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
-                    RunningStats(r.stats)
+                    RunningStats(r.stats, showTotal = false)
                     HandicapCard(r, handicap)
                     MoreStats(r.stats)
                     Text(

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import qrcode from 'qrcode-generator'
-import { Bar, Card, Dialog, Seg, Select, errorText, go, replace, today, useData } from './common'
+import { Bar, Card, Dialog, Seg, Select, errorText, go, replace, today, toast, useData } from './common'
+import { QrScanner } from './QrScanner'
 import { getAccount, getProfile } from '../data/account'
 import { groupRounds } from '../data/db'
 import { deleteRound } from '../data/rounds'
 import * as live from '../data/live'
 import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, ageGroupFor, type AgeGroup, type ArcherClass } from '../domain/round'
 
-/** Join a live group with its code (typed; the host's phone shows it). */
+/** Join a live group with its code: scan the host's QR (2.7.06) or type the code. */
 export function Join({ code: startCode }: { code: string }) {
   const account = useData(getAccount)
   const [code, setCode] = useState(live.cleanCode(startCode))
@@ -16,6 +17,7 @@ export function Join({ code: startCode }: { code: string }) {
   const [bow, setBow] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
   useEffect(() => {
     getProfile().then(p => {
       setCls(p.archerClass); setBow(p.bowStyle)
@@ -34,9 +36,16 @@ export function Join({ code: startCode }: { code: string }) {
       <Bar title="Join a live group" />
       <main class="form">
         {!account && <div class="card err">Sign in (Profile) to join a live group.</div>}
-        <Card title="Group code" sub="Type the 6-character code from the host's phone. You need to be signed in, and the web app needs signal for live groups.">
+        <Card title="Group code" sub="Scan the QR on the host's phone, or type the 6-character code. You need to be signed in, and the web app needs signal for live groups.">
+          <button class="tonal" style="align-self:flex-start" onClick={() => setScanning(true)}>Scan QR code</button>
           <input class="code" autocapitalize="characters" autocomplete="off" value={code} onInput={e => setCode(live.cleanCode((e.target as HTMLInputElement).value))} />
         </Card>
+        <QrScanner open={scanning} onClose={() => setScanning(false)} hint="Point the camera at the QR on the host's phone (in the group's lobby)."
+          onResult={text => {
+            setScanning(false)
+            if (!live.isJoinQr(text)) { toast("That QR isn't a Field Archery Scoring group code."); return }
+            setCode(live.cleanCode(text)); toast('Code scanned.')
+          }} />
         <Card title="You" sub="Filled in from your profile. Changes here only affect this round.">
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />
           <Select<AgeGroup> label="Age group" value={age} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]} onChange={setAge} />

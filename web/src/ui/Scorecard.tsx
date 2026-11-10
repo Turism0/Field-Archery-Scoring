@@ -54,7 +54,7 @@ export function Scorecard({ id }: { id: string }) {
         </Card>}
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {inGroup && <GroupCard group={group} currentId={round.id} />}
-        <RunningStats s={s} targetCount={round.targetCount} />
+        <RunningStats s={s} targetCount={round.targetCount} noTotal />
         {model && h && <HandicapCard points={roundPoints(model, h)} />}
         <MoreStats s={s} />
         </div><div>
@@ -143,7 +143,7 @@ export function ReadOnlySheet({ round, model }: { round: Round; model: HandicapM
   return (
     <div class="split"><div>
       <CardHeader r={round} showLocation />
-      <RunningStats s={s} targetCount={round.targetCount} />
+      <RunningStats s={s} targetCount={round.targetCount} noTotal />
       {model && h && <HandicapCard points={roundPoints(model, h)} />}
       <MoreStats s={s} />
     </div><div>

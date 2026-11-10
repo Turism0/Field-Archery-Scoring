@@ -253,8 +253,8 @@ private fun MemberLine(m: LiveMember, isMe: Boolean) {
     }
 }
 
-/** A QR code for [text] as an image (black on white). */
-private fun qrBitmap(text: String, size: Int = 512): ImageBitmap {
+/** A QR code for [text] as an image (black on white). Also used by the score check QR (2.8). */
+internal fun qrBitmap(text: String, size: Int = 512): ImageBitmap {
     val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 1))
     val pixels = IntArray(size * size) { i -> if (matrix[i % size, i / size]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
     return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888).asImageBitmap()

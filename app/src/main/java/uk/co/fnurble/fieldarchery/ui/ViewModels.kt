@@ -77,6 +77,9 @@ import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
 import uk.co.fnurble.fieldarchery.domain.RoundType
 import uk.co.fnurble.fieldarchery.domain.TargetScore
+import uk.co.fnurble.fieldarchery.domain.describe
+import uk.co.fnurble.fieldarchery.domain.LiveRules
+import uk.co.fnurble.fieldarchery.domain.LiveCheckQr
 import uk.co.fnurble.fieldarchery.domain.TargetType
 import uk.co.fnurble.fieldarchery.domain.WoodsmanArrow
 import uk.co.fnurble.fieldarchery.domain.resolveAgeGroup
@@ -1610,6 +1613,18 @@ data class ManualCheck(val targets: List<Int>, val cards: List<Card>, val others
     }
 }
 
+/**
+ * What scanning the other scorer's check QR found (2.8). [problem]: the QR couldn't be used. Otherwise [matched]
+ * scores were the same and are saved here as checked; [differences] and [notInTheirs] are lines to show.
+ */
+data class QrCheckOutcome(
+    val problem: String? = null,
+    val other: String = "",
+    val matched: Int = 0,
+    val differences: List<String> = emptyList(),
+    val notInTheirs: List<String> = emptyList(),
+)
+
 class ScoringViewModel(
     private val rounds: RoundRepository,
     private val saved: SavedStateHandle,
@@ -1692,6 +1707,65 @@ class ScoringViewModel(
         val gid = liveGroupId ?: return
         val cells = c.cards.flatMap { card -> c.targets.filterIndexed { i, _ -> card.points[i] != null }.map { it to card.memberId } }.toSet()
         viewModelScope.launch { liveRepo?.markChecked(gid, cells) }
+    }
+
+    /**
+     * Checking by QR (2.8): this phone's own complete entries for cards shared with another scorer that are still
+     * waiting for the other scorer's, as (target, card) → score. [includeChecked]: also those already checked by hand
+     * (the other phone may not have checked them yet).
+     */
+    private fun waitingForCheck(s: LiveGroupState, includeChecked: Boolean): Map<Pair<Int, String>, TargetScore> = s.entries
+        .filter { it.scorerMemberId == s.myMemberId && s.member(it.cardMemberId)?.scorers.orEmpty().size >= 2 && it.target.isComplete }
+        .filter { s.cells[it.targetNo to it.cardMemberId] == LiveRules.WAITING }
+        .filter { includeChecked || (it.targetNo to it.cardMemberId) !in s.manualChecks }
+        .associate { (it.targetNo to it.cardMemberId) to it.target }
+
+    /** Double / 3+ scorers with no way to the other scorer: checking by QR is offered (2.8). */
+    fun canCheckByQr(): Boolean {
+        val poll = _live.value ?: return false
+        val s = poll.state ?: return false
+        return s.checked && s.started && !poll.inTouch
+    }
+
+    /** The QR the other scorer scans: this phone's entries waiting to be compared (null when there's no group). */
+    fun checkQrText(): String? {
+        val s = _live.value?.state ?: return null
+        return LiveCheckQr.encode(s.groupId, s.myMemberId, waitingForCheck(s, includeChecked = true).map { (k, t) -> k.second to t })
+    }
+
+    /** How many scores [checkQrText] holds. */
+    fun checkQrCount(): Int = _live.value?.state?.let { waitingForCheck(it, includeChecked = true).size } ?: 0
+
+    /** The other scorer's check QR was scanned: compare, and save the ones that match as checked (as "They agree"). */
+    fun checkScanned(text: String): QrCheckOutcome {
+        val s = _live.value?.state ?: return QrCheckOutcome(problem = "The group isn't loaded yet.")
+        val gid = liveGroupId ?: return QrCheckOutcome(problem = "The group isn't loaded yet.")
+        val p = LiveCheckQr.decode(text) ?: return QrCheckOutcome(
+            problem = if (text.trim().startsWith("fieldarchery:join:")) "That's a group's join QR. Scan the QR the other scorer shows with Show my QR."
+            else "That isn't a score check QR. Scan the QR the other scorer shows with Show my QR.",
+        )
+        val mine = waitingForCheck(s, includeChecked = false)
+        if (mine.isEmpty()) return QrCheckOutcome(problem = "Nothing on this phone is waiting to be checked.")
+        LiveCheckQr.problem(p, s.groupId, s.myMemberId, mine.keys.map { it.second }.distinct()) { s.member(it)?.scorers.orEmpty() }
+            ?.let { return QrCheckOutcome(problem = it) }
+        val r = LiveCheckQr.compare(mine, p)
+        if (r.matched.isNotEmpty()) viewModelScope.launch { liveRepo?.markChecked(gid, r.matched) }
+        val other = s.members.firstOrNull { LiveCheckQr.short(it.memberId) == p.scorer }?.name ?: "the other scorer"
+        fun card(id: String) = s.member(id)?.let { if (it.memberId == s.myMemberId) "you" else it.name } ?: "?"
+        fun what(t: TargetScore) = when {
+            t.isOverridden -> "overridden"
+            t.isWoodsman -> t.arrows.describe()
+            else -> t.animals.joinToString("; ") { it.describe() }
+        }
+        return QrCheckOutcome(
+            other = other,
+            matched = r.matched.size,
+            differences = r.differences.map {
+                "Target ${it.targetNo}, ${card(it.cardMemberId)}: you ${it.mine.totalPoints} (${what(it.mine)}), " +
+                    "$other ${it.theirs.totalPoints} (${what(it.theirs)})"
+            },
+            notInTheirs = r.notInTheirs.map { "Target ${it.first}, ${card(it.second)}" },
+        )
     }
 
     /** "Not now": asked again after the next target. */

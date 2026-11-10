@@ -163,7 +163,10 @@ export function PaperEntry({ id }: { id?: string }) {
                             inputMode={type === 'WOODSMAN' ? 'text' : 'numeric'} maxLength={4} onKeyDown={onKey as never}
                             onInput={e => setCell(i, j, (e.target as HTMLInputElement).value.toUpperCase())} />
                         ))}</div>{err && <div class="error small">{err}</div>}</td>
-                        <td class="num"><b>{res && 'target' in res && !(!isComplete(res.target) && totalPoints(res.target) === 0) ? totalPoints(res.target) : ''}</b></td>
+                        {/* 2.7.06: the score only when it isn't just the number typed (one animal, or =N) */}
+                        <td class="num"><b>{res && 'target' in res && !(!isComplete(res.target) && totalPoints(res.target) === 0)
+                          && !(r.cells.filter(c => c.trim()).length === 1 && r.cells.find(c => c.trim())!.trim().replace(/^=/, '') === String(totalPoints(res.target)))
+                          ? totalPoints(res.target) : ''}</b></td>
                       </tr>
                     )
                   })}</tbody>

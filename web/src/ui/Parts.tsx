@@ -17,12 +17,13 @@ export function longDate(iso: string): string {
 export const typeAndClass = (r: Round) => (r.type === 'WOODSMAN' ? 'Woodsman · ' : '') + classLine(r)
 
 /** Total, average, progress, hit counts and which arrow scored. [compact] drops the arrow row (scoring screen). */
-export function RunningStats({ s, targetCount, compact }: { s: RoundStats; targetCount: number; compact?: boolean }) {
+/** [noTotal] (2.7.06): on scorecards, whose header already shows the total in large type. */
+export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundStats; targetCount: number; compact?: boolean; noTotal?: boolean }) {
   const big = s.maxPerAnimal === 24
   return (
     <div class="card hi runstats">
-      <div class="stats">
-        <div><b class="lg">{s.total}</b><span>Total</span></div>
+      <div class={`stats ${noTotal ? 'two' : ''}`}>
+        {!noTotal && <div><b class="lg">{s.total}</b><span>Total</span></div>}
         <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>{big ? 'Avg per animal' : 'Avg per target'}</span></div>
         <div><b class="lg">{s.targetsScored}/{targetCount}</b><span>Scored</span></div>
       </div>

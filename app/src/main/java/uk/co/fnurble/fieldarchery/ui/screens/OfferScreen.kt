@@ -126,7 +126,7 @@ fun OfferScreen(vm: OfferViewModel, onBack: () -> Unit) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             RoundHeader(r, showLocation = true)
-                            RunningStats(r.stats)
+                            RunningStats(r.stats, showTotal = false)
                             MoreStats(r.stats)
                             Text(
                                 "Targets",

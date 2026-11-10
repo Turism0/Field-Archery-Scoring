@@ -12,6 +12,7 @@ import {
   woodsmanFinished, type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from '../domain/scoring'
 import { RunningStats, TargetRow, memberName, typeAndClass } from './Parts'
+import { useLiveCheck } from './LiveCheck'
 
 /**
  * Scoring a round target by target; in a group, archer by archer on each target. Laid out as the Android app's
@@ -41,14 +42,17 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     let alive = true
     const tick = async () => {
       try { const s = await live.refresh(gid); if (alive) { setState(s); setProblem(null) } }
-      catch (e) { if (alive) setProblem(errorText(e)) }
+      catch (e) {
+        // No signal (2.8): carry on from the copy kept here, with this phone's entries since.
+        const off = await live.offlineState(gid).catch(() => null)
+        if (alive) { if (off) setState(off); setProblem(errorText(e)) }
+      }
     }
     tick()
     const t = setInterval(tick, 3000)
     return () => { alive = false; clearInterval(t) }
   }, [gid, hasInfo])
 
-  useEffect(() => { if (round && (n === 0 || n > round.targetCount || !canGoTo(round, n))) setN(firstUnscored(round) ?? 1) }, [round?.id, round?.targetCount])
 
   const own = group.find(m => m.groupRole == null || m.groupRole === 'SCORER') ?? round
   // Nothing known nearby: ask for the location's name once (the location line works any time).
@@ -58,6 +62,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
 
   const isLive = !!info
   const s = state
+  // Double / 3+ scorers with no signal (2.8): checks by hand, read out or by QR.
+  const liveCheck = useLiveCheck(s, gid ?? undefined, () => { if (gid) live.offlineState(gid).then(x => x && setState(x)) })
   const checked = !!s && live.checked(s)
   const canScore = !isLive || (!!s && live.canScore(s, current))
   // Double / 3+ scorers: what this device entered, shown until both scorers match.
@@ -71,6 +77,10 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     return { ...round, targets: [...byNo.values()].sort((a, b) => a.targetNo - b.targetNo) }
   }, [round, mine, checked, canScore])
 
+  // The target on screen must be one you can go to. Double / 3+ scorers (2.8 fix): your own entries count, not just
+  // saved (matched) scores, or moving to the next archer sent you back to target 1 until the other scorer caught up.
+  useEffect(() => { if (shown && (n === 0 || n > shown.targetCount || !canGoTo(shown, n))) setN(firstUnscored(shown) ?? 1) }, [shown?.id, shown?.targetCount, !!s])
+
   if (!round || !shown || n === 0) return <Bar title="Round" onBack={() => go('/')} />
   const t = target(shown, n)
   const inGroup = group.length > 1
@@ -78,7 +88,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const name = me ? memberName(me) : 'You'
   const what = inGroup ? 'group round' : 'round'
   const whyNot = !isLive ? null : !s ? 'Connecting to the group…' : s.status === 'CLOSED' ? 'The group is closed.'
-    : s.status !== 'STARTED' ? 'Waiting for the host to start.' : canScore ? null
+    : s.status !== 'STARTED' ? (s.offline ? 'Waiting for the host to start. This phone needs signal to hear that the group has started.' : 'Waiting for the host to start.') : canScore ? null
     : (() => { const who = live.scorerNames(s, current); return who.length ? `${who.join(' and ')} ${who.length > 1 ? 'score' : 'scores'} this card.` : 'Someone else scores this card.' })()
   const check = s ? live.checkText(s, n, current, canScore && !!mine[`${n}|${current}`]) : null
   const mismatch = !!s && live.cell(s, n, current) === 'MISMATCH'
@@ -151,6 +161,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           finished ? { text: `Reopen ${what}`, onClick: () => setStatus(round, 'IN_PROGRESS') } : { text: `Finish ${what}`, onClick: () => setAsk('finish') },
           { text: inGroup ? `Round details – ${name}` : 'Round details', onClick: () => go(`/edit/${current}`) },
           !!s && live.canTakeOver(s) && { text: 'Take over as host', onClick: () => setAsk('takeover') },
+          ...liveCheck.menu,
           { text: `Delete ${what}`, onClick: () => setAsk('delete'), danger: true },
         ]} />
       </Bar>
@@ -160,7 +171,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
         <div class="strip" style="padding:8px 16px 0">
           {group.map(m => (
             <button class={`${m.id === current ? 'on' : ''} ${isComplete(target(m, n)) ? 'done' : ''}`}
-              onClick={() => { setCurrent(m.id); if (!canGoTo(m, n)) setN(firstUnscored(m) ?? n) }}>
+              onClick={() => setCurrent(m.id)}>
               {memberName(m)}<br /><b>{roundTotal(m)}</b>
             </button>
           ))}
@@ -169,7 +180,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       {isLive && (
         <div class={`banner ${problem || mismatch ? 'bad' : ''}`} style="margin:8px 16px 0">
           <b>Live group{s ? ` · ${s.code} · ${s.status === 'CLOSED' ? 'finished' : s.status === 'STARTED' ? live.methodOf(s.method)?.name : 'waiting to start'}` : ''}</b>
-          {problem && <span>Can't reach the server ({problem}). Keep scoring: scores are sent when it's back.</span>}
+          {problem && <span>{s?.offline ? 'No signal. Keep scoring: scores are kept on this phone and sent when there\'s signal.' : `Can't reach the server (${problem}). Keep scoring: scores are sent when it's back.`}</span>}
           {whyNot && <span>{whyNot}</span>}
           {youScore.length > 0 && <span>You score: {youScore.join(', ')}</span>}
           {check && <span style={mismatch ? 'font-weight:600' : ''}>{check}</span>}
@@ -196,6 +207,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           {nextLabel}{scored && !last ? ' ›' : ''}</button>
       </div>
 
+      {liveCheck.dialogs}
       <Dialog open={overrideOpen} title="Override score" onClose={() => setOverrideOpen(false)}
         actions={<><button onClick={() => setOverrideOpen(false)}>Cancel</button>
           <button disabled={overrideText === ''} onClick={() => { const v = Number(overrideText); setOverrideOpen(false); if (Number.isInteger(v) && v >= 0) edit(x => withOverride(x, v)) }}>Save</button></>}>
@@ -324,7 +336,8 @@ function WoodsmanEditor({ t, onArrow, onUndo, onOverride, onRemoveOverride, onCl
   return (
     <>
       <div class="target-head">
-        <div class="grow"><div style="font-size:22px">Target {t.targetNo}</div><div class="sub">Woodsman · shoot until you kill it</div></div>
+        {/* 2.7.06: no "Target N" or "Woodsman" here; the top bar already says both */}
+        <div class="grow sub">Shoot until you kill it, up to 3 arrows</div>
         <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />
       </div>
       {t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} /> : <>

@@ -1,5 +1,11 @@
 package uk.co.fnurble.fieldarchery.ui.screens
 
+import androidx.compose.ui.platform.LocalContext
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -114,6 +120,16 @@ fun ScoringScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var confirmTakeOver by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    // Checking scores by QR (2.8): the QR this phone shows, and what scanning the other scorer's found.
+    var checkQr by remember { mutableStateOf<String?>(null) }
+    var qrOutcome by remember { mutableStateOf<uk.co.fnurble.fieldarchery.ui.QrCheckOutcome?>(null) }
+    val context = LocalContext.current
+    fun scanCheckQr() {
+        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        GmsBarcodeScanning.getClient(context, options).startScan()
+            .addOnSuccessListener { code -> code.rawValue?.let { qrOutcome = vm.checkScanned(it) } }
+            .addOnFailureListener { e -> qrOutcome = uk.co.fnurble.fieldarchery.ui.QrCheckOutcome(problem = "Couldn't scan: ${e.message ?: "try again, or read the scores out"}") }
+    }
     var showLocation by rememberSaveable { mutableStateOf(false) }
     var askedForName by rememberSaveable { mutableStateOf(false) }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -186,6 +202,11 @@ fun ScoringScreen(
                                 )
                                 if (live?.state?.canTakeOver == true) {
                                     DropdownMenuItem(text = { Text("Take over as host") }, onClick = { menuOpen = false; confirmTakeOver = true })
+                                }
+                                // Double / 3+ scorers out of touch (2.8): check with the other scorer by QR at any time.
+                                if (vm.canCheckByQr()) {
+                                    DropdownMenuItem(text = { Text("Show my check QR") }, onClick = { menuOpen = false; checkQr = vm.checkQrText() })
+                                    DropdownMenuItem(text = { Text("Scan their check QR") }, onClick = { menuOpen = false; scanCheckQr() })
                                 }
                                 DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
@@ -284,7 +305,17 @@ fun ScoringScreen(
     if (confirmTakeOver) TakeOverDialog(onConfirm = { confirmTakeOver = false; vm.takeOver() }, onDismiss = { confirmTakeOver = false })
 
     // Double / 3+ scorers with no signal and no phones in range (2.3): compare five targets by hand.
-    manualCheck?.let { c -> ManualCheckDialog(c, onAgree = vm::manualCheckAgreed, onLater = vm::manualCheckLater) }
+    // Or by QR (2.8): show this phone's QR for the other scorer, or scan theirs.
+    if (checkQr == null && qrOutcome == null) manualCheck?.let { c ->
+        ManualCheckDialog(
+            c, onAgree = vm::manualCheckAgreed, onLater = vm::manualCheckLater,
+            onShowQr = { checkQr = vm.checkQrText() }, onScanQr = { scanCheckQr() },
+        )
+    }
+    checkQr?.let { text ->
+        CheckQrDialog(text, count = vm.checkQrCount(), others = manualCheck?.others.orEmpty(), onScan = { checkQr = null; scanCheckQr() }, onDone = { checkQr = null })
+    }
+    qrOutcome?.let { o -> QrOutcomeDialog(o, onScanAgain = { qrOutcome = null; scanCheckQr() }, onDone = { qrOutcome = null }) }
 
     if (confirmFinish && r != null) {
         val unscored = r.targetCount - r.targetsComplete
@@ -347,10 +378,8 @@ private fun WoodsmanEditor(
     var menuOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Target ${target.targetNo}", style = MaterialTheme.typography.titleLarge)
-                Text("Woodsman · shoot until you kill it", style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
-            }
+            // 2.7.06: no "Target N" or "Woodsman" here; the top bar already says both.
+            Text("Shoot until you kill it, up to 3 arrows", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             Box {
                 IconButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Target options") }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -753,7 +782,13 @@ fun TakeOverDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 
 /** Five targets to compare aloud with the other scorer when the phones can't reach each other (2.3, Pete). */
 @Composable
-private fun ManualCheckDialog(c: uk.co.fnurble.fieldarchery.ui.ManualCheck, onAgree: () -> Unit, onLater: () -> Unit) {
+private fun ManualCheckDialog(
+    c: uk.co.fnurble.fieldarchery.ui.ManualCheck,
+    onAgree: () -> Unit,
+    onLater: () -> Unit,
+    onShowQr: () -> Unit,
+    onScanQr: () -> Unit,
+) {
     val first = c.targets.first()
     val last = c.targets.last()
     val range = if (c.targets == (first..last).toList()) "targets $first–$last" else "targets " + c.targets.joinToString(", ")
@@ -780,10 +815,79 @@ private fun ManualCheckDialog(c: uk.co.fnurble.fieldarchery.ui.ManualCheck, onAg
                         "here and compared with $who's when the phones are back in touch.",
                     style = MaterialTheme.typography.bodySmall,
                 )
+                // 2.8: or let the phones compare: one shows its QR, the other scans it (then the other way round).
+                Text("Or check by QR: scan $who's QR, and let them scan yours.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onShowQr) { Text("Show my QR") }
+                    OutlinedButton(onClick = onScanQr) { Text("Scan their QR") }
+                }
             }
         },
         confirmButton = { TextButton(onClick = onAgree) { Text("They agree") } },
         dismissButton = { TextButton(onClick = onLater) { Text("Not now") } },
+    )
+}
+
+/** This phone's scores waiting for a check, as a QR for the other scorer to scan (2.8). */
+@Composable
+private fun CheckQrDialog(text: String, count: Int, others: List<String>, onScan: () -> Unit, onDone: () -> Unit) {
+    val who = others.joinToString(" and ").ifEmpty { "the other scorer" }
+    val qr = remember(text) { qrBitmap(text) }
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("My check QR") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    if (count == 0) "Nothing on this phone is waiting to be checked."
+                    else "$count score${if (count == 1) "" else "s"} waiting to be checked. $who scans this with Scan their QR; " +
+                        "then scan theirs, so both phones are checked.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (count > 0) Surface(color = Color.White, shape = MaterialTheme.shapes.medium) {
+                    Image(qr, contentDescription = "Score check QR", modifier = Modifier.size(260.dp).padding(8.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onScan) { Text("Scan theirs") } },
+        dismissButton = { TextButton(onClick = onDone) { Text("Done") } },
+    )
+}
+
+/** What scanning the other scorer's check QR found (2.8). */
+@Composable
+private fun QrOutcomeDialog(o: uk.co.fnurble.fieldarchery.ui.QrCheckOutcome, onScanAgain: () -> Unit, onDone: () -> Unit) {
+    val title = when {
+        o.problem != null -> "Couldn't check"
+        o.differences.isNotEmpty() -> "Scores don't match"
+        o.notInTheirs.isEmpty() -> "All ${o.matched} match"
+        else -> "${o.matched} match"
+    }
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val problem = o.problem
+                if (problem != null) Text(problem, style = MaterialTheme.typography.bodyMedium)
+                else {
+                    if (o.matched > 0) Text(
+                        "${o.matched} score${if (o.matched == 1) "" else "s"} match ${o.other}'s and ${if (o.matched == 1) "is" else "are"} saved here. " +
+                            "They're compared again when the phones are back in touch.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (o.differences.isNotEmpty()) {
+                        Text("These differ. Agree them, put them right on the target, then check again:", style = MaterialTheme.typography.bodyMedium)
+                        o.differences.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
+                    }
+                    if (o.notInTheirs.isNotEmpty()) {
+                        Text("Not entered on ${o.other}'s phone yet: " + o.notInTheirs.joinToString("; "), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDone) { Text("OK") } },
+        dismissButton = { if (o.problem != null || o.differences.isNotEmpty()) TextButton(onClick = onScanAgain) { Text("Scan again") } },
     )
 }
 

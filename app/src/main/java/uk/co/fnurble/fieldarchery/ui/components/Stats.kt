@@ -30,9 +30,10 @@ import java.util.Locale
 /**
  * Running totals for a round: total, average, progress, hit counts and which arrow scored.
  * [compact] drops the per-arrow row to save space on the scoring screen.
+ * [showTotal] false on scorecards (2.7.06), whose header already shows the total in large type.
  */
 @Composable
-fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -42,7 +43,7 @@ fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Bool
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth()) {
-                BigStat("Total", "${stats.totalPoints}")
+                if (showTotal) BigStat("Total", "${stats.totalPoints}")
                 BigStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "Avg per animal" else "Avg per target", stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–")
                 BigStat("Scored", "${stats.targetsScored}/${stats.targetCount}")
             }

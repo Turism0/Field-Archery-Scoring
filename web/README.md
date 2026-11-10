@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.7.05)
+# Field Archery Scoring – web app (2.8)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -24,6 +24,15 @@ sheet. Live groups aren't offered on desktop.
 
 **In 2.7:** an optional starting target on new rounds, Add a round and Round details, shown on the scorecard (`startTarget` in
 the round JSON; a live group's comes from the host).
+
+**In 2.8:** live groups carry on with no signal (`data/live.ts` keeps the last copy of the group and this phone's timed
+entries; `offlineState` works out matching with `domain/liveCheck.ts`, a port of the app's `LiveRules`), with checks by hand
+every 5 targets read out or by QR (`ui/LiveCheck.tsx`; the QR format is shared with the app's `LiveCheckQr.kt`, tested in
+`test/liveCheck.test.ts`). Fix: double scorers moving to the next archer no longer jump back to target 1.
+
+**In 2.7.06:** Join a live group can scan the host's QR (`ui/QrScanner.tsx`: BarcodeDetector where available, else jsQR loaded on
+demand); repeated figures removed (Woodsman "Target N" heading, the total in scorecards' stats box, the paper sheet's Score when it
+only repeats the number typed).
 
 **In 2.7.05:** Shoot locations shows "Sign in to see shoot locations" when signed out (no account reads as undefined, not null).
 
