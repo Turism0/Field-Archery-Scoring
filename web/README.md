@@ -1,4 +1,4 @@
-# Field Archery Scoring – web app (2.7.04)
+# Field Archery Scoring – web app (2.7.05)
 
 The app for iPhones (and any phone or computer with a browser), at **https://fieldarcheryscoring.fnurble.co.uk/** (2.6.03; the apps and the API stay at fieldarchery.fnurble.co.uk).
 It's a Progressive Web App: open it in Safari, tap Share → **Add to Home Screen**, and it runs like an app, works with
@@ -24,6 +24,8 @@ sheet. Live groups aren't offered on desktop.
 
 **In 2.7:** an optional starting target on new rounds, Add a round and Round details, shown on the scorecard (`startTarget` in
 the round JSON; a live group's comes from the host).
+
+**In 2.7.05:** Shoot locations shows "Sign in to see shoot locations" when signed out (no account reads as undefined, not null).
 
 **In 2.7.04:** the scoring screen has no "20 / 24 · Target scored" line (nor Woodsman's "25 / 30"), as in the app.
 

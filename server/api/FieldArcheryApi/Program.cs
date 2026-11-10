@@ -183,5 +183,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "2.7.04";
+    public const string Version = "2.7.05";
 }

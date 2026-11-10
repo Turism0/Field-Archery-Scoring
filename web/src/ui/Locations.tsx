@@ -102,7 +102,9 @@ function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: bool
 
 /** Map of shoot locations (OpenStreetMap). Pick mode: choosing a location for a round. */
 export function LocationMap({ pick }: { pick?: string }) {
-  const account = useData(getAccount)
+  // null when signed out, undefined while it's still being read (2.7.05: getAccount gives undefined when signed out,
+  // so the "Sign in" card never showed and a signed-out browser got an empty map box).
+  const account = useData(async () => (await getAccount()) ?? null)
   const [data, retry] = useLoad(async () => (account ? loc.mapLocations() : null), [account?.token])
   const [placing, setPlacing] = useState(false)
   const [newAt, setNewAt] = useState<{ lat: number; lon: number } | null>(null)
