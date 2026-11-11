@@ -11,7 +11,8 @@ import java.time.LocalDate
 /** Rounds are only compared with the same round type, bow style and number of targets. */
 data class BestKey(val type: RoundType, val bowStyle: BowStyle, val targetCount: Int)
 
-val Round.bestKey: BestKey get() = BestKey(type, bowStyle, targetCount)
+// Fun shots (3.1) are left out: bests compare the total without them, on the targets without them.
+val Round.bestKey: BestKey get() = BestKey(type, bowStyle, statsTargetCount)
 
 /** Oldest first; rounds shot on the same day in the order they were started. */
 private val shotOrder = compareBy<Round>({ it.shootDate }, { it.createdAtMillis }, { it.id })
@@ -41,16 +42,16 @@ object PersonalStats {
                 PersonalBest(
                     key = key,
                     // Highest total; the first time it was shot wins a tie.
-                    best = list.sortedWith(shotOrder).maxBy { it.totalPoints },
+                    best = list.sortedWith(shotOrder).maxBy { it.statsPoints },
                     roundsShot = list.size,
-                    averageTotal = list.map { it.totalPoints }.average(),
+                    averageTotal = list.map { it.statsPoints }.average(),
                 )
             }
             .sortedWith(compareBy<PersonalBest>({ it.key.type.ordinal }, { it.key.bowStyle.ordinal }, { -it.roundsShot }, { it.key.targetCount }))
 
     /** Best average per animal (per target for Woodsman) for each round type and bow style. */
     fun bestAverages(rounds: List<Round>): List<BestAverage> =
-        rounds.filter { it.status == RoundStatus.COMPLETED && it.isFullyScored && it.targetCount >= MIN_TARGETS_FOR_BEST_AVERAGE }
+        rounds.filter { it.status == RoundStatus.COMPLETED && it.isFullyScored && it.statsTargetCount >= MIN_TARGETS_FOR_BEST_AVERAGE }
             .groupBy { it.type to it.bowStyle }
             .mapNotNull { (k, list) ->
                 val best = list.sortedWith(shotOrder).maxByOrNull { it.stats.averagePerAnimal ?: -1.0 } ?: return@mapNotNull null
@@ -70,8 +71,8 @@ object PersonalStats {
                 var bestSoFar: Int? = null
                 for (r in list.sortedWith(shotOrder)) {
                     val previous = bestSoFar
-                    if (previous != null && r.totalPoints > previous) ids += r.id
-                    if (previous == null || r.totalPoints > previous) bestSoFar = r.totalPoints
+                    if (previous != null && r.statsPoints > previous) ids += r.id
+                    if (previous == null || r.statsPoints > previous) bestSoFar = r.statsPoints
                 }
             }
         return ids
@@ -82,7 +83,7 @@ object PersonalStats {
         rounds.filter {
             it.id != round.id && it.status == RoundStatus.COMPLETED && it.isFullyScored && it.bestKey == round.bestKey &&
                 shotOrder.compare(it, round) < 0
-        }.sortedWith(shotOrder).maxByOrNull { it.totalPoints }
+        }.sortedWith(shotOrder).maxByOrNull { it.statsPoints }
 
     // ---- Trends ----
 
@@ -132,7 +133,7 @@ object PersonalStats {
                     targets = list.sumOf { r -> r.targets.count { it.isComplete } },
                     locations = list.mapNotNull { it.location.name?.trim()?.lowercase() }.distinct().size,
                     stats = combined(list).stats,
-                    bestRound = list.sortedWith(shotOrder).maxByOrNull { it.totalPoints },
+                    bestRound = list.sortedWith(shotOrder).maxByOrNull { it.statsPoints },
                     byBow = list.groupBy { it.bowStyle }.toSortedMap(compareBy<BowStyle> { it.ordinal })
                         .map { (bow, l) -> Triple(bow, l.size, combined(l).stats.averagePerAnimal) },
                     personalBests = list.count { it.id in pbs },

@@ -278,9 +278,11 @@ private fun PersonalBestCard(me: Round, beat: Round) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("New personal best", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "${me.totalPoints} beats your previous best of ${beat.totalPoints} (${beat.shootDate.format(UkDate)}) for " +
-                    "${me.targetCount}-target ${me.type.displayName}, ${me.bowStyle.displayName}. " +
-                    "+${me.totalPoints - beat.totalPoints} points.",
+                // Fun shots (3.1) left out.
+                "${me.statsPoints} beats your previous best of ${beat.statsPoints} (${beat.shootDate.format(UkDate)}) for " +
+                    "${me.statsTargetCount}-target ${me.type.displayName}, ${me.bowStyle.displayName}" +
+                    (if (me.funPoints > 0 || beat.funPoints > 0) " (fun shots left out)" else "") + ". " +
+                    "+${me.statsPoints - beat.statsPoints} points.",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

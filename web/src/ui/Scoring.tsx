@@ -7,7 +7,7 @@ import { deleteRound, groupOf, saveTarget, setStatus, setTypeForGroup, syncNow }
 import * as live from '../data/live'
 import { canGoTo, firstUnscored, locationStatus, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
 import {
-  HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, WOODSMAN_MAX, animalLabel, animalPoints, arrowsAvailable, bigGamePoints, calculatedPoints,
+  FUN_MAX, HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, WOODSMAN_MAX, animalLabel, animalPoints, arrowsAvailable, bigGamePoints, calculatedPoints,
   cleared, isComplete, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
   woodsmanFinished, type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from '../domain/scoring'
@@ -197,7 +197,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
                 onClear={() => edit(cleared)} />
             : <TargetEditor t={t} onType={setType} onResult={toggle}
                 onOverride={() => { setOverrideText(String(totalPoints(t))); setOverrideOpen(true) }} onRemoveOverride={() => edit(x => withOverride(x, null))}
-                onClear={() => edit(cleared)} />}
+                onClear={() => edit(cleared)} onFun={p => edit(x => withOverride(x, p))} />}
         </div>
       </main>
       {own && <LocationSheet roundId={own.id} open={locOpen} onClose={() => setLocOpen(false)} />}
@@ -263,9 +263,32 @@ function Overridden({ t, onEdit, onRemove }: { t: TargetScore; onEdit: () => voi
 }
 
 /** "20 / 24", scored or not, the target type and options; then a scorer per animal. */
-function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onClear }: {
+/**
+ * A fun shot (3.1, Pete): a shot with unusual scoring that a club adds. Its score is typed in; it counts in the
+ * round total but in no stats.
+ */
+function FunScorer({ t, onScore }: { t: TargetScore; onScore: (points: number | null) => void }) {
+  const [text, setText] = useState(t.overridePoints != null ? String(t.overridePoints) : '')
+  useEffect(() => { setText(t.overridePoints != null ? String(t.overridePoints) : '') }, [t.targetNo, t.overridePoints])
+  const v = text === '' ? null : Number(text)
+  const ok = v != null && Number.isInteger(v) && v >= 0 && v <= FUN_MAX
+  return (
+    <div class="col" style="gap:8px">
+      <div class="sub">A shot with its own scoring. Type the score: it counts in the round total but not in any stats or handicaps.</div>
+      <label class="field">Fun shot score<input inputMode="numeric" value={text} placeholder="e.g. 30"
+        onInput={e => setText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))}
+        onKeyDown={e => { if (e.key === 'Enter' && ok) onScore(v) }} /></label>
+      <div class="row">
+        <button class="filled" disabled={!ok || v === t.overridePoints} onClick={() => onScore(v)}>{t.overridePoints != null ? 'Change score' : 'Save score'}</button>
+        {t.overridePoints != null && <button onClick={() => onScore(null)}>Clear</button>}
+      </div>
+    </div>
+  )
+}
+
+function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onClear, onFun }: {
   t: TargetScore; onType: (type: TargetType, fan?: number) => void; onResult: (i: number, r: AnimalResult) => void
-  onOverride: () => void; onRemoveOverride: () => void; onClear: () => void
+  onOverride: () => void; onRemoveOverride: () => void; onClear: () => void; onFun: (points: number | null) => void
 }) {
   const multi = t.animals.length > 1
   return (
@@ -277,10 +300,11 @@ function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onCle
           const v = (e.target as HTMLSelectElement).value as TargetType
           if (v !== t.type) onType(v, MIN_FAN)
         }}>
-          {(['STANDARD', 'PREDATOR_PREY', 'FAN'] as TargetType[]).map(x => <option value={x}>{TARGET_TYPE_NAMES[x]}</option>)}
+          {(['STANDARD', 'PREDATOR_PREY', 'FAN', 'FUN'] as TargetType[]).map(x => <option value={x}>{TARGET_TYPE_NAMES[x]}</option>)}
         </select>
-        <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />
+        {t.type !== 'FUN' && <TargetMenu t={t} onOverride={onOverride} onClear={onClear} />}
       </div>
+      {t.type === 'FUN' && <FunScorer t={t} onScore={onFun} />}
       {t.type === 'FAN' && (
         <div class="stepper">
           <span class="grow">Animals in fan</span>
@@ -289,7 +313,7 @@ function TargetEditor({ t, onType, onResult, onOverride, onRemoveOverride, onCle
           <button disabled={t.animals.length >= MAX_FAN} onClick={() => onType('FAN', t.animals.length + 1)}>+</button>
         </div>
       )}
-      {t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} />
+      {t.type === 'FUN' ? null : t.overridePoints != null ? <Overridden t={t} onEdit={onOverride} onRemove={onRemoveOverride} />
         : t.animals.map((a, i) => {
           const waiting = t.type === 'PREDATOR_PREY' && i === 1 && t.animals[0].state === 'PENDING'
           const body = <AnimalScorer result={a} available={arrowsAvailable(t.type, t.animals, i)} waiting={waiting} onResult={r => onResult(i, r)} />

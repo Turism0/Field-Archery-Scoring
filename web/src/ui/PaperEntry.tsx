@@ -13,6 +13,7 @@ import { cellDisabled, emptyRow, rowToTarget, targetToRow, withRowType, type Row
 const KINDS: { value: string; label: string }[] = [
   { value: 'STANDARD', label: 'Standard' }, { value: 'PREDATOR_PREY', label: 'Predator / prey' },
   ...Array.from({ length: MAX_FAN - MIN_FAN + 1 }, (_, i) => ({ value: `FAN${i + MIN_FAN}`, label: `Fan of ${i + MIN_FAN}` })),
+  { value: 'FUN', label: 'Fun shot (any score)' },
 ]
 const kindOf = (r: RowEntry) => (r.type === 'FAN' ? `FAN${r.cells.length}` : r.type)
 
@@ -156,7 +157,7 @@ export function PaperEntry({ id }: { id?: string }) {
           </div>
           <div class="sub">{type === 'WOODSMAN'
             ? 'Type each target\'s arrows: W wound, K kill, M miss (e.g. K, WK, MMK, WWW). A number is a target score entered by hand.'
-            : 'Type each animal\'s points: 24, 20 or 16 on arrow 1; 14 or 10 on arrow 2; 8 or 4 on arrow 3; 0 for a miss. =N enters a whole target\'s score by hand. Enter or Tab moves on.'}</div>
+            : 'Type each animal\'s points: 24, 20 or 16 on arrow 1; 14 or 10 on arrow 2; 8 or 4 on arrow 3; 0 for a miss. =N enters a whole target\'s score by hand. A Fun shot (target kind) takes any score: it counts in the total but not in stats. Enter or Tab moves on.'}</div>
         </div><div>
           {!countOk ? <Card><div class="sub">Enter the number of targets to get the score sheet.</div></Card> : (
             <div class="sheet">

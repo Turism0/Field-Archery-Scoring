@@ -1,7 +1,7 @@
 // Rounds, archers and round JSON (the API's shape, as the Android app sends it).
 import {
   type RoundType, type TargetScore, type TargetType, type AnimalResult, type Hit,
-  newTarget, isComplete, totalPoints, maxPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
+  newTarget, isComplete, isFun, totalPoints, maxPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
 } from './scoring'
 
 export type ArcherClass = 'GENTS' | 'LADIES'
@@ -77,6 +77,13 @@ export function target(r: Round, n: number): TargetScore {
 }
 
 export const roundTotal = (r: Round) => r.targets.reduce((s, t) => s + totalPoints(t), 0)
+/** Fun shots (3.1): in the round total, left out of every stat. */
+export const funShots = (r: Round) => r.targets.filter(isFun)
+export const funPoints = (r: Round) => funShots(r).reduce((s, t) => s + totalPoints(t), 0)
+/** The total for stats, bests and handicaps: the round total less any fun shots. */
+export const statsTotal = (r: Round) => roundTotal(r) - funPoints(r)
+/** The targets for stats: the round's targets less any fun shots. */
+export const statsTargetCount = (r: Round) => r.targetCount - funShots(r).length
 export const targetsComplete = (r: Round) => r.targets.filter(isComplete).length
 export function firstUnscored(r: Round): number | null {
   for (let n = 1; n <= r.targetCount; n++) if (!isComplete(target(r, n))) return n
@@ -94,17 +101,24 @@ export function targetsLine(r: Round): string {
   const n = r.targetCount
   const base = `${n} target${n === 1 ? '' : 's'}`
   if (r.type === 'WOODSMAN') return base
+  const fun = r.targets.filter(isFun).length
+  const funText = fun ? ` · ${fun} fun shot${fun === 1 ? '' : 's'}` : ''
   const pp = r.targets.filter(t => t.type === 'PREDATOR_PREY').length
   const fans = r.targets.filter(t => t.type === 'FAN').length
-  if (!pp && !fans) return base
+  if (!pp && !fans) return base + funText
   let animals = 0
   for (let i = 1; i <= n; i++) animals += target(r, i).animals.length
   const extras = [pp ? `${pp} predator/prey` : '', fans ? `${fans} fan${fans === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')
-  return `${base} · ${animals} animals (${extras})`
+  return `${base} · ${animals} animals (${extras})${funText}`
 }
 
 export interface RoundStats {
+  /** The round total, fun shots included. */
   total: number
+  /** Fun shots (3.1) scored and their points: in [total] but in nothing else here. */
+  funShots: number
+  funPoints: number
+  /** Scored targets, not counting fun shots. */
   targetsScored: number
   averagePerAnimal: number | null
   maxPerAnimal: number
@@ -125,15 +139,19 @@ const rate = <T,>(list: T[], f: (x: T) => boolean) => list.length ? list.filter(
 
 /** Running stats (same rules as the app): averages per animal over fully scored targets. */
 export function roundStats(r: Round): RoundStats {
-  const complete = r.targets.filter(isComplete)
-  const overrides = r.targets.filter(t => t.overridePoints != null).length
+  // Fun shots (3.1) count in the total only.
+  const fun = r.targets.filter(t => isFun(t) && isComplete(t))
+  const funPts = fun.reduce((s, t) => s + totalPoints(t), 0)
+  const targets = r.targets.filter(t => !isFun(t))
+  const complete = targets.filter(isComplete)
+  const overrides = targets.filter(t => t.overridePoints != null).length
   if (r.type === 'WOODSMAN') {
-    const recordedTargets = r.targets.filter(t => t.overridePoints == null)
+    const recordedTargets = targets.filter(t => t.overridePoints == null)
     const arrows = recordedTargets.map(t => t.arrows).join('')
     const recorded = complete.filter(t => t.overridePoints == null)
     const sum = complete.reduce((s, t) => s + totalPoints(t), 0)
     return {
-      total: roundTotal(r), targetsScored: complete.length, maxPerAnimal: WOODSMAN_MAX,
+      total: roundTotal(r), funShots: fun.length, funPoints: funPts, targetsScored: complete.length, maxPerAnimal: WOODSMAN_MAX,
       averagePerAnimal: complete.length ? sum / complete.length : null,
       innerKills: 0, kills: [...arrows].filter(a => a === 'K').length, wounds: [...arrows].filter(a => a === 'W').length,
       misses: [...arrows].filter(a => a === 'M').length,
@@ -145,14 +163,14 @@ export function roundStats(r: Round): RoundStats {
       missRate: rate(recorded, t => calculatedPoints(t) === 0),
     }
   }
-  const results = r.targets.filter(t => t.overridePoints == null).flatMap(t => t.animals)
+  const results = targets.filter(t => t.overridePoints == null).flatMap(t => t.animals)
   const scored = results.filter((a): a is Extract<AnimalResult, { state: 'SCORED' }> => a.state === 'SCORED')
   const animals = complete.reduce((s, t) => s + t.animals.length, 0)
   const recorded = complete.filter(t => t.overridePoints == null).flatMap(t => t.animals)
   const max = complete.reduce((s, t) => s + maxPoints(t), 0)
   const sum = complete.reduce((s, t) => s + totalPoints(t), 0)
   return {
-    total: roundTotal(r), targetsScored: complete.length, maxPerAnimal: MAX_PER_ANIMAL,
+    total: roundTotal(r), funShots: fun.length, funPoints: funPts, targetsScored: complete.length, maxPerAnimal: MAX_PER_ANIMAL,
     averagePerAnimal: animals ? sum / animals : null,
     innerKills: scored.filter(a => a.hit === 'INNER_KILL').length,
     kills: scored.filter(a => a.hit === 'KILL').length,

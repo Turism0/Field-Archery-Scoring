@@ -8,14 +8,15 @@ enum class RoundStatus { IN_PROGRESS, COMPLETED }
  * "36 targets", or "36 targets · 37 animals (1 predator/prey)" when some targets had more than one animal
  * (predator/prey = 2, a fan = however many), so a higher total than a plain round of the same length makes sense.
  */
-fun targetsDescription(targetCount: Int, animals: Int, predatorPrey: Int, fans: Int): String {
+fun targetsDescription(targetCount: Int, animals: Int, predatorPrey: Int, fans: Int, funShots: Int = 0): String {
+    val funText = if (funShots > 0) " · $funShots fun shot${if (funShots == 1) "" else "s"}" else ""
     val base = "$targetCount target${if (targetCount == 1) "" else "s"}"
-    if (predatorPrey == 0 && fans == 0) return base
+    if (predatorPrey == 0 && fans == 0) return base + funText
     val extras = listOfNotNull(
         predatorPrey.takeIf { it > 0 }?.let { "$it predator/prey" },
         fans.takeIf { it > 0 }?.let { "$it fan${if (it == 1) "" else "s"}" },
     ).joinToString(", ")
-    return "$base · $animals animals ($extras)"
+    return "$base · $animals animals ($extras)$funText"
 }
 
 data class Round(
@@ -36,6 +37,14 @@ data class Round(
     val startTarget: Int? = null,
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
+
+    /** Fun shots (3.1): in [totalPoints], left out of every stat. */
+    val funPoints: Int get() = targets.filter { it.isFun }.sumOf { it.totalPoints }
+    /** The total for stats, bests and handicaps: [totalPoints] less any fun shots. */
+    val statsPoints: Int get() = totalPoints - funPoints
+    /** The targets for stats: [targetCount] less any fun shots. */
+    val statsTargetCount: Int get() = targetCount - targets.count { it.isFun }
+
     val targetsComplete: Int get() = targets.count { it.isComplete }
     val isFullyScored: Boolean get() = targets.size == targetCount && targets.all { it.isComplete }
 
@@ -62,6 +71,7 @@ data class Round(
             animals = (1..targetCount).sumOf { target(it).animals.size },
             predatorPrey = targets.count { it.type == TargetType.PREDATOR_PREY },
             fans = targets.count { it.type == TargetType.FAN },
+            funShots = targets.count { it.isFun },
         )
 
     /** e.g. "Gents Adult LB". */
@@ -79,7 +89,9 @@ data class Round(
  * as 2 animals and a fan as however many animals it has, so the average is out of 24.
  */
 data class RoundStats(
+    /** The round total, fun shots included. */
     val totalPoints: Int,
+    /** Scored targets, not counting fun shots. */
     val targetsScored: Int,
     val targetCount: Int,
     /** Highest score for one animal: 24 Big Game, 30 Woodsman. */
@@ -103,13 +115,19 @@ data class RoundStats(
     val firstArrowRate: Double?,
     val killRate: Double?,
     val missRate: Double?,
+    /** Fun shots (3.1) scored and their points: in [totalPoints] but in nothing else here. */
+    val funShots: Int = 0,
+    val funPoints: Int = 0,
 ) {
     companion object {
         fun of(round: Round): RoundStats {
             if (round.type == RoundType.WOODSMAN) return woodsman(round)
-            val results = round.targets.filterNot { it.isOverridden }.flatMap { it.animals }
+            // Fun shots (3.1) count in the total only.
+            val funDone = round.targets.filter { it.isFun && it.isComplete }
+            val targets = round.targets.filterNot { it.isFun }
+            val results = targets.filterNot { it.isOverridden }.flatMap { it.animals }
             val scored = results.filterIsInstance<AnimalResult.Scored>()
-            val complete = round.targets.filter { it.isComplete }
+            val complete = targets.filter { it.isComplete }
             val recorded = complete.filterNot { it.isOverridden }.flatMap { it.animals }
             return RoundStats(
                 totalPoints = round.totalPoints,
@@ -123,7 +141,7 @@ data class RoundStats(
                 wounds = scored.count { it.hit == Hit.WOUND },
                 misses = results.count { it == AnimalResult.Missed },
                 byArrow = (1..BigGameScoring.MAX_ARROWS).associateWith { n -> scored.count { it.arrowNo == n } },
-                overrides = round.targets.count { it.isOverridden },
+                overrides = targets.count { it.isOverridden },
                 animalsScored = complete.sumOf { it.animals.size },
                 shareOfMax = complete.sumOf { it.maxPoints }.let { max ->
                     if (max == 0) null else complete.sumOf { it.totalPoints }.toDouble() / max
@@ -131,6 +149,8 @@ data class RoundStats(
                 firstArrowRate = recorded.rate { it is AnimalResult.Scored && it.arrowNo == 1 },
                 killRate = recorded.rate { it is AnimalResult.Scored && it.hit != Hit.WOUND },
                 missRate = recorded.rate { it == AnimalResult.Missed },
+                funShots = funDone.size,
+                funPoints = funDone.sumOf { it.totalPoints },
             )
         }
     }

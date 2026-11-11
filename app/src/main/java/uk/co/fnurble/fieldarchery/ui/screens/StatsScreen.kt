@@ -167,7 +167,7 @@ private fun BestsCard(type: RoundType, bow: BowStyle, list: List<PersonalBest>, 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("${pb.best.totalPoints}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("${pb.best.statsPoints}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -237,7 +237,7 @@ private fun TrendsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text(p.date.format(UkDate), style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "${p.round.targetCount} targets · ${p.round.totalPoints} points" +
+                            "${p.round.targetCount} targets · ${p.round.statsPoints} points" +
                                 (if (bow == null) " · ${p.round.bowStyle.code}" else "") +
                                 (p.round.location.name?.let { " · $it" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
@@ -365,7 +365,7 @@ private fun SeasonCard(s: PersonalStats.Season, onOpenRound: (String) -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text("${b.totalPoints}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("${b.statsPoints}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
         }
         if (s.byBow.size > 1) {

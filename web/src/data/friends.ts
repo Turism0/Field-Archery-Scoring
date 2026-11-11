@@ -30,7 +30,10 @@ const classLineOf = (r: any) =>
 function entryOf(r: any, i: number): HEntry | null {
   if (r.roundType === 'WOODSMAN' || !r.bowStyle || r.targetsScored == null || r.targetsScored !== r.targetCount || !(r.targetCount > 0)) return null
   // The server lists them newest first; the order tells apart rounds on the same day.
-  return { shootDate: String(r.shootDate).slice(0, 10), order: String(1e6 - i).padStart(7, '0'), bowStyle: r.bowStyle, points: r.totalPoints, targetCount: r.targetCount }
+  // Fun shots (API 3.1) are left out of the handicap.
+  const funShots = r.funShots ?? 0, funPts = r.funPoints ?? 0
+  if (r.targetCount - funShots <= 0) return null
+  return { shootDate: String(r.shootDate).slice(0, 10), order: String(1e6 - i).padStart(7, '0'), bowStyle: r.bowStyle, points: r.totalPoints - funPts, targetCount: r.targetCount - funShots }
 }
 
 function targetsLineOf(r: any): string {

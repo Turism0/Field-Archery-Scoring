@@ -3,8 +3,9 @@
 // arrow 2; 8 / 4 on arrow 3; 0 miss), so the details and stats come out the same as scoring hit by hit.
 // Woodsman takes the arrows as letters (W wound, K kill, M miss, e.g. "MK"): its points aren't unique (20 is MK or WWK).
 // "=37" (or a plain number on Woodsman) is a target entered by hand: the points only.
+// A fun shot (3.1) takes its score as a plain number (0 to 999): in the total, not in stats.
 import {
-  MAX_FAN, MIN_FAN, PENDING, arrowsAvailable, bigGamePoints, newTarget, withAnimalResult, withOverride, withType, woodsmanValid,
+  FUN_MAX, MAX_FAN, MIN_FAN, PENDING, arrowsAvailable, bigGamePoints, newTarget, withAnimalResult, withOverride, withType, woodsmanValid,
   type AnimalResult, type Hit, type RoundType, type TargetScore, type TargetType,
 } from './scoring'
 
@@ -41,6 +42,13 @@ export function rowToTarget(roundType: RoundType, targetNo: number, row: RowEntr
     if (!woodsmanValid(text)) return { error: 'Woodsman: up to 3 arrows as W, K or M (nothing after a K), e.g. WK.' }
     return { target: { ...t, arrows: text } }
   }
+  if (row.type === 'FUN') {
+    t = withType(t, 'FUN')
+    const text = (row.cells[0] ?? '').trim().replace(/^=\s*/, '')
+    if (!text) return { target: t }
+    if (!/^\d{1,3}$/.test(text) || Number(text) > FUN_MAX) return { error: `A fun shot's score is a whole number, 0 to ${FUN_MAX}.` }
+    return { target: withOverride(t, Number(text)) }
+  }
   const first = byHand(row.cells[0] ?? '')
   t = row.type === 'STANDARD' ? t : withType(t, row.type, row.cells.length)
   if (first != null) {
@@ -68,6 +76,7 @@ export function rowToTarget(roundType: RoundType, targetNo: number, row: RowEntr
 /** What a scored target looks like typed in (for editing a round). */
 export function targetToRow(t: TargetScore): RowEntry {
   if (t.type === 'WOODSMAN') return { type: 'WOODSMAN', cells: [t.overridePoints != null ? String(t.overridePoints) : t.arrows] }
+  if (t.type === 'FUN') return { type: 'FUN', cells: [t.overridePoints != null ? String(t.overridePoints) : ''] }
   if (t.overridePoints != null) return { type: t.type, cells: t.animals.map((_, i) => (i === 0 ? `=${t.overridePoints}` : '')) }
   return { type: t.type, cells: t.animals.map(a => a.state === 'SCORED' ? String(bigGamePoints(a.arrowNo, a.hit)) : a.state === 'MISSED' ? '0' : '') }
 }

@@ -25,8 +25,10 @@ export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundSta
       <div class={`stats ${noTotal ? 'two' : ''}`}>
         {!noTotal && <div><b class="lg">{s.total}</b><span>Total</span></div>}
         <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>Avg<span class="long">{big ? ' per animal' : ' per target'}</span></span></div>
-        <div><b class="lg">{s.targetsScored}/{targetCount}</b><span>Scored</span></div>
+        <div><b class="lg">{s.targetsScored + s.funShots}/{targetCount}</b><span>Scored</span></div>
       </div>
+      {s.funShots > 0 && <div class="sub" style="text-align:center;color:inherit">
+        Total includes {s.funShots === 1 ? 'a fun shot' : `${s.funShots} fun shots`} ({s.funPoints} points), left out of the stats</div>}
       <hr />
       <div class={`stats ${big ? 'four' : ''}`}>
         {big && <div><b>{s.innerKills}</b><span>Inner kill</span></div>}
@@ -94,6 +96,7 @@ export function TargetRow({ t, current, locked, onGoTo, goToLabel, readOnly }: {
   const head = locked ? `Target ${t.targetNo}`
     : t.type === 'WOODSMAN' && !over && t.arrows ? describeArrows(t.arrows)
     : !isComplete(t) ? 'Not scored'
+    : t.type === 'FUN' ? 'Fun shot'
     : over ? 'Overridden'
     : t.type === 'STANDARD' ? describeAnimal(t.animals[0])
     : TARGET_TYPE_NAMES[t.type] + (t.type === 'FAN' ? ` ×${t.animals.length}` : '')
@@ -102,7 +105,7 @@ export function TargetRow({ t, current, locked, onGoTo, goToLabel, readOnly }: {
     <div class={`trow ${current ? 'current' : ''} ${locked ? 'locked' : ''}`}>
       <button class="trow-main" disabled={!clickable} onClick={() => (multi ? setOpen(!open) : onGoTo?.())}>
         <span class="tnum">{locked ? '🔒' : t.targetNo}</span>
-        <span class="grow"><span>{head}</span>{over && isComplete(t) && <span class="sub" style="display:block">Entered by hand</span>}</span>
+        <span class="grow"><span>{head}</span>{over && isComplete(t) && <span class="sub" style="display:block">{t.type === 'FUN' ? 'Not in stats' : 'Entered by hand'}</span>}</span>
         <b>{isComplete(t) || totalPoints(t) > 0 ? totalPoints(t) : '–'}</b>
         {multi && !locked && <span class="sub">{open ? '▲' : '▼'}</span>}
       </button>

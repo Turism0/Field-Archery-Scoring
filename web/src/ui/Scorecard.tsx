@@ -5,7 +5,7 @@ import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
 import { deleteRound, groupOf, setStatus } from '../data/rounds'
-import { ROUND_TYPE_NAMES, canGoTo, classLine, roundStats, roundTotal, target, targetsLine } from '../domain/round'
+import { ROUND_TYPE_NAMES, canGoTo, classLine, funPoints, roundStats, roundTotal, statsTargetCount, statsTotal, target, targetsLine } from '../domain/round'
 import { TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, totalPoints } from '../domain/scoring'
 import { finished } from '../data/rounds'
 import { getModel } from '../data/handicap'
@@ -49,7 +49,7 @@ export function Scorecard({ id }: { id: string }) {
         <div class="split"><div>
         <CardHeader r={round} />
         {beat && <Card title="New personal best" cls="hi">
-          <div>{roundTotal(round)} beats your previous best of {roundTotal(beat)} ({ukDate(beat.shootDate)}) for {round.targetCount}-target {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}. +{roundTotal(round) - roundTotal(beat)} points.</div>
+          <div>{statsTotal(round)} beats your previous best of {statsTotal(beat)} ({ukDate(beat.shootDate)}) for {statsTargetCount(round)}-target {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}{funPoints(round) || funPoints(beat) ? ' (fun shots left out)' : ''}. +{statsTotal(round) - statsTotal(beat)} points.</div>
         </Card>}
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {inGroup && <GroupCard group={group} currentId={round.id} />}
@@ -112,20 +112,22 @@ export function StatsCard({ round, s }: { round: Round; s: RoundStats }) {
  */
 export function HandicapCard({ round, model, mine }: { round: Round; model: HandicapModel | null | undefined; mine?: Round[] }) {
   if (round.type !== 'BIG_GAME' || round.status !== 'COMPLETED') return null
-  const total = roundTotal(round)
+  // Fun shots (3.1) are left out of handicap scores: the total and targets without them.
+  const total = statsTotal(round)
+  const count = statsTargetCount(round)
   const mult = model ? multiplier(model, { bowStyle: round.bowStyle, archerClass: round.archerClass, ageGroup: round.ageGroup }) : null
   const entries = mine?.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
-  const h = entries ? personalHandicap(entries, round.bowStyle, { shootDate: round.shootDate, order: round.createdUtc, bowStyle: round.bowStyle, points: total, targetCount: round.targetCount }) : null
+  const h = entries ? personalHandicap(entries, round.bowStyle, { shootDate: round.shootDate, order: round.createdUtc, bowStyle: round.bowStyle, points: total, targetCount: count }) : null
   if (!entries && mult == null) return null
   return (
     <Card title="Handicap competition">
       {entries && (h
         ? <div class="row between" style="flex-wrap:nowrap"><div><b>Net score</b>
-            <div class="sub">{total} + {net(total, round.targetCount, h.handicap) - total} ({bowName(round.bowStyle)} handicap {h.handicap} before this round{round.targetCount !== 40 ? `, scaled to ${round.targetCount} targets` : ''}). Par {parFor(round.targetCount)}.</div></div>
-            <span class="num-big">{net(total, round.targetCount, h.handicap)}</span></div>
+            <div class="sub">{total} + {net(total, count, h.handicap) - total} ({bowName(round.bowStyle)} handicap {h.handicap} before this round{count !== 40 ? `, scaled to ${count} targets` : ''}). Par {parFor(count)}.{count !== round.targetCount ? ' Fun shots left out.' : ''}</div></div>
+            <span class="num-big">{net(total, count, h.handicap)}</span></div>
         : <div class="sub">No {bowName(round.bowStyle)} handicap before this round: it needs 3 finished, fully scored rounds with that bow.</div>)}
       {mult != null && <div class="row between" style="flex-wrap:nowrap"><div><b>With the class multiplier</b>
-          <div class="sub">{total} × {mult.toFixed(2)} ({classLine(round)})</div></div>
+          <div class="sub">{total} × {mult.toFixed(2)} ({classLine(round)}){count !== round.targetCount ? ', fun shots left out' : ''}</div></div>
           <span class="num-big">{applyMultiplier(total, mult)}</span></div>}
     </Card>
   )
@@ -142,6 +144,7 @@ export function TargetTable({ round, onTarget }: { round: Round; onTarget?: (n: 
               <td>{t.targetNo}</td>
               <td><span class="sub">{t.type !== 'STANDARD' && t.type !== 'WOODSMAN' ? `${TARGET_TYPE_NAMES[t.type]}: ` : ''}</span>
                 {!isComplete(t) && totalPoints(t) === 0 ? <span class="sub">Not scored</span>
+                  : t.type === 'FUN' ? 'Not in stats'
                   : t.overridePoints != null ? 'Entered by hand'
                   : t.type === 'WOODSMAN' ? describeArrows(t.arrows) : t.animals.map(describeAnimal).join(' · ')}</td>
               <td class="num"><b>{totalPoints(t)}</b></td>

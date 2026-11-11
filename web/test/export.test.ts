@@ -28,10 +28,10 @@ describe('export', () => {
     expect(l.length).toBe(3); expect(l[0]).toBe(ROUND_HEADER.join(','))
     expect(l[1].startsWith('2026-10-04,Big Game,3,3,2,"Sherwood, ""Top"" field",')).toBe(true)
     const row = l[1].split(',')
-    expect(l[1]).toContain(',Gents,Adult,36,72,')   // 24 + 0 + 12 of 3 × 24
+    expect(l[1]).toContain(',Gents,Adult,36,,72,')   // 24 + 0 + 12 of 3 × 24
     expect(row[row.length - 1]).toBe('r1'); expect(row[row.length - 2]).toBe('No')
     expect(l[2]).toContain('Woodsman,2,2,,,')
-    expect(l[2]).toContain(',Ladies,Junior,25,60,')
+    expect(l[2]).toContain(',Ladies,Junior,25,,60,')
   })
   it('one row per target', () => {
     const l = lines(targetsCsv([bigGame(), woodsman()]))

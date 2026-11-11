@@ -125,6 +125,13 @@ enum class TargetType(val displayName: String, val shortName: String) {
 
     /** Woodsman rounds: one animal, arrows recorded in order (see [WoodsmanScoring]). Max 30. */
     WOODSMAN("Woodsman", "Wds"),
+
+    /**
+     * A fun shot (3.1, Pete): a Big Game target with unusual scoring that a club adds. No animals; its score is typed
+     * in ([TargetScore.overridePoints], any whole number 0 to [TargetScore.FUN_MAX]). It counts in the round total but
+     * is left out of every stat (averages, bests, handicaps).
+     */
+    FUN("Fun shot", "Fun"),
 }
 
 /** The score for one target (peg) on the course. */
@@ -147,6 +154,10 @@ data class TargetScore(
                 require(animals.isEmpty()) { "Woodsman targets record arrows, not animals" }
                 require(WoodsmanScoring.isValid(arrows)) { "Up to 3 arrows, nothing after a kill" }
             }
+            TargetType.FUN -> {
+                require(animals.isEmpty()) { "A fun shot has no animals, just its score" }
+                require(overridePoints == null || overridePoints <= FUN_MAX) { "A fun shot scores 0 to $FUN_MAX" }
+            }
         }
         require(type == TargetType.WOODSMAN || arrows.isEmpty()) { "Only Woodsman targets record arrows" }
         require(overridePoints == null || overridePoints >= 0) { "Override cannot be negative" }
@@ -154,18 +165,20 @@ data class TargetScore(
     }
 
     val isWoodsman: Boolean get() = type == TargetType.WOODSMAN
+    /** A fun shot (3.1): in the round total, not in any stats. */
+    val isFun: Boolean get() = type == TargetType.FUN
 
     val calculatedPoints: Int get() = if (isWoodsman) WoodsmanScoring.points(arrows) else animals.sumOf { it.points }
     val totalPoints: Int get() = overridePoints ?: calculatedPoints
     val isOverridden: Boolean get() = overridePoints != null
-    val maxPoints: Int get() = if (isWoodsman) WoodsmanScoring.MAX_PER_TARGET else animals.size * BigGameScoring.MAX_PER_ANIMAL
+    val maxPoints: Int get() = if (isWoodsman) WoodsmanScoring.MAX_PER_TARGET else animals.size * BigGameScoring.MAX_PER_ANIMAL   // fun shot: 0
 
     /** How many arrows can be shot at the given animal, given the other results. */
     fun arrowsAvailable(animalIndex: Int): Int = arrowsAvailable(type, animals, animalIndex)
 
     /** Fully scored: overridden, or every animal resolved (prey with no arrows left counts as resolved). */
     val isComplete: Boolean
-        get() = isOverridden || (isWoodsman && WoodsmanScoring.isFinished(arrows)) || !isWoodsman && animals.indices.all { i ->
+        get() = isOverridden || (isWoodsman && WoodsmanScoring.isFinished(arrows)) || !isWoodsman && !isFun && animals.indices.all { i ->
             val a = animals[i]
             a !is AnimalResult.Pending || (isPredatorResolved() && arrowsAvailable(i) == 0)
         }
@@ -178,6 +191,7 @@ data class TargetScore(
         TargetType.PREDATOR_PREY -> if (index == 0) "Predator" else "Prey"
         TargetType.FAN -> "Animal ${index + 1}"
         TargetType.WOODSMAN -> "Animal"
+        TargetType.FUN -> "Fun shot"
     }
 
     /** Woodsman: records the next arrow (ignored once the target is finished). */
@@ -207,7 +221,9 @@ data class TargetScore(
         val count = if (newType == TargetType.FAN) fanAnimals else animalCountFor(newType)
         require(newType != TargetType.FAN || count in MIN_FAN..MAX_FAN) { "Fan has $MIN_FAN to $MAX_FAN animals" }
         val kept = List(count) { i -> animals.getOrElse(i) { AnimalResult.Pending } }
-        return copy(type = newType, animals = fixDependents(newType, kept))
+        // A fun shot has its own typed score: switching to or from one starts the score afresh.
+        val override = if ((newType == TargetType.FUN) != isFun) null else overridePoints
+        return copy(type = newType, animals = fixDependents(newType, kept), overridePoints = override)
     }
 
     fun withOverride(points: Int?): TargetScore = copy(overridePoints = points)
@@ -217,12 +233,14 @@ data class TargetScore(
     companion object {
         const val MIN_FAN = 2
         const val MAX_FAN = 6
+        /** The most a fun shot can score (the server checks the same). */
+        const val FUN_MAX = 999
 
         fun animalCountFor(type: TargetType): Int = when (type) {
             TargetType.STANDARD -> 1
             TargetType.PREDATOR_PREY -> 2
             TargetType.FAN -> MIN_FAN
-            TargetType.WOODSMAN -> 0
+            TargetType.WOODSMAN, TargetType.FUN -> 0
         }
 
         fun arrowsAvailable(type: TargetType, animals: List<AnimalResult>, index: Int): Int {

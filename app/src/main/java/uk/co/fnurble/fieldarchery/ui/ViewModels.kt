@@ -293,8 +293,9 @@ class HistoryViewModel(
 internal fun netScores(rounds: List<Round>): Map<String, Pair<Int, Int>> {
     val entries = rounds.mapNotNull { it.handicapEntry() }
     return rounds.filter { it.type == RoundType.BIG_GAME }.mapNotNull { r ->
-        val here = PersonalHandicap.Entry(r.shootDate, r.createdAtMillis, r.bowStyle, r.totalPoints, r.targetCount)
-        PersonalHandicap.of(entries, r.bowStyle, before = here)?.let { h -> r.id to (PersonalHandicap.net(r.totalPoints, r.targetCount, h.handicap) to h.handicap) }
+        // Fun shots (3.1) left out.
+        val here = PersonalHandicap.Entry(r.shootDate, r.createdAtMillis, r.bowStyle, r.statsPoints, r.statsTargetCount)
+        PersonalHandicap.of(entries, r.bowStyle, before = here)?.let { h -> r.id to (PersonalHandicap.net(r.statsPoints, r.statsTargetCount, h.handicap) to h.handicap) }
     }.toMap()
 }
 
@@ -2080,7 +2081,7 @@ class ScorecardViewModel(
      */
     val handicapBefore: StateFlow<OwnHandicap?> = rounds.finishedRounds.map { all ->
         val me = all.firstOrNull { it.id == roundId } ?: return@map null
-        val here = PersonalHandicap.Entry(me.shootDate, me.createdAtMillis, me.bowStyle, me.totalPoints, me.targetCount)
+        val here = PersonalHandicap.Entry(me.shootDate, me.createdAtMillis, me.bowStyle, me.statsPoints, me.statsTargetCount)
         OwnHandicap(PersonalHandicap.of(all.mapNotNull { it.handicapEntry() }, me.bowStyle, before = here))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

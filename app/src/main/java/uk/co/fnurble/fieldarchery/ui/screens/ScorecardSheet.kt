@@ -124,14 +124,17 @@ internal fun ScorecardTargetRow(
                     when {
                         locked -> "Target ${t.targetNo}"
                         t.isWoodsman && !t.isOverridden && t.arrows.isNotEmpty() -> t.arrows.describe()
-                        !t.isComplete -> "Not scored"
+                        !t.isComplete -> if (t.isFun) "Fun shot – not scored" else "Not scored"
+                        t.isFun -> "Fun shot"
                         t.isOverridden -> "Overridden"
                         t.type == TargetType.STANDARD -> t.animals.first().describe()
                         else -> t.type.displayName + if (t.type == TargetType.FAN) " ×${t.animals.size}" else ""
                     },
                 )
             },
-            supportingContent = if (t.isOverridden && t.isComplete) {
+            supportingContent = if (t.isFun && t.isComplete) {
+                { Text("Not in stats", color = scheme.tertiary) }
+            } else if (t.isOverridden && t.isComplete) {
                 { Text("Calculated ${t.calculatedPoints}", color = scheme.tertiary) }
             } else null,
             trailingContent = {

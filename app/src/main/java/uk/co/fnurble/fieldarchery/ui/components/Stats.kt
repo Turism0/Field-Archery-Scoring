@@ -48,7 +48,7 @@ fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Bool
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Total ${stats.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("Avg $avg", style = MaterialTheme.typography.titleMedium)
-                Text("${stats.targetsScored}/${stats.targetCount} scored", style = MaterialTheme.typography.titleMedium)
+                Text("${stats.targetsScored + stats.funShots}/${stats.targetCount} scored", style = MaterialTheme.typography.titleMedium)
             }
         }
         return
@@ -64,7 +64,15 @@ fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Bool
             Row(Modifier.fillMaxWidth()) {
                 if (showTotal) BigStat("Total", "${stats.totalPoints}")
                 BigStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "Avg per animal" else "Avg per target", stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–")
-                BigStat("Scored", "${stats.targetsScored}/${stats.targetCount}")
+                BigStat("Scored", "${stats.targetsScored + stats.funShots}/${stats.targetCount}")
+            }
+            if (stats.funShots > 0) {
+                Text(
+                    "Total includes ${if (stats.funShots == 1) "a fun shot" else "${stats.funShots} fun shots"} (${stats.funPoints} points), left out of the stats",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f))
             Row(Modifier.fillMaxWidth()) {
@@ -113,7 +121,9 @@ private val fadedContent: Color
 @Composable
 fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, modifier: Modifier = Modifier) {
     if (round.type != RoundType.BIG_GAME || round.status != RoundStatus.COMPLETED) return
-    val total = round.totalPoints
+    // Fun shots (3.1) are left out of handicap scores: the total and targets without them.
+    val total = round.statsPoints
+    val count = round.statsTargetCount
     val mult = model?.multiplier(HandicapModel.Archer(round.bowStyle, round.archerClass, round.ageGroup))
     if (own == null && mult == null) return
     Card(
@@ -130,14 +140,14 @@ fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, 
                         style = MaterialTheme.typography.bodySmall,
                     )
                 } else {
-                    val net = PersonalHandicap.net(total, round.targetCount, h.handicap)
+                    val net = PersonalHandicap.net(total, count, h.handicap)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Net score", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                             Text(
                                 "$total + ${net - total} (${round.bowStyle.displayName} handicap ${h.handicap} before this round" +
-                                    (if (round.targetCount != PersonalHandicap.PAR_TARGETS) ", scaled to ${round.targetCount} targets" else "") +
-                                    "). Par ${PersonalHandicap.parFor(round.targetCount)}.",
+                                    (if (count != PersonalHandicap.PAR_TARGETS) ", scaled to $count targets" else "") +
+                                    "). Par ${PersonalHandicap.parFor(count)}." + (if (count != round.targetCount) " Fun shots left out." else ""),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -149,7 +159,8 @@ fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("With the class multiplier", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Text("$total × ${"%.2f".format(java.util.Locale.UK, mult)} (${round.classLine})", style = MaterialTheme.typography.bodySmall)
+                        Text("$total × ${"%.2f".format(java.util.Locale.UK, mult)} (${round.classLine})" +
+                            (if (count != round.targetCount) ", fun shots left out" else ""), style = MaterialTheme.typography.bodySmall)
                     }
                     Text("${HandicapModel.applyMultiplier(total, mult)}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }

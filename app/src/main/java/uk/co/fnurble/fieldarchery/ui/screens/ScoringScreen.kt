@@ -287,6 +287,7 @@ fun ScoringScreen(
                 onOverride = { showOverride = true },
                 onRemoveOverride = { vm.setOverride(null) },
                 onClear = { vm.clearTarget() },
+                onFun = { vm.setOverride(it) },
             )
         }
         }
@@ -531,13 +532,17 @@ private fun TargetEditor(
     onOverride: () -> Unit,
     onRemoveOverride: () -> Unit,
     onClear: () -> Unit,
+    /** A fun shot's typed score (3.1); null clears it. */
+    onFun: (Int?) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(LocalScoreSizes.current.gap)) {
         TargetHeader(target, onType, onOverride, onClear)
 
         if (target.type == TargetType.FAN) FanCountStepper(target.animals.size) { onType(TargetType.FAN, it) }
 
-        if (target.isOverridden) {
+        if (target.isFun) {
+            FunShotScorer(target, onFun)
+        } else if (target.isOverridden) {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
                 Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -601,7 +606,8 @@ private fun TargetHeader(
                 }
             }
         }
-        Box {
+        // A fun shot is only ever its typed score: no override or clear menu.
+        if (!target.isFun) Box {
             IconButton(onClick = { moreMenu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "Target options") }
             DropdownMenu(expanded = moreMenu, onDismissRequest = { moreMenu = false }) {
                 DropdownMenuItem(
@@ -614,6 +620,31 @@ private fun TargetHeader(
                     leadingIcon = { Icon(Icons.Filled.Clear, contentDescription = null) },
                     onClick = { moreMenu = false; onClear() },
                 )
+            }
+        }
+    }
+}
+
+/**
+ * A fun shot (3.1, Pete): a shot with unusual scoring that a club adds. Its score is typed in; it counts in the
+ * round total but in no stats or handicaps.
+ */
+@Composable
+private fun FunShotScorer(target: TargetScore, onScore: (Int?) -> Unit) {
+    var text by remember(target.targetNo, target.overridePoints) { mutableStateOf(target.overridePoints?.toString() ?: "") }
+    val value = text.toIntOrNull()?.takeIf { it in 0..TargetScore.FUN_MAX }
+    OutlinedCard {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "A shot with its own scoring. Type the score: it counts in the round total but not in any stats or handicaps.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            NumberField(label = "Fun shot score", value = text, onValue = { text = it }, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onScore(value) }, enabled = value != null && value != target.overridePoints) {
+                    Text(if (target.overridePoints != null) "Change score" else "Save score")
+                }
+                if (target.overridePoints != null) TextButton(onClick = { onScore(null) }) { Text("Clear") }
             }
         }
     }

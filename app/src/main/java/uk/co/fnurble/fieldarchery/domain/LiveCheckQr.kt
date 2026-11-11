@@ -34,6 +34,7 @@ object LiveCheckQr {
     fun encodeTarget(t: TargetScore): String {
         val body = when (t.type) {
             TargetType.WOODSMAN -> WoodsmanScoring.encode(t.arrows)
+            TargetType.FUN -> ""
             else -> t.animals.joinToString(",") { a ->
                 when (a) {
                     AnimalResult.Pending -> "-"
@@ -42,7 +43,7 @@ object LiveCheckQr {
                 }
             }
         }
-        val type = when (t.type) { TargetType.STANDARD -> "S"; TargetType.PREDATOR_PREY -> "P"; TargetType.FAN -> "F"; TargetType.WOODSMAN -> "W" }
+        val type = when (t.type) { TargetType.STANDARD -> "S"; TargetType.PREDATOR_PREY -> "P"; TargetType.FAN -> "F"; TargetType.WOODSMAN -> "W"; TargetType.FUN -> "X" }
         return type + body + (t.overridePoints?.let { "=$it" } ?: "")
     }
 
@@ -66,11 +67,14 @@ object LiveCheckQr {
         val override = if (eq >= 0) code.substring(eq + 1).toInt() else null
         val main = if (eq >= 0) code.substring(0, eq) else code
         val type = when (main.first()) {
-            'S' -> TargetType.STANDARD; 'P' -> TargetType.PREDATOR_PREY; 'F' -> TargetType.FAN; 'W' -> TargetType.WOODSMAN
+            'S' -> TargetType.STANDARD; 'P' -> TargetType.PREDATOR_PREY; 'F' -> TargetType.FAN; 'W' -> TargetType.WOODSMAN; 'X' -> TargetType.FUN
             else -> return null
         }
         val body = main.drop(1)
-        if (type == TargetType.WOODSMAN) {
+        if (type == TargetType.FUN) {
+            require(body.isEmpty())
+            TargetScore(targetNo, type, emptyList(), override)
+        } else if (type == TargetType.WOODSMAN) {
             TargetScore(targetNo, type, emptyList(), override, WoodsmanScoring.decode(body).also { require(it.size == body.length) })
         } else {
             val animals = body.split(",").map { a ->

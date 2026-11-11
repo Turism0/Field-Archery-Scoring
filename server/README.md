@@ -96,7 +96,7 @@ Windows PowerShell 5.1 as Administrator. Makes the `FieldArcheryApi` app pool (c
 | PUT | `/api/rounds/{roundId}` | Bearer token; whole round (below) | `{ roundId, result: "saved" \| "unchanged", serverUpdatedUtc }`; 400 `invalid_round` with `problems` |
 | GET | `/api/rounds/{roundId}` | Bearer token | The stored round (own rounds only), with `isDeleted` and `serverUpdatedUtc` |
 | DELETE | `/api/rounds/{roundId}` | Bearer token | 204; marks it deleted (kept so other phones find out) |
-| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest, recent }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game; `recent` (API 2.9): their latest 20 finished Big Game rounds with each bow style `{ shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints, targetsScored }` for their personal handicaps (2.4–2.8: latest 10 in all) |
+| GET | `/api/friends` | Bearer token | `{ friends: [{ archerId, username, friendsSinceUtc, rounds, bestTotal, lastShootDate, averagePerAnimal, woodsmanRounds, woodsmanBest, recent }], incoming: [...], outgoing: [...] }`; rounds / best / average are Big Game; `recent` (API 2.9): their latest 20 finished Big Game rounds with each bow style `{ shootDate, targetCount, animalCount, archerClass, ageGroup, bowStyle, totalPoints, targetsScored, funShots, funPoints }` (fun shots API 3.1) for their personal handicaps (2.4–2.8: latest 10 in all) |
 | POST | `/api/friends/requests` | Bearer token; `{ username }` | 201 `requested`; 200 `accepted` if they'd already asked you; 404 `no_such_user`; 409 `already_requested` / `already_friends`; 400 `cannot_friend_self` |
 | POST | `/api/friends/{archerId}/accept` | Bearer token | 200; 404 `no_request` unless they asked you |
 | DELETE | `/api/friends/{archerId}` | Bearer token | 204: decline, cancel or unfriend |
@@ -155,6 +155,7 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
 
 - `"startTarget"` (API 2.7, optional): the target the archer started on, 1 to `targetCount` (`null` when not given). Only noted on the scorecard: targets keep their own numbers.
 - `"roundType"`: `BIG_GAME` (default when missing) or `WOODSMAN`. A Woodsman round's targets are `"type": "WOODSMAN"` with `"animals": []` and `"arrows"`: the arrows in order, `W` wound (5), `K` kill (30 / 20 / 10 on arrow 1 / 2 / 3, shooting stops), `M` miss (0), e.g. `"WK"` = 25; an unfinished target has fewer than 3 and no K. Override 0–30. Big Game targets have no arrows.
+- **Fun shots (API 3.1, schema 11):** a Big Game target can be `"type": "FUN"`: a shot with unusual scoring, `"animals": []`, its score in `overridePoints` (any whole number 0–999; null = not scored yet, `points` 0) and `points` equal to it. It counts in `totalPoints` but every stat leaves it out: friends' best / average, location page best / average / per animal, and `recent` (which gives `funShots` and `funPoints` so phones leave it out of handicaps). Round summaries (friends' rounds, location pages) give `funShots` and `funPoints`.
 - Every score is checked against the Big Game rules (allowed hit per arrow and its points, predator/prey shared arrows, fan size, overrides, target and round totals). Anything wrong is refused with a list of problems.
 - Optional `"locationId"`: the shoot location. An id that was merged is stored as the location kept; an unknown id is stored as no location (the round is still saved). Downloads include `locationId` and `locationName`.
 - Same round id again is safe: the copy with the later `clientUpdatedUtc` wins, an equal or older copy is ignored (`unchanged`).
@@ -206,6 +207,14 @@ Run `sql/013_start_target.sql` in SSMS first (schema 9), then publish API 2.7.
 ```
 
 A round's `startTarget` is kept and comes back, can be left out, and must be 1 to the number of targets; a live group's is set by the host and can be cleared. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+
+## Testing fun shots (3.1)
+
+```powershell
+.\Test-FunShots.ps1
+```
+
+Needs `015_fun_shots.sql` run. A Big Game target of type `FUN` with its score typed in (0 to 999, no animals) is saved and comes back; one with animals, a score over 999 or points that don't match is refused; the location page's stats leave it out while the round's own total keeps it. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Loading historical scorecards (3.0.01)
 

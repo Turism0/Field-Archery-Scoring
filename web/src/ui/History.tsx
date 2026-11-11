@@ -5,10 +5,10 @@ import { useState } from 'preact/hooks'
 import { Bar, Dialog, Field, go, today, ukDate, useData, useDesktop } from './common'
 import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
-import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
+import { ROUND_TYPE_NAMES, bowName, statsTargetCount, statsTotal } from '../domain/round'
 import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
 import { handicapEntry, net, personalHandicap } from '../domain/handicap'
-import { totalPoints, type RoundType } from '../domain/scoring'
+import { type RoundType } from '../domain/scoring'
 
 interface Filter { type?: RoundType; bow?: string; location?: string; period: Period }
 const NONE: Filter = { period: { kind: 'all' } }
@@ -33,9 +33,10 @@ export function History() {
   const entries = rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
   const netOf = (r: typeof rounds[number]) => {
     if (r.type !== 'BIG_GAME') return null
-    const total = r.targets.reduce((x, t) => x + totalPoints(t), 0)
-    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: r.targetCount })
-    return h ? { net: net(total, r.targetCount, h.handicap), handicap: h.handicap } : null
+    // Fun shots (3.1) left out.
+    const total = statsTotal(r)
+    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: statsTargetCount(r) })
+    return h ? { net: net(total, statsTargetCount(r), h.handicap), handicap: h.handicap } : null
   }
   const now = today()
   const list = rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&

@@ -28,7 +28,8 @@ public static class LocationPageEndpoints
     private sealed record Loc(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate, Guid? CreatedById);
 
     public sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
-        string AgeGroup, string BowStyle, int TotalPoints, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
+        string AgeGroup, string BowStyle, int TotalPoints, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0,
+        int FunShots = 0, int FunPoints = 0);
 
     private sealed record FriendRow(Guid ArcherId, string Username, string RoundType, int Rounds, int? BestTotal, double? AveragePerAnimal);
 
@@ -113,7 +114,8 @@ public static class LocationPageEndpoints
             var friendRows = (await conn.QueryAsync<FriendRow>(new CommandDefinition($"""
                 WITH fr AS (SELECT FriendId FROM dbo.vFriend WHERE ArcherId = @me),
                 done AS (
-                    SELECT r.RoundId, r.ArcherId, r.RoundType, r.TotalPoints FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
+                    SELECT r.RoundId, r.ArcherId, r.RoundType, {RoundShape.StatsPointsSql("r")} AS TotalPoints   -- 3.1: less fun shots
+                    FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
                     WHERE r.LocationId = @id AND r.Status = 'COMPLETED' AND r.IsDeleted = 0),
                 an AS (
                     SELECT d.ArcherId, d.RoundType, SUM(x.Animals) AS Animals
@@ -146,7 +148,7 @@ public static class LocationPageEndpoints
             // Everyone's finished rounds here, per bow style (no names).
             var bowRows = await conn.QueryAsync<BowRow>(new CommandDefinition($"""
                 WITH done AS (
-                    SELECT RoundId, ArcherId, RoundType, BowStyle, TotalPoints FROM dbo.Round d
+                    SELECT RoundId, ArcherId, RoundType, BowStyle, {RoundShape.StatsPointsSql("d")} AS TotalPoints FROM dbo.Round d
                     WHERE LocationId = @id AND Status = 'COMPLETED' AND IsDeleted = 0),
                 an AS (
                     SELECT d.RoundType, d.BowStyle, SUM(x.Animals) AS Animals
@@ -171,7 +173,7 @@ public static class LocationPageEndpoints
             // The same, per class and age group (API 2.4).
             var classRows = await conn.QueryAsync<BowClassRow>(new CommandDefinition($"""
                 WITH done AS (
-                    SELECT RoundId, ArcherId, RoundType, BowStyle, ArcherClass, AgeGroup, TotalPoints FROM dbo.Round d
+                    SELECT RoundId, ArcherId, RoundType, BowStyle, ArcherClass, AgeGroup, {RoundShape.StatsPointsSql("d")} AS TotalPoints FROM dbo.Round d
                     WHERE LocationId = @id AND Status = 'COMPLETED' AND IsDeleted = 0),
                 an AS (
                     SELECT d.RoundType, d.BowStyle, d.ArcherClass, d.AgeGroup, SUM(x.Animals) AS Animals
@@ -223,6 +225,8 @@ public static class LocationPageEndpoints
         r.AnimalCount,
         r.PredatorPrey,
         r.Fans,
+        r.FunShots,
+        r.FunPoints,
     };
 
     private static IResult NotFound() =>

@@ -45,13 +45,13 @@ public static class FriendEndpoints
         int WoodsmanRounds, int? WoodsmanBest);
 
     private sealed record RecentRow(Guid ArcherId, DateTime ShootDate, short TargetCount, int AnimalCount, string ArcherClass,
-        string AgeGroup, string BowStyle, int TotalPoints, int TargetsScored);
+        string AgeGroup, string BowStyle, int TotalPoints, int TargetsScored, int FunShots = 0, int FunPoints = 0);
 
     public sealed record PendingRequest(Guid ArcherId, string Username, DateTime RequestedUtc, bool Outgoing);
 
     public sealed record FriendRoundSummary(
         Guid RoundId, DateTime ShootDate, short TargetCount, string ArcherClass, string AgeGroup, string BowStyle, int TotalPoints,
-        string? LocationName, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
+        string? LocationName, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0, int FunShots = 0, int FunPoints = 0);
 
     // The pair is stored once, lower ArcherId first. SQL Server decides "lower" (its own uniqueidentifier order).
     private const string PairWhere = """
@@ -66,10 +66,11 @@ public static class FriendEndpoints
 
         // Friends with a summary of their finished rounds. The average is per animal over finished rounds
         // (predator/prey = 2, fan = n), so it's out of 24.
-        var friends = (await conn.QueryAsync<FriendSummary>(new CommandDefinition("""
+        // API 3.1: fun shots are left out of these (their points aren't in TotalPoints here).
+        var friends = (await conn.QueryAsync<FriendSummary>(new CommandDefinition($"""
             WITH fr AS (SELECT FriendId, AcceptedUtc FROM dbo.vFriend WHERE ArcherId = @me),
             done AS (
-                SELECT r.RoundId, r.ArcherId, r.TotalPoints, r.ShootDate
+                SELECT r.RoundId, r.ArcherId, {RoundShape.StatsPointsSql("r")} AS TotalPoints, r.ShootDate
                 FROM dbo.Round r JOIN fr ON fr.FriendId = r.ArcherId
                 WHERE r.Status = 'COMPLETED' AND r.IsDeleted = 0 AND r.RoundType = 'BIG_GAME'),
             wd AS (
@@ -102,7 +103,8 @@ public static class FriendEndpoints
         // Each friend's latest 20 finished Big Game rounds with each bow style: the phone works out their personal
         // handicap per bow (API 2.9; was the latest 10 for the rating out of 1000). targetsScored: targets with a score
         // entered (an override, or an animal that isn't still to score); only rounds with every target scored count.
-        var recent = (await conn.QueryAsync<RecentRow>(new CommandDefinition("""
+        // API 3.1: funShots / funPoints so the phone can leave fun shots out of the handicap.
+        var recent = (await conn.QueryAsync<RecentRow>(new CommandDefinition($"""
             WITH fr AS (SELECT FriendId FROM dbo.vFriend WHERE ArcherId = @me),
             ranked AS (
                 SELECT r.RoundId, r.ArcherId, r.ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup, r.BowStyle, r.TotalPoints,
@@ -114,7 +116,9 @@ public static class FriendEndpoints
                    k.ArcherClass, k.AgeGroup, k.BowStyle, k.TotalPoints,
                    (SELECT COUNT(*) FROM dbo.TargetScore t WHERE t.RoundId = k.RoundId
                       AND (t.OverridePoints IS NOT NULL
-                           OR EXISTS (SELECT 1 FROM dbo.AnimalScore s WHERE s.RoundId = t.RoundId AND s.TargetNo = t.TargetNo AND s.State <> 'PENDING'))) AS TargetsScored
+                           OR EXISTS (SELECT 1 FROM dbo.AnimalScore s WHERE s.RoundId = t.RoundId AND s.TargetNo = t.TargetNo AND s.State <> 'PENDING'))) AS TargetsScored,
+                   (SELECT COUNT(*) FROM dbo.TargetScore t WHERE t.RoundId = k.RoundId AND t.TargetType = 'FUN') AS FunShots,
+                   {RoundShape.FunPointsSql("k")} AS FunPoints
             FROM ranked k WHERE k.n <= 20;
             """, new { me }, cancellationToken: ct))).ToLookup(x => x.ArcherId);
 
@@ -138,7 +142,7 @@ public static class FriendEndpoints
                 {
                     shootDate = DateOnly.FromDateTime(x.ShootDate), targetCount = (int)x.TargetCount, animalCount = x.AnimalCount,
                     archerClass = x.ArcherClass.Trim(), ageGroup = x.AgeGroup, bowStyle = x.BowStyle, totalPoints = x.TotalPoints,
-                    targetsScored = x.TargetsScored,
+                    targetsScored = x.TargetsScored, funShots = x.FunShots, funPoints = x.FunPoints,
                 }),
             }),
             incoming = pending.Where(p => !p.Outgoing).Select(p => p with { RequestedUtc = Utc(p.RequestedUtc)!.Value }),
@@ -240,6 +244,8 @@ public static class FriendEndpoints
                 r.AnimalCount,
                 r.PredatorPrey,
                 r.Fans,
+                r.FunShots,
+                r.FunPoints,
             }),
         });
     }

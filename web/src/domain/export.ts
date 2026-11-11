@@ -1,5 +1,5 @@
 // Exporting rounds (2.7.03, desktop): two CSV layouts and JSON. Pure functions, tested in test/export.test.ts.
-import { AGE_NAMES, CLASS_NAMES, ROUND_TYPE_NAMES, bowName, roundStats, roundToJson, type Round } from './round'
+import { AGE_NAMES, CLASS_NAMES, ROUND_TYPE_NAMES, bowName, roundStats, roundToJson, statsTargetCount, statsTotal, type Round } from './round'
 import { HIT_NAMES, TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, maxPoints, totalPoints, type TargetScore } from './scoring'
 import { applyMultiplier, handicapEntry, multiplier, net, personalHandicap, type HandicapModel } from './handicap'
 
@@ -21,7 +21,7 @@ const pct = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 10)
 
 export const ROUND_HEADER = [
   'Date', 'Round type', 'Targets', 'Targets scored', 'Starting target', 'Location', 'Bow', 'Bow code', 'Class', 'Age group',
-  'Total', 'Max for targets scored', 'Average per animal', 'Inner kills', 'Kills', 'Wounds', 'Misses',
+  'Total', 'Fun shot points', 'Max for targets scored', 'Average per animal', 'Inner kills', 'Kills', 'Wounds', 'Misses',
   'Hits on 1st arrow', 'Hits on 2nd arrow', 'Hits on 3rd arrow', 'Overridden targets', '1st arrow %', 'Kill %', 'Miss %',
   'Handicap', 'Net score', 'Multiplier', 'Score × multiplier', 'Group round', 'Round id',
 ]
@@ -35,15 +35,17 @@ export function roundsCsv(rounds: Round[], model?: HandicapModel | null, all: Ro
   return toCsv(ROUND_HEADER, rounds.map(r => {
     const s = roundStats(r)
     const big = r.type === 'BIG_GAME'
-    const h = big ? personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: s.total, targetCount: r.targetCount }) : null
+    // Fun shots (3.1): in the total, left out of everything else.
+    const pts = statsTotal(r), count = statsTargetCount(r)
+    const h = big && count > 0 ? personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: pts, targetCount: count }) : null
     const mult = big && model ? multiplier(model, { bowStyle: r.bowStyle, archerClass: r.archerClass, ageGroup: r.ageGroup }) : null
     const max = r.targets.filter(isComplete).reduce((t, x) => t + maxPoints(x), 0)
     return [
       r.shootDate, ROUND_TYPE_NAMES[r.type], r.targetCount, s.targetsScored, r.startTarget ?? null, r.locationName ?? null,
       bowName(r.bowStyle), r.bowStyle, CLASS_NAMES[r.archerClass], AGE_NAMES[r.ageGroup],
-      s.total, max, s.averagePerAnimal, r.type === 'WOODSMAN' ? null : s.innerKills, s.kills, s.wounds, s.misses,
+      s.total, s.funPoints || null, max, s.averagePerAnimal, r.type === 'WOODSMAN' ? null : s.innerKills, s.kills, s.wounds, s.misses,
       s.byArrow[0], s.byArrow[1], s.byArrow[2], s.overrides, pct(s.firstArrowRate), pct(s.killRate), pct(s.missRate),
-      h?.handicap ?? null, h ? net(s.total, r.targetCount, h.handicap) : null, mult, mult != null ? applyMultiplier(s.total, mult) : null,
+      h?.handicap ?? null, h ? net(pts, count, h.handicap) : null, mult, mult != null ? applyMultiplier(pts, mult) : null,
       r.groupId ? 'Yes' : 'No', r.id,
     ]
   }))
@@ -68,6 +70,7 @@ function arrowAndHit(t: TargetScore): [number | null, string | null] {
 }
 
 function result(t: TargetScore): string {
+  if (t.type === 'FUN') return t.overridePoints != null ? `Fun shot: ${t.overridePoints} (not in stats)` : 'Fun shot: not scored'
   if (t.overridePoints != null) return `Overridden: ${t.overridePoints}`
   if (t.type === 'WOODSMAN') return describeArrows(t.arrows)
   return t.animals.map(describeAnimal).join('; ')

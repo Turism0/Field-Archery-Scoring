@@ -18,6 +18,9 @@ public static class RoundValidator
     public const string BigGame = "BIG_GAME";
     public const string Woodsman = "WOODSMAN";
     public const int WoodsmanMax = 30;
+    /// <summary>Fun shot (API 3.1): a Big Game target scored by hand, any whole number 0 to this.</summary>
+    public const string Fun = "FUN";
+    public const int FunMax = 999;
 
     /// <summary>The round's type, BIG_GAME when not sent (older apps).</summary>
     public static string TypeOf(RoundDto r) => string.IsNullOrWhiteSpace(r.RoundType) ? BigGame : r.RoundType.Trim().ToUpperInvariant();
@@ -115,6 +118,14 @@ public static class RoundValidator
         var where = $"Target {t.TargetNo}";
         var animals = (t.Animals ?? []).OrderBy(a => a.Index).ToList();
         if (!string.IsNullOrEmpty(t.Arrows)) { problems.Add($"{where}: Big Game targets don't record arrows."); return; }
+        if (t.Type == Fun)
+        {
+            // A fun shot: no animals, its score typed in (none yet = not scored, 0 points).
+            if (animals.Count != 0) problems.Add($"{where}: a fun shot has no animals, just its score.");
+            else if (t.OverridePoints is { } fun && (fun < 0 || fun > FunMax)) problems.Add($"{where}: a fun shot scores 0 to {FunMax}.");
+            else if (t.Points != (t.OverridePoints ?? 0)) problems.Add($"{where}: points must equal the fun shot's score.");
+            return;
+        }
 
         var countOk = t.Type switch
         {

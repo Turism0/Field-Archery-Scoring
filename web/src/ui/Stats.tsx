@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { Bar, Card, Seg, Select, Tabs, go, one, ukDate, useData } from './common'
 import { finished } from '../data/rounds'
-import { ROUND_TYPE_NAMES, bowName, roundTotal, type Round, type RoundStats } from '../domain/round'
+import { ROUND_TYPE_NAMES, bowName, statsTotal, type Round, type RoundStats } from '../domain/round'
 import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, bowOrder, seasons, trend, type TrendPoint } from '../domain/stats'
 import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import type { RoundType } from '../domain/scoring'
@@ -45,7 +45,7 @@ function Bests({ rounds }: { rounds: Round[] }) {
             <button class="row between plain" onClick={() => go(`/card/${pb.best.id}`)}>
               <span><b>{pb.targetCount} targets</b><div class="sub">{roundLine(pb.best)}</div>
                 <div class="sub">{pb.roundsShot} round{pb.roundsShot === 1 ? '' : 's'} · average {Math.round(pb.averageTotal)}</div></span>
-              <span class="num-big">{roundTotal(pb.best)}</span>
+              <span class="num-big">{statsTotal(pb.best)}</span>
             </button>
           ))}
         </Card>
@@ -88,7 +88,7 @@ function Trends({ rounds }: { rounds: Round[] }) {
       <h3 class="section">Rounds (newest first)</h3>
       {[...points].reverse().map(p => (
         <button class="row between plain" onClick={() => go(`/card/${p.round.id}`)}>
-          <span>{ukDate(p.date)}<div class="sub">{p.round.targetCount} targets · {roundTotal(p.round)} points{bow == null ? ` · ${p.round.bowStyle}` : ''}{p.round.locationName ? ` · ${p.round.locationName}` : ''}</div></span>
+          <span>{ukDate(p.date)}<div class="sub">{p.round.targetCount} targets · {statsTotal(p.round)} points{bow == null ? ` · ${p.round.bowStyle}` : ''}{p.round.locationName ? ` · ${p.round.locationName}` : ''}</div></span>
           <b>{one(p.average)}</b>
         </button>
       ))}
@@ -154,7 +154,7 @@ function Seasons({ rounds }: { rounds: Round[] }) {
       <MoreStats s={s.stats} />
       {s.bestRound && <button class="row between plain" onClick={() => go(`/card/${s.bestRound!.id}`)}>
         <span><b>Best round</b><div class="sub">{s.bestRound.targetCount} targets · {s.bestRound.bowStyle} · {roundLine(s.bestRound)}</div></span>
-        <span class="num-big">{roundTotal(s.bestRound)}</span></button>}
+        <span class="num-big">{statsTotal(s.bestRound)}</span></button>}
       {s.byBow.length > 1 && s.byBow.map(b => (
         <div class="row between"><span>{bowName(b.bowStyle)} ({b.bowStyle})</span>
           <span class="sub">{b.rounds} round{b.rounds === 1 ? '' : 's'} · avg {b.average != null ? one(b.average) : '–'}</span></div>

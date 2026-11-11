@@ -114,7 +114,11 @@ class FriendsRepository(
                             if (bow == null || r.optString("roundType", "BIG_GAME") == "WOODSMAN" || !r.has("targetsScored") ||
                                 r.getInt("targetsScored") != targets || targets <= 0) null
                             // Newest first from the server: the order tells apart rounds on the same day.
-                            else PersonalHandicap.Entry(LocalDate.parse(r.getString("shootDate").take(10)), (1_000_000 - i).toLong(), bow, r.getInt("totalPoints"), targets)
+                            // Fun shots (API 3.1) are left out of the handicap.
+                            else (targets - r.optInt("funShots")).takeIf { it > 0 }?.let { counted ->
+                                PersonalHandicap.Entry(LocalDate.parse(r.getString("shootDate").take(10)), (1_000_000 - i).toLong(), bow,
+                                    r.getInt("totalPoints") - r.optInt("funPoints"), counted)
+                            }
                         }.getOrNull()
                     },
                 )

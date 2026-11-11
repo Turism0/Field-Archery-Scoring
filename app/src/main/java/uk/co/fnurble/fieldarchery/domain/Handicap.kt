@@ -148,6 +148,7 @@ object PersonalHandicap {
 
 /** Your own finished, fully scored Big Game round for the personal handicap; null otherwise. */
 fun Round.handicapEntry(): PersonalHandicap.Entry? =
-    if (type == RoundType.BIG_GAME && status == RoundStatus.COMPLETED && isFullyScored && targetCount > 0)
-        PersonalHandicap.Entry(shootDate, createdAtMillis, bowStyle, totalPoints, targetCount)
+    // Fun shots (3.1) are left out: the points and targets without them.
+    if (type == RoundType.BIG_GAME && status == RoundStatus.COMPLETED && isFullyScored && statsTargetCount > 0)
+        PersonalHandicap.Entry(shootDate, createdAtMillis, bowStyle, statsPoints, statsTargetCount)
     else null

@@ -100,5 +100,8 @@ export const parFor = (targetCount: number) => 24 * targetCount
 export function handicapEntry(r: Round): HEntry | null {
   if (r.type !== 'BIG_GAME' || r.status !== 'COMPLETED' || r.targetCount <= 0) return null
   if (r.targets.length !== r.targetCount || !r.targets.every(isComplete)) return null
-  return { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: r.targets.reduce((x, t) => x + totalPoints(t), 0), targetCount: r.targetCount }
+  // Fun shots (3.1) are left out: the points and targets without them.
+  const counted = r.targets.filter(t => t.type !== 'FUN')
+  if (!counted.length) return null
+  return { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: counted.reduce((x, t) => x + totalPoints(t), 0), targetCount: counted.length }
 }

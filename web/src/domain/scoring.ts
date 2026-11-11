@@ -1,7 +1,8 @@
 // Scoring rules, the same as the Android app's domain/Scoring.kt and the server's RoundValidator. Keep them in step.
 
 export type Hit = 'INNER_KILL' | 'KILL' | 'WOUND'
-export type TargetType = 'STANDARD' | 'PREDATOR_PREY' | 'FAN' | 'WOODSMAN'
+/** FUN (3.1): a Big Game fun shot with unusual scoring, its score typed in (overridePoints); in the total, not in stats. */
+export type TargetType = 'STANDARD' | 'PREDATOR_PREY' | 'FAN' | 'WOODSMAN' | 'FUN'
 export type RoundType = 'BIG_GAME' | 'WOODSMAN'
 /** Woodsman arrows in order: W wound, K kill, M miss. */
 export type WoodsmanArrow = 'W' | 'K' | 'M'
@@ -23,8 +24,11 @@ export interface TargetScore {
 
 export const HIT_NAMES: Record<Hit, string> = { INNER_KILL: 'Inner kill', KILL: 'Kill', WOUND: 'Wound' }
 export const TARGET_TYPE_NAMES: Record<TargetType, string> = {
-  STANDARD: 'Standard', PREDATOR_PREY: 'Predator / Prey', FAN: 'Fan', WOODSMAN: 'Woodsman',
+  STANDARD: 'Standard', PREDATOR_PREY: 'Predator / Prey', FAN: 'Fan', WOODSMAN: 'Woodsman', FUN: 'Fun shot',
 }
+/** The most a fun shot can score (any whole number 0 to this; the server checks the same). */
+export const FUN_MAX = 999
+export const isFun = (t: TargetScore) => t.type === 'FUN'
 
 export const MAX_ARROWS = 3
 export const MAX_PER_ANIMAL = 24
@@ -97,12 +101,13 @@ export function totalPoints(t: TargetScore): number {
 }
 
 export function maxPoints(t: TargetScore): number {
-  return t.type === 'WOODSMAN' ? WOODSMAN_MAX : t.animals.length * MAX_PER_ANIMAL
+  return t.type === 'WOODSMAN' ? WOODSMAN_MAX : t.type === 'FUN' ? 0 : t.animals.length * MAX_PER_ANIMAL
 }
 
 /** Fully scored: overridden, or every animal resolved (a prey with no arrows left counts as resolved). */
 export function isComplete(t: TargetScore): boolean {
   if (t.overridePoints != null) return true
+  if (t.type === 'FUN') return false   // scored once its score is typed in
   if (t.type === 'WOODSMAN') return woodsmanFinished(t.arrows)
   return t.animals.every((a, i) =>
     a.state !== 'PENDING' || (t.animals[0].state !== 'PENDING' && arrowsAvailable(t.type, t.animals, i) === 0))
@@ -144,7 +149,9 @@ export function withType(t: TargetScore, type: TargetType, fanAnimals = MIN_FAN)
   if (type === 'FAN' && (fanAnimals < MIN_FAN || fanAnimals > MAX_FAN)) throw new Error(`Fan has ${MIN_FAN} to ${MAX_FAN} animals`)
   const count = type === 'FAN' ? fanAnimals : animalCountFor(type)
   const kept = Array.from({ length: count }, (_, i) => t.animals[i] ?? PENDING)
-  return { ...t, type, animals: fixDependents(type, kept) }
+  // A fun shot has its own typed score: switching to or from one starts the score afresh.
+  const overridePoints = (type === 'FUN') !== (t.type === 'FUN') ? null : t.overridePoints
+  return { ...t, type, animals: fixDependents(type, kept), overridePoints }
 }
 
 export function withOverride(t: TargetScore, points: number | null): TargetScore {
@@ -166,6 +173,7 @@ export function cleared(t: TargetScore): TargetScore {
 export function animalLabel(t: TargetScore, index: number): string {
   if (t.type === 'PREDATOR_PREY') return index === 0 ? 'Predator' : 'Prey'
   if (t.type === 'FAN') return `Animal ${index + 1}`
+  if (t.type === 'FUN') return 'Fun shot'
   return 'Animal'
 }
 

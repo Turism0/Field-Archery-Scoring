@@ -1,7 +1,7 @@
 // Live groups with no signal on the web (2.8): the app's LiveRules (matching, checks by hand) and LiveCheckQr
 // (checking scores by QR). Keep in step with LiveRules.kt and LiveCheckQr.kt; test/liveCheck.test.ts has the same cases.
 import {
-  MAX_FAN, MIN_FAN, allowedHits, animalPoints, arrowsAvailable, isComplete, totalPoints, woodsmanValid,
+  FUN_MAX, MAX_FAN, MIN_FAN, allowedHits, animalPoints, arrowsAvailable, isComplete, totalPoints, woodsmanValid,
   type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from './scoring'
 
@@ -77,11 +77,11 @@ export const isCheckQr = (text: string) => text.trim().startsWith(CHECK_PREFIX)
 export interface CheckItem { targetNo: number; card: string; target: TargetScore }
 export interface CheckPayload { group: string; scorer: string; items: CheckItem[] }
 
-const TYPE_LETTER: Record<TargetType, string> = { STANDARD: 'S', PREDATOR_PREY: 'P', FAN: 'F', WOODSMAN: 'W' }
+const TYPE_LETTER: Record<TargetType, string> = { STANDARD: 'S', PREDATOR_PREY: 'P', FAN: 'F', WOODSMAN: 'W', FUN: 'X' }
 const HIT_LETTER: Record<Hit, string> = { INNER_KILL: 'I', KILL: 'K', WOUND: 'W' }
 
 export function encodeTarget(t: TargetScore): string {
-  const body = t.type === 'WOODSMAN' ? t.arrows
+  const body = t.type === 'WOODSMAN' ? t.arrows : t.type === 'FUN' ? ''
     : t.animals.map(a => a.state === 'PENDING' ? '-' : a.state === 'MISSED' ? 'M' : `${a.arrowNo}${HIT_LETTER[a.hit]}`).join(',')
   return TYPE_LETTER[t.type] + body + (t.overridePoints != null ? `=${t.overridePoints}` : '')
 }
@@ -101,6 +101,7 @@ export function decodeTarget(targetNo: number, code: string): TargetScore | null
   if (!type) return null
   const body = main.slice(1)
   if (type === 'WOODSMAN') return /^[WKM]*$/.test(body) && woodsmanValid(body) ? { targetNo, type, animals: [], overridePoints: override, arrows: body } : null
+  if (type === 'FUN') return body === '' && (override == null || override <= FUN_MAX) ? { targetNo, type, animals: [], overridePoints: override, arrows: '' } : null
   const animals: AnimalResult[] = []
   for (const a of body.split(',')) {
     if (a === '-') animals.push({ state: 'PENDING' })

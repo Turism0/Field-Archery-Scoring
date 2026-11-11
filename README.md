@@ -4,6 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1
+
+- **3.1 (app, web app, API and database): fun shots (Pete).** Some Big Game courses add a fun shot with unusual scoring. Any target can now be a **Fun shot**: pick it from the target type (scoring screen, app and web; on a computer, the target kind on the score sheet) and type its score, any whole number from 0 to 999. A round can have any number of them.
+  - **Counts in the round total** (scorecard, Score history, Home, group totals, exports) and nowhere else: averages, hit counts, overrides, share of maximum, personal bests, handicaps, net scores and score × multiplier all leave it out, as do friends' and location page stats on the server. Personal bests compare rounds on the total without fun shots, on the number of targets without them (a 36-target round with one fun shot counts as 35).
+  - Scorecards show "Fun shot · Not in stats" on that target and "3 targets · 1 fun shot" in the round line; the stats box says how many points of the total are fun shots. The handicap card says when fun shots were left out. The per-round CSV export has a Fun shot points column.
+  - Works in live groups and the QR check (letter X).
+  - **Server: run `sql/015_fun_shots.sql` in SSMS on Mimir first (schema 11), then publish API 3.1, then `Test-FunShots.ps1`.** An app on 3.0 or older skips a round with a fun shot when it syncs (it doesn't know the target type), so update the app with the server; the web app updates itself.
+  - App versionCode 52, versionName 3.1. Tests: Kotlin 71, web 65.
+
 ## Version 3.0.02
 
 - **3.0.02 (server tool; app, API and web app version only): the historical import leaves out scorecards with two-animal totals (Pete).** A card with any target scored 30, 32, 34, 40 or 44 (two animals, split unknown) isn't an ordinary Big Game round, so `Import-HistoricalRounds.ps1` now leaves the whole card out and lists it in the dry run (11 of Pete's cards), instead of loading those targets as a fan of 2 with the total by hand. With the 3 cards already left out, 83 of Pete's 97 cards load. App versionCode 51, versionName 3.0.02.

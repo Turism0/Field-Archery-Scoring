@@ -1,6 +1,6 @@
 // History and stats (as the app's PersonalStats.kt): personal bests, trends and season summaries from your own
 // finished rounds. Averages are per animal (Big Game, out of 24) or per target (Woodsman, out of 30).
-import { BOW_STYLES, isFullyScored, roundStats, roundTotal, type Round, type RoundStats } from './round'
+import { BOW_STYLES, isFullyScored, roundStats, statsTargetCount, statsTotal, type Round, type RoundStats } from './round'
 import type { RoundType } from './scoring'
 
 export const MIN_TARGETS_FOR_BEST_AVERAGE = 18
@@ -13,7 +13,8 @@ export function shotOrder(a: Round, b: Round): number {
   return a.shootDate.localeCompare(b.shootDate) || a.createdUtc.localeCompare(b.createdUtc) || a.id.localeCompare(b.id)
 }
 
-const bestKey = (r: Round) => `${r.type}|${r.bowStyle}|${r.targetCount}`
+// Fun shots (3.1) are left out: bests compare the total without them, on the targets without them.
+const bestKey = (r: Round) => `${r.type}|${r.bowStyle}|${statsTargetCount(r)}`
 const finishedFull = (rounds: Round[]) => rounds.filter(r => r.status === 'COMPLETED' && isFullyScored(r))
 
 function groupBy<T>(list: T[], key: (x: T) => string): Map<string, T[]> {
@@ -37,15 +38,15 @@ export function bests(rounds: Round[]): PersonalBest[] {
     const sorted = [...list].sort(shotOrder)
     const r = sorted[0]
     return {
-      type: r.type, bowStyle: r.bowStyle, targetCount: r.targetCount, best: maxBy(sorted, roundTotal)!, roundsShot: list.length,
-      averageTotal: list.reduce((s, x) => s + roundTotal(x), 0) / list.length,
+      type: r.type, bowStyle: r.bowStyle, targetCount: statsTargetCount(r), best: maxBy(sorted, statsTotal)!, roundsShot: list.length,
+      averageTotal: list.reduce((s, x) => s + statsTotal(x), 0) / list.length,
     }
   }).sort((a, b) => typeOrder(a.type) - typeOrder(b.type) || bowOrder(a.bowStyle) - bowOrder(b.bowStyle) ||
     b.roundsShot - a.roundsShot || a.targetCount - b.targetCount)
 }
 
 export function bestAverages(rounds: Round[]): BestAverage[] {
-  const list = finishedFull(rounds).filter(r => r.targetCount >= MIN_TARGETS_FOR_BEST_AVERAGE)
+  const list = finishedFull(rounds).filter(r => statsTargetCount(r) >= MIN_TARGETS_FOR_BEST_AVERAGE)
   const out: BestAverage[] = []
   for (const l of groupBy(list, r => `${r.type}|${r.bowStyle}`).values()) {
     const best = maxBy([...l].sort(shotOrder), r => roundStats(r).averagePerAnimal ?? -1)
@@ -61,7 +62,7 @@ export function personalBestIds(rounds: Round[]): Set<string> {
   for (const list of groupBy(finishedFull(rounds), bestKey).values()) {
     let bestSoFar: number | null = null
     for (const r of [...list].sort(shotOrder)) {
-      const t = roundTotal(r)
+      const t = statsTotal(r)
       if (bestSoFar != null && t > bestSoFar) ids.add(r.id)
       if (bestSoFar == null || t > bestSoFar) bestSoFar = t
     }
@@ -71,7 +72,7 @@ export function personalBestIds(rounds: Round[]): Set<string> {
 
 /** The best earlier round of the same kind (what this one had to beat). */
 export function previousBest(round: Round, rounds: Round[]): Round | undefined {
-  return maxBy(finishedFull(rounds).filter(r => r.id !== round.id && bestKey(r) === bestKey(round) && shotOrder(r, round) < 0).sort(shotOrder), roundTotal)
+  return maxBy(finishedFull(rounds).filter(r => r.id !== round.id && bestKey(r) === bestKey(round) && shotOrder(r, round) < 0).sort(shotOrder), statsTotal)
 }
 
 export interface TrendPoint { round: Round; date: string; average: number; rolling: number }
@@ -106,7 +107,7 @@ export function seasons(rounds: Round[]): Season[] {
       year: Number(list[0].shootDate.slice(0, 4)), type: list[0].type, rounds: list.length,
       targets: list.reduce((s, r) => s + roundStats(r).targetsScored, 0),
       locations: new Set(list.map(r => r.locationName?.trim().toLowerCase()).filter(Boolean)).size,
-      stats: roundStats(combined(list)), bestRound: maxBy([...list].sort(shotOrder), roundTotal), byBow,
+      stats: roundStats(combined(list)), bestRound: maxBy([...list].sort(shotOrder), statsTotal), byBow,
       personalBests: list.filter(r => pbs.has(r.id)).length,
     }
   }).sort((a, b) => b.year - a.year || typeOrder(a.type) - typeOrder(b.type))

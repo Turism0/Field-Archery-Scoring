@@ -3,7 +3,7 @@ import { Bar, Card, go, one, ukDate, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
-import { ROUND_TYPE_NAMES, bowName, classLine, locationStatus, roundTotal, targetsComplete, targetsLine } from '../domain/round'
+import { ROUND_TYPE_NAMES, bowName, classLine, locationStatus, roundTotal, statsTargetCount, statsTotal, targetsComplete, targetsLine } from '../domain/round'
 import { handicapEntry, net, personalHandicap, personalHandicaps } from '../domain/handicap'
 import { bests, personalBestIds, seasons } from '../domain/stats'
 import { normalised, type HomeLayout } from '../domain/homeLayout'
@@ -29,9 +29,10 @@ export function Dashboard() {
   const hs = personalHandicaps(entries)
   const netOf = (r: typeof list[number]) => {
     if (r.type !== 'BIG_GAME') return null
-    const total = roundTotal(r)
-    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: r.targetCount })
-    return h ? net(total, r.targetCount, h.handicap) : null
+    // Fun shots (3.1) left out.
+    const total = statsTotal(r)
+    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: statsTargetCount(r) })
+    return h ? net(total, statsTargetCount(r), h.handicap) : null
   }
   const pbs = personalBestIds(list)
   const top = bests(list).slice(0, 6)
@@ -62,7 +63,7 @@ export function Dashboard() {
           <Card title={`${year} so far`}>
             {!season.length ? <div class="sub">No rounds this year yet.</div> : season.map(s => (
               <div class="row between"><span>{ROUND_TYPE_NAMES[s.type]}</span>
-                <span class="sub">{s.rounds} round{s.rounds === 1 ? '' : 's'} · avg {s.stats.averagePerAnimal != null ? one(s.stats.averagePerAnimal) : '–'} · best {s.bestRound ? roundTotal(s.bestRound) : '–'}</span></div>
+                <span class="sub">{s.rounds} round{s.rounds === 1 ? '' : 's'} · avg {s.stats.averagePerAnimal != null ? one(s.stats.averagePerAnimal) : '–'} · best {s.bestRound ? statsTotal(s.bestRound) : '–'}</span></div>
             ))}
             <div class="sub">{list.length} finished round{list.length === 1 ? '' : 's'} in all</div>
           </Card>
@@ -108,7 +109,7 @@ export function Dashboard() {
               <tbody>{top.map(b => (
                 <tr onClick={() => go(`/card/${b.best.id}`)}>
                   <td>{ROUND_TYPE_NAMES[b.type]} · {b.targetCount} targets<div class="sub">{ukDate(b.best.shootDate)}</div></td>
-                  <td>{bowName(b.bowStyle)}</td><td class="num">{b.roundsShot}</td><td class="num">{one(b.averageTotal)}</td><td class="num"><b>{roundTotal(b.best)}</b></td>
+                  <td>{bowName(b.bowStyle)}</td><td class="num">{b.roundsShot}</td><td class="num">{one(b.averageTotal)}</td><td class="num"><b>{statsTotal(b.best)}</b></td>
                 </tr>
               ))}</tbody>
             </table>}

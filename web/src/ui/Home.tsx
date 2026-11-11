@@ -5,7 +5,7 @@ import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress, syncNow } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
 import { getServerState, onServerState, type ServerState } from '../data/api'
-import { roundTotal } from '../domain/round'
+import { statsTotal } from '../domain/round'
 import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import {
   DEFAULT_LAYOUT, TILE_TITLES, canHide, isDefault, move, normalised, setHidden, type HomeLayout, type TileId,
@@ -39,7 +39,7 @@ export function Home() {
   const signedIn = !!account
   const admin = signedIn && isAdmin(account)
   const shown = layout.order.filter(id => id !== 'ADMIN' || admin)
-  const bestBig = done?.length ? Math.max(0, ...done.filter(r => r.type === 'BIG_GAME').map(roundTotal)) : null
+  const bestBig = done?.length ? Math.max(0, ...done.filter(r => r.type === 'BIG_GAME').map(statsTotal)) : null
   // Personal handicaps (2.9), your main bow's first.
   const hs = done ? personalHandicaps(done.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)) : []
 
