@@ -57,6 +57,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -150,6 +153,28 @@ fun ScoringScreen(
     }
 
     val r = round
+    // 3.2.07 (Pete): editing a finished round has Cancel / Save; Back asks first if anything changed.
+    val editingFlag by vm.editing.collectAsStateWithLifecycle()
+    val editing = editingFlag && r?.status == RoundStatus.COMPLETED
+    var askLeave by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    BackHandler(enabled = editing) { scope.launch { if (vm.hasChanges()) askLeave = true else vm.saveEdits(onBack) } }
+    if (askLeave) {
+        AlertDialog(
+            onDismissRequest = { askLeave = false },
+            title = { Text("Save your changes?") },
+            text = { Text("You've changed some scores on this ${if (inGroup) "group round" else "round"}. Save them, or put the scores back as they were?") },
+            confirmButton = { TextButton(onClick = { askLeave = false; vm.saveEdits(onBack) }) { Text("Save") } },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { askLeave = false }) { Text("Keep editing") }
+                    TextButton(onClick = { askLeave = false; vm.cancelEdits(onBack) }) {
+                        Text("Discard", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+        )
+    }
     // Also when moving to another archer in a group.
     LaunchedEffect(r?.id) { if (r != null) vm.ensureTargetSelected(r) }
     // Round details changed (e.g. fewer targets): make sure the open target still exists.
@@ -187,9 +212,14 @@ fun ScoringScreen(
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                        if (editing) {
+                            TextButton(onClick = { vm.cancelEdits(onBack) }) { Text("Cancel") }
+                        } else {
+                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                        }
                     },
                     actions = {
+                        if (editing) TextButton(onClick = { vm.saveEdits(onBack) }) { Text("Save", fontWeight = FontWeight.SemiBold) }
                         IconButton(onClick = { showCard = true }) {
                             Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Scorecard")
                         }
@@ -249,8 +279,9 @@ fun ScoringScreen(
                     onPrev = { vm.prev() },
                     onNext = { vm.next() },
                     onFinish = { confirmFinish = true },
-                    onDone = onBack,
+                    onDone = { if (editing) vm.saveEdits(onBack) else onBack() },
                     finished = r.status == RoundStatus.COMPLETED,
+                    doneLabel = if (editing) "Save" else "Done",
                 )
             }
         },
@@ -488,6 +519,8 @@ private fun TargetNavBar(
     onNext: () -> Unit,
     onFinish: () -> Unit,
     onDone: () -> Unit,
+    /** The last target's button on a finished round: Save while editing (3.2.07). */
+    doneLabel: String = "Done",
 ) {
     Surface(tonalElevation = 3.dp) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -512,7 +545,7 @@ private fun TargetNavBar(
                     Text(
                         when {
                             !scored -> "Score target $targetNo to continue"
-                            last -> if (finished) "Done" else "Finish round"
+                            last -> if (finished) doneLabel else "Finish round"
                             else -> nextLabel ?: "Next target"
                         },
                         style = MaterialTheme.typography.titleSmall,

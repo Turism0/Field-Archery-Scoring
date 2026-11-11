@@ -65,6 +65,36 @@ export async function saveTarget(id: string, t: TargetScore) {
   await putRound({ ...r, targets, updatedUtc: nowUtc(), pending: true, failed: false })
 }
 
+// ---- editing a finished round (3.2.07, Pete): Save keeps the changes, Cancel puts the scores back ----
+
+/** Copies of a round (and everyone in its group) before editing. */
+export async function snapshot(r: Round): Promise<Round[]> {
+  return structuredClone(await groupOf(r))
+}
+
+/** The targets in [before] that differ now (and are still in the round): what Cancel would put back. */
+async function changes(before: Round[]): Promise<[string, TargetScore][]> {
+  const out: [string, TargetScore][] = []
+  for (const b of before) {
+    const now = await getRound(b.id)
+    if (!now) continue
+    for (const t of b.targets) {
+      if (t.targetNo <= now.targetCount && JSON.stringify(target(now, t.targetNo)) !== JSON.stringify(t)) out.push([b.id, t])
+    }
+  }
+  return out
+}
+
+export async function changedSince(before: Round[]): Promise<boolean> { return (await changes(before)).length > 0 }
+
+/**
+ * Cancel: every target back as it was. Saved as a new edit, so a copy already backed up mid-edit is put back on the
+ * server too. Round details (changed on their own screen, with their own Save) aren't touched.
+ */
+export async function restore(before: Round[]) {
+  for (const [id, t] of await changes(before)) await saveTarget(id, t)
+}
+
 /** In a group, everyone not yet scored on this target gets the same target type. */
 export async function setTypeForGroup(r: Round, t: TargetScore) {
   for (const m of await groupOf(r)) {

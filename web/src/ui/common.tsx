@@ -58,12 +58,17 @@ export function useDesktop(): boolean {
 const TOP_LEVEL = ['/', '/add', '/new', '/join', '/history', '/stats', '/handicap', '/friends', '/map', '/admin', '/profile']
 const isTopLevel = () => TOP_LEVEL.includes((location.hash.slice(1) || '/').split('?')[0])
 
-export function Bar({ title, sub, onBack, children }: { title: string; sub?: string; onBack?: (() => void) | false; children?: ComponentChildren }) {
+export function Bar({ title, sub, onBack, start, children }: {
+  title: string; sub?: string; onBack?: (() => void) | false
+  /** Shown instead of the back arrow (3.2.07: Cancel while editing a finished round). */
+  start?: ComponentChildren
+  children?: ComponentChildren
+}) {
   const desktop = useDesktop()
   if (desktop && onBack === undefined && isTopLevel()) onBack = false
   return (
     <header class="bar">
-      {onBack !== false && <button class="icon" aria-label="Back" onClick={onBack ?? back}>←</button>}
+      {start ?? (onBack !== false && <button class="icon" aria-label="Back" onClick={onBack ?? back}>←</button>)}
       {sub ? <div class="titles"><h1>{title}</h1><div class="sub">{sub}</div></div> : <h1>{title}</h1>}
       {children}
     </header>

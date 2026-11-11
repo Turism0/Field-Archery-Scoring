@@ -1732,6 +1732,44 @@ class ScoringViewModel(
     /** The round opened from the nav route (in a group, whoever was tapped; usually the scorer's own round). */
     val startRoundId: String = checkNotNull(saved["roundId"])
 
+    // ---- Editing a finished round (3.2.07, Pete): Save keeps the changes, Cancel puts the scores back ----
+
+    /** The scores as they were when the screen opened, if the round was finished (otherwise this isn't editing). */
+    private var before: List<Round>? = null
+    private val _editing = MutableStateFlow(false)
+    /** Editing a finished round: Cancel / Save in the top bar, and Back asks first if anything changed. */
+    val editing: StateFlow<Boolean> = _editing.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            if (rounds.get(startRoundId)?.status == RoundStatus.COMPLETED) {
+                before = rounds.snapshot(startRoundId)
+                _editing.value = true
+            }
+        }
+    }
+
+    /** Anything changed since the screen opened? */
+    suspend fun hasChanges(): Boolean = before?.let { rounds.changedSince(it) } ?: false
+
+    /** Save: the changes are already kept as they're made; just finish editing. */
+    fun saveEdits(onDone: () -> Unit) {
+        before = null
+        _editing.value = false
+        onDone()
+    }
+
+    /** Cancel: every score back as it was when the screen opened, then [onDone]. */
+    fun cancelEdits(onDone: () -> Unit) {
+        val b = before
+        before = null
+        _editing.value = false
+        viewModelScope.launch {
+            b?.let { rounds.restore(it) }
+            onDone()
+        }
+    }
+
     /** The round being scored now: in a group this moves from archer to archer. */
     private val _roundId = MutableStateFlow(saved.get<String>(KEY_CURRENT) ?: startRoundId)
     val roundId: StateFlow<String> = _roundId.asStateFlow()

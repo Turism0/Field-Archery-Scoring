@@ -4,6 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.07
+
+- **3.2.07 (app and web app; API version only): Save and Cancel when editing a finished round (Pete, from testers).** Edit scores on a finished round's scorecard (or tap a target) opens scoring with **Cancel** on the left of the top bar (instead of the back arrow) and **Save** on the right, on every target; the last target's button says Save too. Both go back to the screen before.
+  - **Save** keeps the changes (they're saved as you go, so nothing is lost if the phone dies mid-edit).
+  - **Cancel** puts every score back as it was when the screen opened, everyone's in a group round. It's saved as a new edit, so if a change was backed up mid-edit the server gets the original back too. Round details changed on their own screen (with its own Save) aren't undone.
+  - **Back** (the phone's Back, or the browser's) asks **Save your changes?** (Save / Discard / Keep editing) if anything changed; with no changes it just goes back.
+  - Rounds still being scored are unchanged (back arrow, Finish round).
+  - Tested in the web app (Cancel, Save, Back with and without changes, the dialog's Discard). App versionCode 69, versionName 3.2.07.
+
 ## Version 3.2.06
 
 - **3.2.06 (API; app and web app version only): API security review (Pete).**

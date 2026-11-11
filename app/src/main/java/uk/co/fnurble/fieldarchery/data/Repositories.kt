@@ -372,6 +372,30 @@ class RoundRepository(
         dao.deleteGuestsBefore(Instant.now(clock).minus(java.time.Duration.ofDays(GUEST_DAYS)).toEpochMilli())
     }
 
+    // ---- Editing a finished round (3.2.07, Pete): Save keeps the changes, Cancel puts the scores back ----
+
+    /** Copies of a round (and everyone in its group) before editing. */
+    suspend fun snapshot(roundId: String): List<Round> = groupRoundsOf(roundId).mapNotNull { get(it.id) }
+
+    /** The targets in [before] that differ now (and are still in the round): what Cancel would put back. */
+    private suspend fun changes(before: List<Round>): List<Pair<String, TargetScore>> = before.flatMap { b ->
+        val now = get(b.id) ?: return@flatMap emptyList()
+        b.targets.filter { it.targetNo <= now.targetCount && now.target(it.targetNo) != it }.map { b.id to it }
+    }
+
+    suspend fun changedSince(before: List<Round>): Boolean = changes(before).isNotEmpty()
+
+    /**
+     * Cancel: every target back as it was. Saved as a new edit, so a copy already backed up mid-edit is put back on
+     * the server too. Round details (changed on their own screen, with their own Save) aren't touched.
+     */
+    suspend fun restore(before: List<Round>) {
+        val now = Instant.now(clock)
+        val back = changes(before)
+        back.forEach { (id, t) -> dao.saveTarget(t.toEntity(id, now), t.toAnimalEntities(id)) }
+        if (back.isNotEmpty()) onChanged()
+    }
+
     suspend fun saveTarget(roundId: String, target: TargetScore) {
         dao.saveTarget(target.toEntity(roundId, Instant.now(clock)), target.toAnimalEntities(roundId))
         onChanged()

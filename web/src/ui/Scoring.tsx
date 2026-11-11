@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'preact/hooks'
-import { Bar, Dialog, Menu, errorText, go, replace, toast, ukDate, useData } from './common'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { Bar, Dialog, Menu, back, errorText, go, replace, toast, ukDate, useData } from './common'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
-import { deleteRound, groupOf, saveTarget, setStatus, setTypeForGroup, syncNow } from '../data/rounds'
+import { changedSince, deleteRound, groupOf, restore, saveTarget, setStatus, setTypeForGroup, snapshot, syncNow } from '../data/rounds'
 import * as live from '../data/live'
 import { canGoTo, firstUnscored, locationStatus, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
 import {
@@ -29,6 +29,33 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const account = useData(getAccount)
   const [locOpen, setLocOpen] = useState(false)
   const [askedName, setAskedName] = useState(false)
+
+  // ---- editing a finished round (3.2.07, Pete): Save keeps the changes, Cancel puts the scores back ----
+  // The scores as they were when the screen opened (null: the round wasn't finished, so this isn't editing).
+  const [before, setBefore] = useState<Round[] | null | undefined>(undefined)
+  useEffect(() => {
+    if (before !== undefined || !round) return
+    if (round.status === 'COMPLETED') snapshot(round).then(setBefore); else setBefore(null)
+  }, [round?.id])
+  const editing = !!before && round?.status === 'COMPLETED'
+  const [leaving, setLeaving] = useState(false)
+  const exiting = useRef(false)   // Save / Cancel are going back: that Back isn't asked about
+  // The browser's or phone's Back while editing asks first: a spare history entry (marked editGuard) catches it.
+  useEffect(() => {
+    if (!editing) return
+    if (!history.state?.editGuard) history.pushState({ editGuard: true }, '', location.href)
+    const onPop = async () => {
+      if (exiting.current) return
+      if (before && await changedSince(before)) { history.pushState({ editGuard: true }, '', location.href); setLeaving(true) }
+      else back()
+    }
+    addEventListener('popstate', onPop)
+    return () => removeEventListener('popstate', onPop)
+  }, [editing])
+  /** Back to the screen before (past the spare history entry). */
+  const leave = () => { exiting.current = true; if (history.state?.editGuard) history.go(-2); else back() }
+  async function saveEdits() { setLeaving(false); syncNow(); leave() }
+  async function cancelEdits() { setLeaving(false); if (before) await restore(before); syncNow(); leave() }
 
   // ---- live group (through the server) ----
   const gid = group[0]?.groupId
@@ -137,7 +164,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     }
   }
   const nextLabel = !scored ? `Score target ${n} to continue`
-    : last ? (finished ? 'Done' : 'Finish round')
+    : last ? (finished ? (editing ? 'Save' : 'Done') : 'Finish round')
     : next ? (next[1] === n ? `Next: ${memberName(next[0])}` : `Target ${next[1]}: ${memberName(next[0])}`) : 'Next target'
 
   async function finish() {
@@ -156,7 +183,9 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     // 2.9.03 (Pete): the page is the phone's height; the target area scrolls only if it really can't fit.
     <div class="scoring">
       <Bar title={inGroup ? `Target ${n} · ${name}` : `Target ${n} of ${round.targetCount}`}
-        sub={(inGroup ? `of ${round.targetCount} · ` : '') + `${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onBack={() => go('/')}>
+        sub={(inGroup ? `of ${round.targetCount} · ` : '') + `${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onBack={() => go('/')}
+        start={editing ? <button style="padding:8px 12px" onClick={cancelEdits}>Cancel</button> : undefined}>
+        {editing && <button style="padding:8px 12px;font-weight:600" onClick={saveEdits}>Save</button>}
         <button class="icon" aria-label="Scorecard" onClick={() => setAsk('card')}>☰</button>
         <Menu items={[
           finished ? { text: `Reopen ${what}`, onClick: () => setStatus(round, 'IN_PROGRESS') } : { text: `Finish ${what}`, onClick: () => setAsk('finish') },
@@ -204,11 +233,16 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
 
       <div class="nav">
         <button class="outlined" disabled={!prevOk} onClick={() => step(-1)}>‹ Prev</button>
-        <button class="filled" disabled={!scored} onClick={() => (!last ? step(1) : finished ? go('/') : setAsk('finish'))}>
+        <button class="filled" disabled={!scored} onClick={() => (!last ? step(1) : finished ? (editing ? saveEdits() : go('/')) : setAsk('finish'))}>
           {nextLabel}{scored && !last ? ' ›' : ''}</button>
       </div>
 
       {liveCheck.dialogs}
+      <Dialog open={leaving} title="Save your changes?" onClose={() => setLeaving(false)}
+        actions={<><button onClick={() => setLeaving(false)}>Keep editing</button>
+          <button class="danger" onClick={cancelEdits}>Discard</button><button class="filled" onClick={saveEdits}>Save</button></>}>
+        You've changed some scores on this {what}. Save them, or put the scores back as they were?
+      </Dialog>
       <Dialog open={overrideOpen} title="Override score" onClose={() => setOverrideOpen(false)}
         actions={<><button onClick={() => setOverrideOpen(false)}>Cancel</button>
           <button disabled={overrideText === ''} onClick={() => { const v = Number(overrideText); setOverrideOpen(false); if (Number.isInteger(v) && v >= 0) edit(x => withOverride(x, v)) }}>Save</button></>}>
