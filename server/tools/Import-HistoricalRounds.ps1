@@ -1,7 +1,8 @@
 #Requires -Version 7
 <#
     Loads historical rounds from a scorecard CSV into one archer's account through the API (3.0.01, Pete).
-    Run in PowerShell 7 (pwsh). Needs API 3.0 and schema 10 (014_location_no_pin.sql) for name-only locations.
+    Run in PowerShell 7 (pwsh). Needs API 3.1 and schema 11 (014_location_no_pin.sql and 015_fun_shots.sql): name-only
+    locations and fun shots.
 
         .\Import-HistoricalRounds.ps1 -CsvPath .\archery_scores_in_memory.csv -Username Turismo            # dry run
         .\Import-HistoricalRounds.ps1 -CsvPath .\archery_scores_in_memory.csv -Username Turismo -Apply     # for real
@@ -16,8 +17,9 @@
     - A round you already have with the same date and total (e.g. scored in the app) is left alone.
     - Big Game points become an arrow and hit, as on the desktop score sheet: 24 inner kill, 20 kill, 16 wound on
       arrow 1; 14 kill, 10 wound on arrow 2; 8 kill, 4 wound on arrow 3; 0 a miss.
-    - A scorecard with any other target score (e.g. 30, 34, 40, 44: two animals, split unknown) is left out (Pete,
-      3.0.02): it isn't an ordinary Big Game round we can record shot by shot.
+    - Any other target score (e.g. 15, 25, 30, 34, 40, 44: not one Big Game shot, and the card doesn't say what it was)
+      is loaded as a fun shot (3.1.05, Pete): it counts in the round total but not in any stats or handicaps.
+      (3.0.02 left those cards out.)
     - Locations: the club name, or "<name> <year>" for the NFAS championships (a different ground every year).
       An existing location with that name (any case) is used; otherwise a public name-only location (no map pin) is
       made. Use $LocationNames to point a CSV club at a location you already have under another name.
@@ -37,7 +39,7 @@ $ErrorActionPreference = 'Stop'
 # Scorecards left out (Pete, 11 Nov 2026).
 $Skip = @{
     'PXL_20250622_133250404.jpg' = 'a second photo of the 21 June 2025 Druids card (same scores)'
-    '20170803_165238.jpg'        = "Elmtree 2017-08-03: 15/25/30/35 aren't Big Game scores"
+    '20170803_165238.jpg'        = 'Elmtree 2017-08-03: 13 targets of 15/25/30/35, too many to be fun shots (Pete, 3.1.06)'
     '20170729_173431.jpg'        = 'Woodsman 2017-07-29: 35/40/45 are more than the 30 a Woodsman target allows'
 }
 
@@ -87,10 +89,12 @@ function TargetFor([int]$no, [int]$points) {
         return @{ targetNo = $no; type = 'STANDARD'; overridePoints = $null; points = $points
                   animals = @(@{ index = 0; state = 'SCORED'; arrowNo = $a[0]; hit = $a[1]; points = $points }) }
     }
-    throw "Target $no has $points points, which isn't a single Big Game shot."
+    # Not one Big Game shot and we don't know what it was (3.1.05, Pete): a fun shot, in the total but not in stats.
+    if ($points -lt 0 -or $points -gt 999) { throw "Target $no has $points points: more than a fun shot can hold (0 to 999)." }
+    return @{ targetNo = $no; type = 'FUN'; overridePoints = $points; points = $points; animals = @() }
 }
 
-# Target scores that aren't one Big Game shot (0, 4, 8, 10, 14, 16, 20, 24), as "target N: points".
+# Target scores that aren't one Big Game shot (0, 4, 8, 10, 14, 16, 20, 24), as "target N: points": loaded as fun shots.
 function OddTargets($row) {
     $count = [int]$row.Target_Count
     @(foreach ($n in 1..$count) {
@@ -107,7 +111,7 @@ Write-Host "$($rows.Count) scorecards for $Archer in the CSV.`n"
 # ---- sign in ----
 $r = Call GET '/health'
 if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health (HTTP $($r.Status))." }
-if ($r.Body.schemaVersion -lt 10) { throw "The database is schema $($r.Body.schemaVersion): run 014_location_no_pin.sql and publish API 3.0 first." }
+if ($r.Body.schemaVersion -lt 11) { throw "The database is schema $($r.Body.schemaVersion): run 014_location_no_pin.sql and 015_fun_shots.sql, and publish API 3.1, first." }
 $password = Read-Host "Password for $Username" -AsSecureString
 $r = Call POST '/api/auth/login' @{ username = $Username; password = (ConvertFrom-SecureString $password -AsPlainText); deviceName = 'Historical import' }
 if ($r.Status -ne 200) { throw "Couldn't sign in ($($r.Status)): $($r.Body.message)" }
@@ -150,9 +154,6 @@ Write-Host "$($known.Count) shoot locations you can use.`n"
 $plan = foreach ($row in $rows | Sort-Object Shoot_Date, File) {
     if ($Skip.ContainsKey($row.File)) { [pscustomobject]@{ Row = $row; Action = 'skip'; Why = $Skip[$row.File] }; continue }
     $odd = OddTargets $row
-    if ($row.Round_Type -eq 'Big Game' -and $odd.Count) {
-        [pscustomobject]@{ Row = $row; Action = 'skip'; Why = "not one Big Game shot per target ($($odd -join ', '))" }; continue
-    }
     $date = $row.Shoot_Date
     $total = [int][double]$row.Recorded_Total
     $existing = $live | Where-Object { $_.shootDate -eq $date -and $_.totalPoints -eq $total }
@@ -163,7 +164,7 @@ $plan = foreach ($row in $rows | Sort-Object Shoot_Date, File) {
     $club = if ($LocationForFile.ContainsKey($row.File)) { $LocationForFile[$row.File] } else { $row.Host_Club.Trim() }
     if ($LocationNames.ContainsKey($club)) { $club = $LocationNames[$club] }
     elseif ($PerYear -contains $club) { $club = "$club $($date.Substring(0, 4))" }
-    [pscustomobject]@{ Row = $row; Action = 'load'; Id = $id; Date = $date; Total = $total; Location = $club }
+    [pscustomobject]@{ Row = $row; Action = 'load'; Id = $id; Date = $date; Total = $total; Location = $club; Fun = $odd }
 }
 
 $load = @($plan | Where-Object Action -eq 'load')
@@ -171,6 +172,10 @@ $newNames = @($load.Location | Sort-Object -Unique | Where-Object { -not $known.
 
 Write-Host '---- Skipped ----' -ForegroundColor Cyan
 $plan | Where-Object Action -eq 'skip' | ForEach-Object { Write-Host "  $($_.Row.Shoot_Date) $($_.Row.Host_Club) ($($_.Row.File)): $($_.Why)" }
+Write-Host "`n---- Fun shots (not one Big Game shot: in the total, not in stats) ----" -ForegroundColor Cyan
+$withFun = @($load | Where-Object { $_.Fun.Count })
+if (-not $withFun) { Write-Host '  none' }
+$withFun | ForEach-Object { Write-Host "  $($_.Date) $($_.Location): $($_.Fun -join ', ')" }
 Write-Host "`n---- Locations ----" -ForegroundColor Cyan
 $load.Location | Sort-Object -Unique | ForEach-Object {
     $n = @($load | Where-Object Location -eq $_).Count

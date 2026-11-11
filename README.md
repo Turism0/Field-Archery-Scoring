@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1.06
+
+- **3.1.06 (server tool; app, API and web app version only): the historical import leaves out the Elmtree 2017-08-03 card again (Pete).** It has 13 targets of 15/25/30/35: a shoot usually has only 1 or 2 fun shots, so it isn't known what happened there. 94 of Pete's 97 cards load (less any already in the app). App versionCode 58, versionName 3.1.06.
+
+## Version 3.1.05
+
+- **3.1.05 (server tool; app, API and web app version only): the historical import loads odd target scores as fun shots (Pete).** A target score that isn't one Big Game shot (e.g. 15, 25, 30, 32, 34, 40, 44), where the card doesn't say what it was, is now loaded as a fun shot: in the round total, left out of all stats and handicaps. So the 11 cards with two-animal totals and the Elmtree 2017-08-03 card (13 such targets) are loaded instead of left out; the dry run lists every fun shot by card and target. Still left out: the second photo of the 21 June 2025 Druids card and the 2017-07-29 Woodsman (fun shots are Big Game only). That's 95 of Pete's 97 cards, less any already in the app. Needs API 3.1 and schema 11. App versionCode 57, versionName 3.1.05.
+
 ## Version 3.1.04
 
 - **3.1.04 (server test fix; app, API and web app version only):** `Test-FunShots.ps1` had every good round refused with a blank 400: it added up the round total with Measure-Object, which gives a decimal, so the total went to the API as `85.0` and the API (whole numbers only) couldn't read the round. The total is now a whole number. The API itself was fine. App versionCode 56, versionName 3.1.04.

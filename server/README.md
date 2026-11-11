@@ -223,7 +223,7 @@ Needs `015_fun_shots.sql` run. A Big Game target of type `FUN` with its score ty
 .\tools\Import-HistoricalRounds.ps1 -CsvPath <csv> -Username <your username> -Apply   # loads them
 ```
 
-PowerShell 7; needs API 3.0 and schema 10. Loads one archer's rows from the scorecard CSV as finished Big Game rounds through `PUT /api/rounds/{id}` (ids from the photo file names, so it's safe to run again), using an existing location with the club's name or making a name-only one. See the comments at the top of the script.
+PowerShell 7; needs API 3.0 and schema 10. Loads one archer's rows from the scorecard CSV as finished Big Game rounds through `PUT /api/rounds/{id}` (ids from the photo file names, so it's safe to run again), using an existing location with the club's name or making a name-only one. Target scores that aren't one Big Game shot are loaded as fun shots (3.1.05; needs API 3.1, schema 11). See the comments at the top of the script.
 
 ## Testing name-only locations (3.0)
 
