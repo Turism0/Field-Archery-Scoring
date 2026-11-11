@@ -15,8 +15,9 @@
     - Each round's id is made from its file name, so running it again changes nothing (the API says "unchanged").
     - A round you already have with the same date and total (e.g. scored in the app) is left alone.
     - Big Game points become an arrow and hit, as on the desktop score sheet: 24 inner kill, 20 kill, 16 wound on
-      arrow 1; 14 kill, 10 wound on arrow 2; 8 kill, 4 wound on arrow 3; 0 a miss. Totals above 24 (30, 32, 34, 40,
-      44: two animals) are a fan of 2 with the total typed by hand (=N), as the split isn't on the CSV.
+      arrow 1; 14 kill, 10 wound on arrow 2; 8 kill, 4 wound on arrow 3; 0 a miss.
+    - A scorecard with any other target score (e.g. 30, 34, 40, 44: two animals, split unknown) is left out (Pete,
+      3.0.02): it isn't an ordinary Big Game round we can record shot by shot.
     - Locations: the club name, or "<name> <year>" for the NFAS championships (a different ground every year).
       An existing location with that name (any case) is used; otherwise a public name-only location (no map pin) is
       made. Use $LocationNames to point a CSV club at a location you already have under another name.
@@ -86,13 +87,16 @@ function TargetFor([int]$no, [int]$points) {
         return @{ targetNo = $no; type = 'STANDARD'; overridePoints = $null; points = $points
                   animals = @(@{ index = 0; state = 'SCORED'; arrowNo = $a[0]; hit = $a[1]; points = $points }) }
     }
-    if ($points -le 48) {
-        # Two animals, split unknown: a fan of 2 with the total by hand.
-        return @{ targetNo = $no; type = 'FAN'; overridePoints = $points; points = $points
-                  animals = @(@{ index = 0; state = 'PENDING'; arrowNo = $null; hit = $null; points = 0 },
-                              @{ index = 1; state = 'PENDING'; arrowNo = $null; hit = $null; points = 0 }) }
-    }
-    throw "Target $no has $points points: more than two animals can score."
+    throw "Target $no has $points points, which isn't a single Big Game shot."
+}
+
+# Target scores that aren't one Big Game shot (0, 4, 8, 10, 14, 16, 20, 24), as "target N: points".
+function OddTargets($row) {
+    $count = [int]$row.Target_Count
+    @(foreach ($n in 1..$count) {
+        $v = $row."Target_$n"
+        if ($v -ne '' -and -not ([int][double]$v -eq 0 -or $Arrows.ContainsKey([int][double]$v))) { "target $n`: $([int][double]$v)" }
+    })
 }
 
 # ---- read the CSV ----
@@ -145,6 +149,10 @@ Write-Host "$($known.Count) shoot locations you can use.`n"
 # ---- work out each round ----
 $plan = foreach ($row in $rows | Sort-Object Shoot_Date, File) {
     if ($Skip.ContainsKey($row.File)) { [pscustomobject]@{ Row = $row; Action = 'skip'; Why = $Skip[$row.File] }; continue }
+    $odd = OddTargets $row
+    if ($row.Round_Type -eq 'Big Game' -and $odd.Count) {
+        [pscustomobject]@{ Row = $row; Action = 'skip'; Why = "not one Big Game shot per target ($($odd -join ', '))" }; continue
+    }
     $date = $row.Shoot_Date
     $total = [int][double]$row.Recorded_Total
     $existing = $live | Where-Object { $_.shootDate -eq $date -and $_.totalPoints -eq $total }

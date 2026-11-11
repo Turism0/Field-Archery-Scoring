@@ -4,11 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.0.02
+
+- **3.0.02 (server tool; app, API and web app version only): the historical import leaves out scorecards with two-animal totals (Pete).** A card with any target scored 30, 32, 34, 40 or 44 (two animals, split unknown) isn't an ordinary Big Game round, so `Import-HistoricalRounds.ps1` now leaves the whole card out and lists it in the dry run (11 of Pete's cards), instead of loading those targets as a fan of 2 with the total by hand. With the 3 cards already left out, 83 of Pete's 97 cards load. App versionCode 51, versionName 3.0.02.
+
 ## Version 3.0.01
 
 - **3.0.01 (server tool; app, API and web app version only): loading historical scorecards (Pete).** `server/tools/Import-HistoricalRounds.ps1` loads rounds from the scorecard CSV (one row per card, points per target) into one account through the API. Run it in PowerShell 7 after 3.0 is deployed: first without `-Apply` (a dry run that lists what it would load, skip and which locations it would make), then with `-Apply`.
   - Only the named archer's rows (default Pete Bullock; Jo's are left out). Left out (Pete): the second photo of the 21 June 2025 Druids card, Elmtree 2017-08-03 (15/25/30/35 aren't Big Game scores) and the Woodsman 2017-07-29 (35/40/45 are over the Woodsman maximum of 30). June 2019 is Druids, not the 3D Championships.
-  - Points become an arrow and hit as on the desktop score sheet (24/20/16 arrow 1, 14/10 arrow 2, 8/4 arrow 3, 0 a miss), so stats and handicaps work. Totals for two animals (30, 32, 34, 40, 44) are a fan of 2 with the total by hand, as the card doesn't say how they split.
+  - Points become an arrow and hit as on the desktop score sheet (24/20/16 arrow 1, 14/10 arrow 2, 8/4 arrow 3, 0 a miss), so stats and handicaps work. (Totals for two animals were loaded as a fan of 2 with the total by hand; 3.0.02 leaves those cards out.)
   - Locations: the club name, or e.g. "NFAS National Championships 2016" for championships (a different ground each year). A location you can already see with that name is used; otherwise a public name-only one is made (3.0). If a club is already on the map under another name, map it in `$LocationNames` at the top of the script after the dry run.
   - Safe to run again: each round's id comes from its photo's file name, so a second run changes nothing, and a round you already have on that date with that total (e.g. scored in the app) is skipped.
   - App versionCode 50, versionName 3.0.01.
