@@ -43,7 +43,7 @@ function New-Round($third, $LocationId = $null, [string]$Type = 'BIG_GAME') {
     $now = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
     $targets = @((New-KillTarget 1), (New-KillTarget 2), $third)
     @{ roundType = $Type; shootDate = (Get-Date).ToString('yyyy-MM-dd'); targetCount = 3; archerClass = 'G'; ageGroup = 'ADULT'
-       bowStyle = 'LB'; status = 'COMPLETED'; totalPoints = ($targets | ForEach-Object { $_.points } | Measure-Object -Sum).Sum
+       bowStyle = 'LB'; status = 'COMPLETED'; totalPoints = [int]($targets | ForEach-Object { $_.points } | Measure-Object -Sum).Sum   # [int]: a double goes as 85.0, which the API refuses
        clientCreatedUtc = $now; clientUpdatedUtc = $now; locationId = $LocationId; targets = $targets }
 }
 
