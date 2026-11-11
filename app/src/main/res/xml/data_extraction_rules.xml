@@ -4,8 +4,11 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="database" path="fieldarchery.db" />
+        <!-- Whose rounds those are (3.2.02), so a restored phone keeps them for that account and clears them for another. -->
+        <include domain="sharedpref" path="device_data.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="fieldarchery.db" />
+        <include domain="sharedpref" path="device_data.xml" />
     </device-transfer>
 </data-extraction-rules>

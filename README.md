@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.03
+
+- **3.2.03 (app and web app; API version only): two more gaps where one account's data could reach another (Pete: review after 3.2.02).**
+  - **Signing out during a sync:** a sync already running kept going with the old sign-in and could put that account's rounds, friends and download position back on the just-cleared device. Sync now stops as soon as the sign-in it started with has ended, and keeps nothing more.
+  - **Android backup / new phone:** the record of whose rounds are on the phone is now backed up with the rounds, so a restored phone keeps them for that account (no question) and clears them if someone else signs in. Before, a restored phone would have asked about its own rounds as if scored while signed out.
+  - Reviewed with no change needed: the server only lets an account read or change its own rounds, requests, groups and private locations (friends see finished rounds only; Admin and Owner checks on every admin call); the web app's offline copy holds only the app's own files, never anyone's data; nothing else is kept in the browser or on the phone beyond what signing out now clears.
+  - App versionCode 65, versionName 3.2.03.
+
 ## Version 3.2.02
 
 - **3.2.02 (app and web app; API version only): signing out clears the device (Pete, bug fix).** Before, signing out left everything on the phone or browser, so the next account to sign in saw the last person's rounds, profile and friends.

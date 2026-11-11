@@ -124,10 +124,14 @@ async function doSync(): Promise<SyncReport> {
     try { await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
     await upload(token)
     await download(token)
+    // Signed out while syncing (3.2.02): nothing more is kept for that account.
+    if (!(await stillSignedIn(token))) return { ok: false, message: 'Signed out.' }
     try {
       const f = await request('GET', '/api/friends', undefined, token)
+      if (!(await stillSignedIn(token))) return { ok: false, message: 'Signed out.' }
       await setKv('friends', f.friends.map((x: any) => ({ archerId: x.archerId, username: x.username }) satisfies Friend))
     } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
+    if (!(await stillSignedIn(token))) return { ok: false, message: 'Signed out.' }
     await setKv('lastSync', new Date().toISOString())
     return { ok: true }
   } catch (e) {
@@ -170,6 +174,9 @@ async function markSynced(id: string, editedAt: string, failed: boolean) {
   if (r && r.updatedUtc === editedAt) await putRound({ ...r, pending: false, failed }, false)
 }
 
+/** False once this sign-in has ended (signed out, or another account) mid-sync: its rounds mustn't land on a cleared device. */
+async function stillSignedIn(token: string) { return (await getAccount())?.token === token }
+
 async function download(token: string) {
   const saved = await getKv<string>('cursor')
   // A few minutes before the last cursor, so a change saved as we last downloaded isn't missed.
@@ -180,13 +187,14 @@ async function download(token: string) {
     const q: string = [since ? `since=${encodeURIComponent(since)}` : '', afterId ? `afterId=${afterId}` : '', 'limit=50'].filter(Boolean).join('&')
     const page: any = await request('GET', `/api/rounds?${q}`, undefined, token)
     for (const j of page.rounds as any[]) {
+      if (!(await stillSignedIn(token))) return
       try { await applyRemote(j) } catch { /* a round this version can't read: skipped */ }
       since = j.serverUpdatedUtc as string; afterId = j.roundId as string
       if (!newest || since! > newest) newest = since
     }
     if (!page.more) break
   }
-  if (newest) await setKv('cursor', newest)
+  if (newest && await stillSignedIn(token)) await setKv('cursor', newest)
   await putRounds([])
 }
 

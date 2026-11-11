@@ -2,4 +2,6 @@
 <!-- Android 8–11: same as data_extraction_rules.xml – back up the database, not the sign-in token. -->
 <full-backup-content>
     <include domain="database" path="fieldarchery.db" />
+    <!-- Whose rounds those are (3.2.02), so a restored phone keeps them for that account and clears them for another. -->
+    <include domain="sharedpref" path="device_data.xml" />
 </full-backup-content>

@@ -66,12 +66,15 @@ class RoundSyncer(
             upload(account.token)
             uploadOffers(account.token)
             val skipped = download(account.token)
+            // Signed out while syncing (3.2.02): nothing more is kept for that account.
+            if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
             // Remember friends for adding them to group rounds with no signal (not essential).
             try {
                 cacheFriends(account.token)
             } catch (e: ApiException) {
                 if (e.isNetwork || e.status == 401) throw e
             }
+            if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
             accounts.setLastSync(Instant.now())
             Report(Outcome.DONE, skipped = skipped)
         } catch (e: ApiException) {
@@ -142,8 +145,12 @@ class RoundSyncer(
         }
     }
 
+    /** False once this sign-in has ended (signed out, or another account) mid-sync: its rounds mustn't land on a cleared phone. */
+    private fun stillSignedIn(token: String) = accounts.account.value?.token == token
+
     private suspend fun cacheFriends(token: String) {
         val list = api.friends(token).getJSONArray("friends")
+        if (!stillSignedIn(token)) return
         accounts.setCachedFriends((0 until list.length()).map { list.getJSONObject(it) }
             .map { CachedFriend(it.getString("archerId"), it.getString("username")) })
     }
@@ -162,6 +169,7 @@ class RoundSyncer(
             val page = api.changedRounds(token, since, afterId)
             val rounds = page.getJSONArray("rounds")
             for (i in 0 until rounds.length()) {
+                if (!stillSignedIn(token)) return skipped
                 val json = rounds.getJSONObject(i)
                 // Skip (and count) a round this version of the app can't read.
                 if (runCatching { applyRemote(json) }.isFailure) skipped++
@@ -172,7 +180,7 @@ class RoundSyncer(
             }
         } while (page.optBoolean("more"))
 
-        newest?.let { accounts.setPullCursor(it.toString()) }
+        if (stillSignedIn(token)) newest?.let { accounts.setPullCursor(it.toString()) }
         return skipped
     }
 
