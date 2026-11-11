@@ -79,6 +79,7 @@ builder.Services.AddRateLimiter(o =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseSecurityHeaders();   // 3.2.06: browser security headers on everything (SecurityHeaders.cs)
 // The web app (2.5, built from web/ into wwwroot/app): /app/ for iPhones and any browser. The page, service worker and
 // manifest are always re-checked so updates reach phones; everything else has a content hash in its name.
 var types = new FileExtensionContentTypeProvider();
@@ -187,5 +188,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "3.2.05";
+    public const string Version = "3.2.06";
 }

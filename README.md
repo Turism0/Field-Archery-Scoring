@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.06
+
+- **3.2.06 (API; app and web app version only): API security review (Pete).**
+  - **Browser security headers on everything** (`SecurityHeaders.cs`): a Content-Security-Policy that only lets the web app run its own scripts (so injected script can't run, or send a sign-in token anywhere) and load map tiles from OpenStreetMap; no other site can show the pages in a frame (so nobody can trick a click on Delete my account); files are only treated as the type sent; other sites see only the site's address as the referrer; camera and location for this site only; and HSTS (browsers only use https) when the request came in over https. Every web app screen was checked under the policy at phone and desktop sizes with no blocked items.
+  - **Joining a live group by code is rate limited** per IP address like sign-in (120 a minute), so codes can't be tried in bulk.
+  - Reviewed with no change needed: sign-in tokens (32 random bytes, only a hash stored, revoked on sign-out and on a password reset); passwords (ASP.NET Core Identity hashing, 8 to 128 characters, locked for 15 minutes after 5 wrong tries, also on recovery codes and the web deletion form); recovery and reset codes (random, hashed, reset codes expire); every endpoint needs a sign-in except sign-in itself, /health and the public pages; ownership checks on rounds, requests, groups and private locations; Admin / Owner checks read from the database on every call; all SQL parameterised; no secrets in the repo; web app libraries: `npm audit` 0 vulnerabilities.
+  - App versionCode 68, versionName 3.2.06 (no app changes).
+
 ## Version 3.2.05
 
 - **3.2.05 (app, web app and API): ready for real use (Pete: review).**

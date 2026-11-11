@@ -69,7 +69,8 @@ public static class GroupEndpoints
     {
         var groups = app.MapGroup("/api/groups").RequireAuthorization();
         groups.MapGet("/", Mine);
-        groups.MapPost("/join", Join);
+        // 3.2.06: rate limited per IP address like sign-in, so join codes can't be tried in bulk.
+        groups.MapPost("/join", Join).RequireRateLimiting(RateLimits.Auth);
         groups.MapPut("/{groupId:guid}", Put);
         groups.MapGet("/{groupId:guid}", Get);
         groups.MapPut("/{groupId:guid}/entries", PutEntries);
