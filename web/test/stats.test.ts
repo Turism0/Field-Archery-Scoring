@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { newTarget, withOverride, type RoundType } from '../src/domain/scoring'
 import { newRound, type Round } from '../src/domain/round'
-import { bestAverages, bests, inPeriod, personalBestIds, previousBest, seasons, trend, years } from '../src/domain/stats'
+import { bestAverages, bests, inPeriod, personalBestIds, previousBest, seasons, sortHistory, trend, years } from '../src/domain/stats'
 import { REFERENCE, allowance, applyMultiplier, convert, counting, multiplier, net, parFor, personalHandicap, personalHandicaps, typicalShare, type HArcher, type HEntry, type HandicapModel } from '../src/domain/handicap'
 import { DEFAULT_LAYOUT, TILES, isDefault, move, normalised, setHidden } from '../src/domain/homeLayout'
 
@@ -178,5 +178,17 @@ describe('home layout', () => {
     const l = normalised({ order: ['SCORE', 'JOIN' as never, 'STATS', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN', 'OLD' as never], hidden: ['SCORE'] })
     expect(l.order).toEqual(['SCORE', 'STATS', 'HANDICAP', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN'])
     expect(l.hidden).toEqual([])
+  })
+})
+
+describe('score history order (3.2.01)', () => {
+  const rs = [round('a', '2026-01-01', 15), round('b', '2026-03-01', 22), round('c', '2026-02-01', 18), round('d', '2026-04-01', 0, { scored: 0 })]
+  it('by date, either way', () => {
+    expect(sortHistory(rs, 'DATE_DESC').map(r => r.id)).toEqual(['d', 'b', 'c', 'a'])
+    expect(sortHistory(rs, 'DATE_ASC').map(r => r.id)).toEqual(['a', 'c', 'b', 'd'])
+  })
+  it('by average, either way, nothing scored last', () => {
+    expect(sortHistory(rs, 'AVG_DESC').map(r => r.id)).toEqual(['b', 'c', 'a', 'd'])
+    expect(sortHistory(rs, 'AVG_ASC').map(r => r.id)).toEqual(['a', 'c', 'b', 'd'])
   })
 })

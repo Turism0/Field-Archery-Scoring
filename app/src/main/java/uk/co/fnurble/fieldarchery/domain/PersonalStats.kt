@@ -178,3 +178,22 @@ object PersonalStats {
     /** Years that have rounds, newest first (for the period choice). */
     fun years(dates: List<LocalDate>): List<Int> = dates.map { it.year }.distinct().sortedDescending()
 }
+
+/** Score history order (3.2.01, Pete): by date or by average per animal, either way. */
+enum class HistorySort(val label: String) {
+    DATE_DESC("Newest first"), DATE_ASC("Oldest first"), AVG_DESC("Highest average"), AVG_ASC("Lowest average");
+
+    /**
+     * [newestFirst] (as the database gives them) in this order. Average: rounds with none (nothing scored) go last;
+     * a tie goes newest first.
+     */
+    fun <T> sort(newestFirst: List<T>, average: (T) -> Double?): List<T> = when (this) {
+        DATE_DESC -> newestFirst
+        DATE_ASC -> newestFirst.reversed()
+        AVG_DESC, AVG_ASC -> {
+            val (scored, none) = newestFirst.partition { average(it) != null }
+            val byAvg = if (this == AVG_DESC) scored.sortedByDescending { average(it)!! } else scored.sortedBy { average(it)!! }
+            byAvg + none   // sortedBy is stable: a tie keeps newest first
+        }
+    }
+}

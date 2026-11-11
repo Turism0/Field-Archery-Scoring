@@ -4,6 +4,10 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.01
+
+- **3.2.01 (app and web app; API version only): sort Score history (Pete).** A Sort choice with the filters: newest first (as before, the default each time), oldest first, highest average or lowest average. The average is the one on each tile (per animal; Woodsman per target; fun shots left out); rounds with nothing scored go last, and a tie goes newest first. Works with the filters and the export (in the shown order). Tests: Kotlin 81, web 74. App versionCode 63, versionName 3.2.01.
+
 ## Version 3.2
 
 - **3.2 (app and web app; API version only): filters on the Stats screen (Pete).** One filter bar above the Bests, Trends and Seasons tabs:

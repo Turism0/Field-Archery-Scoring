@@ -135,3 +135,26 @@ export const periodLabel = (p: Period) =>
   p.kind === 'all' ? 'All time' : p.kind === '12m' ? 'Last 12 months' : p.kind === 'year' ? String(p.year) : 'Dates…'
 
 export const years = (dates: string[]) => [...new Set(dates.map(d => Number(d.slice(0, 4))))].sort((a, b) => b - a)
+
+// ---- Score history order (3.2.01, Pete) ----
+
+export type HistorySort = 'DATE_DESC' | 'DATE_ASC' | 'AVG_DESC' | 'AVG_ASC'
+export const HISTORY_SORTS: { code: HistorySort; name: string }[] = [
+  { code: 'DATE_DESC', name: 'Newest first' }, { code: 'DATE_ASC', name: 'Oldest first' },
+  { code: 'AVG_DESC', name: 'Highest average' }, { code: 'AVG_ASC', name: 'Lowest average' },
+]
+
+/**
+ * Rounds in the chosen order. Dates: by shoot date (same day: the order they were started). Average: per animal
+ * (Woodsman per target, fun shots left out); rounds with nothing scored go last; a tie goes newest first.
+ */
+export function sortHistory(rounds: Round[], sort: HistorySort): Round[] {
+  const byDate = [...rounds].sort(shotOrder)
+  if (sort === 'DATE_ASC') return byDate
+  const newest = byDate.reverse()
+  if (sort === 'DATE_DESC') return newest
+  const avg = (r: Round) => roundStats(r).averagePerAnimal
+  const dir = sort === 'AVG_DESC' ? -1 : 1
+  return newest.map((r, i) => ({ r, i, a: avg(r) })).sort((x, y) =>
+    x.a == null ? (y.a == null ? x.i - y.i : 1) : y.a == null ? -1 : (x.a - y.a) * dir || x.i - y.i).map(x => x.r)
+}

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.data.RoundSummary
+import uk.co.fnurble.fieldarchery.domain.HistorySort
 import uk.co.fnurble.fieldarchery.domain.PersonalStats.Period
 import uk.co.fnurble.fieldarchery.ui.HistoryChoices
 import uk.co.fnurble.fieldarchery.ui.HistoryFilter
@@ -52,7 +53,7 @@ import uk.co.fnurble.fieldarchery.ui.components.RoundCard
 import uk.co.fnurble.fieldarchery.ui.components.SyncStatusLine
 import uk.co.fnurble.fieldarchery.ui.components.UkDate
 
-/** Finished rounds, newest first, with filters and PB marks. Tap one for its scorecard; pull down to sync. */
+/** Finished rounds with filters, a sort order (3.2.01) and PB marks. Tap one for its scorecard; pull down to sync. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundSummary) -> Unit) {
@@ -62,6 +63,7 @@ fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundS
     val choices by vm.choices.collectAsStateWithLifecycle()
     val pbs by vm.personalBests.collectAsStateWithLifecycle()
     val averages by vm.averages.collectAsStateWithLifecycle()
+    val sort by vm.sort.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -117,7 +119,7 @@ fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundS
                 ) {
                     if (signedIn) item(key = "sync") { SyncStatusLine(lastSync) }
                     item(key = "filters") {
-                        HistoryFilters(filter, choices, onChange = vm::setFilter, onPickDates = { pickDates = true })
+                        HistoryFilters(filter, choices, onChange = vm::setFilter, onPickDates = { pickDates = true }, sort = sort, onSort = vm::setSort)
                     }
                     if (filter.isActive) item(key = "count") {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -178,8 +180,16 @@ private fun HistoryFilters(
     c: HistoryChoices,
     onChange: ((HistoryFilter) -> HistoryFilter) -> Unit,
     onPickDates: () -> Unit,
+    sort: HistorySort,
+    onSort: (HistorySort) -> Unit,
 ) {
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 3.2.01 (Pete): newest / oldest first, or highest / lowest average.
+        FilterMenuChip(
+            title = "Sort", anyLabel = HistorySort.DATE_DESC.label,
+            options = HistorySort.entries.drop(1), selected = sort.takeIf { it != HistorySort.DATE_DESC },
+            optionLabel = { it.label }, onSelect = { onSort(it ?: HistorySort.DATE_DESC) },
+        )
         if (c.types.size > 1 || f.type != null) {
             FilterMenuChip("Type", "All", c.types, f.type, { it.displayName }, { t -> onChange { it.copy(type = t) } })
         }

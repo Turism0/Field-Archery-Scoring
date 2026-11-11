@@ -73,6 +73,7 @@ import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
 import uk.co.fnurble.fieldarchery.domain.handicapEntry
 import uk.co.fnurble.fieldarchery.domain.BestAverage
 import uk.co.fnurble.fieldarchery.domain.PersonalBest
+import uk.co.fnurble.fieldarchery.domain.HistorySort
 import uk.co.fnurble.fieldarchery.domain.PersonalStats
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
@@ -265,10 +266,18 @@ class HistoryViewModel(
     fun setFilter(change: (HistoryFilter) -> HistoryFilter) = _filter.update(change)
     fun clearFilter() { _filter.value = HistoryFilter() }
 
-    /** Finished rounds matching the filters. */
-    val rounds: StateFlow<List<RoundSummary>?> = combine(finished, _filter) { list, f ->
+    private val _sort = MutableStateFlow(HistorySort.DATE_DESC)
+    /** The order (3.2.01): newest first, oldest first, or by average per animal either way. */
+    val sort: StateFlow<HistorySort> = _sort.asStateFlow()
+    fun setSort(s: HistorySort) { _sort.value = s }
+
+    private val averageById = roundRepo.finishedRounds
+        .map { rounds -> rounds.mapNotNull { r -> r.stats.averagePerAnimal?.let { r.id to it } }.toMap() }
+
+    /** Finished rounds matching the filters, in the chosen order. */
+    val rounds: StateFlow<List<RoundSummary>?> = combine(finished, _filter, _sort, averageById) { list, f, sort, avgs ->
         val today = LocalDate.now()
-        list.filter { f.matches(it, today) }
+        sort.sort(list.filter { f.matches(it, today) }) { avgs[it.id] }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** How many finished rounds there are before filtering. */
@@ -288,8 +297,7 @@ class HistoryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /** Each round's average per animal (Woodsman: per target), fun shots left out (3.1.08): round id → average. */
-    val averages: StateFlow<Map<String, Double>> = roundRepo.finishedRounds
-        .map { rounds -> rounds.mapNotNull { r -> r.stats.averagePerAnimal?.let { r.id to it } }.toMap() }
+    val averages: StateFlow<Map<String, Double>> = averageById
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     // 3.1.09 (Pete): no handicap or net score on the Score history tiles; they're on the scorecard.

@@ -6,13 +6,13 @@ import { Bar, Dialog, Field, go, today, ukDate, useData, useDesktop } from './co
 import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
 import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
-import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
+import { HISTORY_SORTS, bowOrder, inPeriod, periodLabel, personalBestIds, sortHistory, years, type HistorySort, type Period } from '../domain/stats'
 import { type RoundType } from '../domain/scoring'
 
 interface Filter { type?: RoundType; bow?: string; location?: string; period: Period }
 const NONE: Filter = { period: { kind: 'all' } }
 
-/** Finished rounds, newest first, with filters and PB marks; tap for the scorecard. */
+/** Finished rounds with filters, a sort order (3.2.01) and PB marks; tap for the scorecard. */
 export function History() {
   const rounds = useData(finished)
   const account = useData(getAccount)
@@ -25,13 +25,15 @@ export function History() {
   const [f, setF] = useState<Filter>(NONE)
   const [dates, setDates] = useState<{ from?: string; to?: string } | null>(null)
   const [exporting, setExporting] = useState(false)
+  // 3.2.01 (Pete): newest first, oldest first, or by average per animal either way.
+  const [sort, setSort] = useState<HistorySort>('DATE_DESC')
   const desktop = useDesktop()
   if (!rounds) return <Bar title="Score history" />
   const pbs = personalBestIds(rounds)
   // 3.1.09 (Pete): no handicap or net score on the tiles; they're on the scorecard.
   const now = today()
-  const list = rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
-    (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now))
+  const list = sortHistory(rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
+    (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now)), sort)
   const types = [...new Set(rounds.map(r => r.type))]
   const bows = [...new Set(rounds.map(r => r.bowStyle))].sort((a, b) => bowOrder(a) - bowOrder(b))
   const locations = [...new Set(rounds.map(r => r.locationName).filter((x): x is string => !!x))].sort()
@@ -64,6 +66,8 @@ export function History() {
               {years(rounds.map(r => r.shootDate)).map(y => <option value={`y${y}`}>{y}</option>)}
               <option value="dates">{f.period.kind === 'between' ? fmt(f.period) : 'Choose dates…'}</option>
             </select>
+            <select aria-label="Sort" class={sort !== 'DATE_DESC' ? 'on' : ''} value={sort} onChange={e => setSort((e.target as HTMLSelectElement).value as HistorySort)}>
+              {HISTORY_SORTS.map(s => <option value={s.code}>Sort: {s.name}</option>)}</select>
           </div>
           {active && <div class="row between"><span class="sub">Showing {list.length} of {rounds.length} round{rounds.length === 1 ? '' : 's'}{f.period.kind !== 'all' && f.period.kind !== 'between' ? ` · ${periodLabel(f.period)}` : ''}</span>
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
