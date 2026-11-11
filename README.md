@@ -4,6 +4,10 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1.07
+
+- **3.1.07 (server tool; app, API and web app version only): the historical import uses the championship names as they are in the CSV (Pete).** No year is added any more: every year's rounds go to one "NFAS National Championships" and one "NFAS 3D Championships" location (name-only, no map pin), as the grounds aren't known. App versionCode 59, versionName 3.1.07.
+
 ## Version 3.1.06
 
 - **3.1.06 (server tool; app, API and web app version only): the historical import leaves out the Elmtree 2017-08-03 card again (Pete).** It has 13 targets of 15/25/30/35: a shoot usually has only 1 or 2 fun shots, so it isn't known what happened there. 94 of Pete's 97 cards load (less any already in the app). App versionCode 58, versionName 3.1.06.

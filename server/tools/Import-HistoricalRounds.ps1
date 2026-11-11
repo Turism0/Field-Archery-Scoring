@@ -20,7 +20,7 @@
     - Any other target score (e.g. 15, 25, 30, 34, 40, 44: not one Big Game shot, and the card doesn't say what it was)
       is loaded as a fun shot (3.1.05, Pete): it counts in the round total but not in any stats or handicaps.
       (3.0.02 left those cards out.)
-    - Locations: the club name, or "<name> <year>" for the NFAS championships (a different ground every year).
+    - Locations: the club name as it is in the CSV (3.1.07, Pete: championships too, no year added).
       An existing location with that name (any case) is used; otherwise a public name-only location (no map pin) is
       made. Use $LocationNames to point a CSV club at a location you already have under another name.
 
@@ -54,8 +54,6 @@ $LocationNames = @{
     # 'Severn Valley Yeoman Foresters' = 'SVYF'
 }
 
-# Championships are named with their year: a different ground each year.
-$PerYear = @('NFAS National Championships', 'NFAS 3D Championships')
 
 $Arrows = @{ 24 = @(1, 'INNER_KILL'); 20 = @(1, 'KILL'); 16 = @(1, 'WOUND'); 14 = @(2, 'KILL'); 10 = @(2, 'WOUND'); 8 = @(3, 'KILL'); 4 = @(3, 'WOUND') }
 $Bows = 'AFB', 'BB', 'BH', 'CL', 'XB', 'TXB', 'FS', 'HT', 'LB', 'PV', 'TD', 'TB', 'UL'
@@ -163,7 +161,6 @@ $plan = foreach ($row in $rows | Sort-Object Shoot_Date, File) {
     }
     $club = if ($LocationForFile.ContainsKey($row.File)) { $LocationForFile[$row.File] } else { $row.Host_Club.Trim() }
     if ($LocationNames.ContainsKey($club)) { $club = $LocationNames[$club] }
-    elseif ($PerYear -contains $club) { $club = "$club $($date.Substring(0, 4))" }
     [pscustomobject]@{ Row = $row; Action = 'load'; Id = $id; Date = $date; Total = $total; Location = $club; Fun = $odd }
 }
 
