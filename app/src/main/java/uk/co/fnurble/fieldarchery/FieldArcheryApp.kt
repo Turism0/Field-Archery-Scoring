@@ -40,6 +40,7 @@ class AppContainer(app: Application) {
     val handicapRepository = HandicapRepository(app, api, accountStore)
     /** How Home's tiles are arranged (2.4.01). */
     val homeLayoutStore = uk.co.fnurble.fieldarchery.data.HomeLayoutStore(app)
+    val statsFilterStore = uk.co.fnurble.fieldarchery.data.StatsFilterStore(app)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
     suspend fun checkServer() {
         runCatching { api.health() }

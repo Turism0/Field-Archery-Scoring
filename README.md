@@ -4,6 +4,16 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2
+
+- **3.2 (app and web app; API version only): filters on the Stats screen (Pete).** One filter bar above the Bests, Trends and Seasons tabs:
+  - **Round type:** Big Game, Woodsman or both (shown when you've shot both).
+  - **Bow style:** any number of the bow styles you have finished rounds with (only those are offered); never none.
+  - **Dates:** the last 1, 2, 3, 5 or 10 years **rolling** (back from today), the last 1, 2, 3, 5 or 10 **calendar** years including this one (1 = this year so far; 3 = e.g. 2024–2026), or all time.
+  - **Defaults:** the first time, both round types, your Profile's bow style (or the one you've shot most if it has no rounds) and the last year rolling. After that, whatever you chose last time (remembered on that phone or browser; a bow or type you no longer have rounds for drops out).
+  - Bests, best averages and seasons only count the rounds that match. Trends shows a chart for each round type chosen, with the chosen bows together (Trends' own round type and bow pickers are gone). The Handicap card on Bests isn't filtered: a handicap always uses your last 20 rounds.
+  - Tests: Kotlin 78, web 72. App versionCode 62, versionName 3.2.
+
 ## Version 3.1.09
 
 - **3.1.09 (app and web app; API version only): no handicap or net score on the Score history tiles (Pete).** Each round's net score and the handicap before it are on its scorecard (Handicap competition card), not on the history list. The desktop Home's Recent rounds table keeps its Net column. App versionCode 61, versionName 3.1.09.

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -50,6 +51,41 @@ fun <T> FilterMenuChip(
             }
             extra.forEach { (label, action) ->
                 DropdownMenuItem(text = { Text(label) }, onClick = { open = false; action() })
+            }
+        }
+    }
+}
+
+/**
+ * A filter chip that opens a menu of tick boxes (3.2): several can be chosen, never none. The menu stays open while
+ * choosing; [onToggle] is called for each one tapped.
+ */
+@Composable
+fun <T> MultiChoiceChip(
+    text: String,
+    options: List<T>,
+    selected: Set<T>,
+    optionLabel: (T) -> String,
+    modifier: Modifier = Modifier,
+    onToggle: (T) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        FilterChip(
+            selected = true,
+            onClick = { open = true },
+            label = { Text(text) },
+            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null, Modifier.size(FilterChipDefaults.IconSize)) },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { o ->
+                val on = o in selected
+                DropdownMenuItem(
+                    text = { Text(optionLabel(o)) },
+                    leadingIcon = { Checkbox(checked = on, onCheckedChange = null, enabled = !on || selected.size > 1) },
+                    enabled = !on || selected.size > 1,
+                    onClick = { onToggle(o) },
+                )
             }
         }
     }

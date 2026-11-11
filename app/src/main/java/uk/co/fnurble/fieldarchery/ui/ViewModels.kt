@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -55,6 +56,7 @@ import uk.co.fnurble.fieldarchery.data.ServerState
 import uk.co.fnurble.fieldarchery.data.AccountRepository
 import uk.co.fnurble.fieldarchery.data.Profile
 import uk.co.fnurble.fieldarchery.data.ProfileRepository
+import uk.co.fnurble.fieldarchery.data.StatsFilterStore
 import uk.co.fnurble.fieldarchery.data.RoundRepository
 import uk.co.fnurble.fieldarchery.data.RoundSummary
 import uk.co.fnurble.fieldarchery.data.remote.ApiException
@@ -75,6 +77,7 @@ import uk.co.fnurble.fieldarchery.domain.PersonalStats
 import uk.co.fnurble.fieldarchery.domain.Round
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
 import uk.co.fnurble.fieldarchery.domain.RoundType
+import uk.co.fnurble.fieldarchery.domain.StatsFilter
 import uk.co.fnurble.fieldarchery.domain.TargetScore
 import uk.co.fnurble.fieldarchery.domain.describe
 import uk.co.fnurble.fieldarchery.domain.LiveRules
@@ -303,56 +306,53 @@ internal fun netScores(rounds: List<Round>): Map<String, Pair<Int, Int>> {
 }
 
 /** Stats (2.2): personal bests, trends and season summaries from your finished rounds. */
-class StatsViewModel(roundRepo: RoundRepository, handicap: HandicapRepository? = null) : ViewModel() {
+class StatsViewModel(
+    roundRepo: RoundRepository,
+    handicap: HandicapRepository? = null,
+    profiles: ProfileRepository? = null,
+    private val filterStore: StatsFilterStore? = null,
+) : ViewModel() {
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
-    /** Your personal handicaps (2.9): one per bow style, most rounds first. */
+    /** Your personal handicaps (2.9): one per bow style, most rounds first. Always from all your rounds, whatever the filters. */
     val handicaps: StateFlow<List<PersonalHandicap.Handicap>> = roundRepo.finishedRounds
         .map { rounds -> PersonalHandicap.all(rounds.mapNotNull { it.handicapEntry() }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Every finished round (null while loading). */
     val rounds: StateFlow<List<Round>?> = roundRepo.finishedRounds
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val bests: StateFlow<List<PersonalBest>> = roundRepo.finishedRounds.map { PersonalStats.bests(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    // ---- Filters (3.2, Pete): round types, bow styles and dates; the last choice is remembered on this phone ----
 
-    val bestAverages: StateFlow<List<BestAverage>> = roundRepo.finishedRounds.map { PersonalStats.bestAverages(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val profileBow = profiles?.profile?.map { it.mainBowStyle } ?: flowOf(null)
+    private val savedFilter = filterStore?.saved ?: MutableStateFlow(null)
 
-    val seasons: StateFlow<List<PersonalStats.Season>> = roundRepo.finishedRounds.map { PersonalStats.seasons(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    // ---- Trend chart: one round type, one bow style (or all) ----
-
-    private val _trendType = MutableStateFlow<RoundType?>(null)
-    private val _trendBow = MutableStateFlow<BowStyle?>(null)
-    private val _trendBowChosen = MutableStateFlow(false)
-
-    /** The round type on the chart: chosen, else the one you've shot most. */
-    val trendType: StateFlow<RoundType> = combine(rounds, _trendType) { list, chosen ->
-        chosen ?: list.orEmpty().groupingBy { it.type }.eachCount().maxByOrNull { it.value }?.key ?: RoundType.BIG_GAME
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RoundType.BIG_GAME)
-
-    /** Bow style on the chart: chosen (null = all), else the one you shoot most with this type. */
-    val trendBow: StateFlow<BowStyle?> = combine(rounds, trendType, _trendBow, _trendBowChosen) { list, type, chosen, wasChosen ->
-        if (wasChosen) chosen
-        else list.orEmpty().filter { it.type == type }.groupingBy { it.bowStyle }.eachCount().maxByOrNull { it.value }?.key
+    /** The filters in use (null while loading). */
+    val filter: StateFlow<StatsFilter?> = combine(roundRepo.finishedRounds, savedFilter, profileBow) { list, saved, bow ->
+        StatsFilter.resolve(saved, list, bow)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    val trend: StateFlow<List<PersonalStats.TrendPoint>> = combine(rounds, trendType, trendBow) { list, type, bow ->
-        PersonalStats.trend(list.orEmpty(), type, bow)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    fun setFilter(f: StatsFilter) { filterStore?.save(f) }
 
-    fun chooseTrendType(type: RoundType) {
-        _trendType.value = type
-        _trendBowChosen.value = false
+    /** The rounds that match the filters. */
+    private val shown = combine(roundRepo.finishedRounds, filter) { list, f ->
+        if (f == null) emptyList() else LocalDate.now().let { today -> list.filter { f.matches(it, today) } }
     }
 
-    fun chooseTrendBow(bow: BowStyle?) {
-        _trendBow.value = bow
-        _trendBowChosen.value = true
-    }
+    val bests: StateFlow<List<PersonalBest>> = shown.map { PersonalStats.bests(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val bestAverages: StateFlow<List<BestAverage>> = shown.map { PersonalStats.bestAverages(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val seasons: StateFlow<List<PersonalStats.Season>> = shown.map { PersonalStats.seasons(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** A trend for each round type chosen, the chosen bows together. */
+    val trends: StateFlow<Map<RoundType, List<PersonalStats.TrendPoint>>> = combine(shown, filter) { list, f ->
+        f?.types.orEmpty().sortedBy { it.ordinal }.associateWith { PersonalStats.trend(list, it, null) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 }
 
 /** Score a round: continue an unfinished round or start a new one. */

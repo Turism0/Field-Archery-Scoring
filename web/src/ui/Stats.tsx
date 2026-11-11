@@ -1,39 +1,88 @@
-import { useState } from 'preact/hooks'
-import { Bar, Card, Seg, Select, Tabs, go, one, ukDate, useData } from './common'
+import { useEffect, useState } from 'preact/hooks'
+import { Bar, Card, Tabs, go, one, today, ukDate, useData } from './common'
 import { finished } from '../data/rounds'
+import { getProfile } from '../data/account'
+import {
+  availableBows, availableTypes, bowOrderOf, matchesFilter, periodLabel, periodOptions, resolveFilter, samePeriod, toggled, typeOrder,
+  type StatsFilter,
+} from '../domain/statsFilter'
 import { ROUND_TYPE_NAMES, bowName, statsTotal, type Round, type RoundStats } from '../domain/round'
-import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, bowOrder, seasons, trend, type TrendPoint } from '../domain/stats'
+import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, seasons, trend, type TrendPoint } from '../domain/stats'
 import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import type { RoundType } from '../domain/scoring'
 
 const perWhat = (t: RoundType) => (t === 'WOODSMAN' ? 'per target' : 'per animal')
 const roundLine = (r: Round) => ukDate(r.shootDate) + (r.locationName ? ` · ${r.locationName}` : '')
 
-/** Stats from your own finished rounds: bests, trends and seasons (calendar years). */
+const FILTER_KEY = 'statsFilter'
+function loadFilter(): Partial<StatsFilter> | null {
+  try { const s = localStorage.getItem(FILTER_KEY); return s ? JSON.parse(s) : null } catch { return null }
+}
+function saveFilter(f: StatsFilter) {
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify(f)) } catch { /* private window: just not remembered */ }
+}
+
+/**
+ * Stats from your own finished rounds: bests, trends and seasons (calendar years). 3.2 (Pete): filtered by round type,
+ * bow style and date range; the choice is remembered on this browser for next time.
+ */
 export function Stats() {
   const rounds = useData(finished)
   const [tab, setTab] = useState(0)
+  const [profileBow, setProfileBow] = useState<string | null | undefined>(undefined)
+  const [chosen, setChosen] = useState<Partial<StatsFilter> | null>(loadFilter)
+  useEffect(() => { getProfile().then(p => setProfileBow(p.bowStyle ?? null), () => setProfileBow(null)) }, [])
+  if (!rounds || profileBow === undefined) return <><Bar title="Stats" /></>
+  const filter = resolveFilter(chosen, rounds, profileBow)
+  const change = (f: StatsFilter) => { setChosen(f); saveFilter(f) }
+  const now = today()
+  const shown = rounds.filter(r => matchesFilter(filter, r, now))
   return (
     <>
       <Bar title="Stats" />
       <Tabs tabs={['Bests', 'Trends', 'Seasons']} value={tab} onChange={setTab} />
       <main>
-        {rounds && !rounds.length ? <p class="sub" style="text-align:center">Finish a round to see your stats.</p>
-          : rounds && (tab === 0 ? <Bests rounds={rounds} /> : tab === 1 ? <Trends rounds={rounds} /> : <Seasons rounds={rounds} />)}
+        {!rounds.length ? <p class="sub" style="text-align:center">Finish a round to see your stats.</p> : <>
+          <FilterBar rounds={rounds} filter={filter} onChange={change} />
+          {tab === 0 ? <Bests rounds={shown} all={rounds} /> : tab === 1 ? <Trends rounds={shown} types={filter.types} /> : <Seasons rounds={shown} />}
+        </>}
       </main>
     </>
   )
 }
 
-function Bests({ rounds }: { rounds: Round[] }) {
+/** Round types and bow styles (either or both, several) as chips, and the date range. */
+function FilterBar({ rounds, filter, onChange }: { rounds: Round[]; filter: StatsFilter; onChange: (f: StatsFilter) => void }) {
+  const types = availableTypes(rounds), bows = availableBows(rounds)
+  const now = today()
+  const periods = periodOptions()
+  const idx = periods.findIndex(p => samePeriod(p, filter.period))
+  return (
+    <div class="card low col" style="gap:8px">
+      {types.length > 1 && <div class="row">{types.map(t => (
+        <button class={`chip ${filter.types.includes(t) ? 'on' : ''}`} aria-pressed={filter.types.includes(t)}
+          onClick={() => onChange({ ...filter, types: toggled(filter.types, t, typeOrder) })}>{ROUND_TYPE_NAMES[t]}</button>))}</div>}
+      <div class="row">{bows.map(b => (
+        <button class={`chip ${filter.bows.includes(b) ? 'on' : ''}`} aria-pressed={filter.bows.includes(b)} title={bowName(b)}
+          onClick={() => onChange({ ...filter, bows: toggled(filter.bows, b, bowOrderOf) })}>{bows.length > 3 ? b : `${bowName(b)} (${b})`}</button>))}</div>
+      <label class="field">Dates
+        <select value={String(idx)} onChange={e => onChange({ ...filter, period: periods[Number((e.target as HTMLSelectElement).value)] })}>
+          {periods.map((p, i) => <option value={String(i)}>{periodLabel(p, now)}</option>)}
+        </select></label>
+    </div>
+  )
+}
+
+function Bests({ rounds, all }: { rounds: Round[]; all: Round[] }) {
   const list = bests(rounds)
   const avgs = bestAverages(rounds)
   const groups = new Map<string, typeof list>()
   for (const b of list) { const k = `${b.type}|${b.bowStyle}`; groups.set(k, [...(groups.get(k) ?? []), b]) }
   return <>
-    <HandicapSummary rounds={rounds} />
-    <div class="sub">Best totals for each round type, bow style and number of targets, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
-    {!groups.size && <p>No fully scored rounds yet.</p>}
+    {/* The handicap always uses your last 20 rounds, whatever the filters. */}
+    <HandicapSummary rounds={all} />
+    <div class="sub">Best totals for each round type, bow style and number of targets in these dates, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
+    {!groups.size && <p>No fully scored rounds match these filters.</p>}
     <div class="grid2">{[...groups.entries()].map(([k, l]) => {
       const [type, bow] = k.split('|') as [RoundType, string]
       const a = avgs.find(x => x.type === type && x.bowStyle === bow)
@@ -66,21 +115,20 @@ function HandicapSummary({ rounds }: { rounds: Round[] }) {
   )
 }
 
-function Trends({ rounds }: { rounds: Round[] }) {
-  const types = (['BIG_GAME', 'WOODSMAN'] as RoundType[]).filter(t => rounds.some(r => r.type === t))
-  const mostOf = <T,>(xs: T[]) => { const c = new Map<T, number>(); xs.forEach(x => c.set(x, (c.get(x) ?? 0) + 1)); return [...c.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] }
-  const [chosenType, setType] = useState<RoundType | null>(null)
-  const type = chosenType ?? mostOf(rounds.map(r => r.type)) ?? 'BIG_GAME'
-  const [chosenBow, setBow] = useState<{ v: string | null } | null>(null)
-  const bow = chosenBow ? chosenBow.v : mostOf(rounds.filter(r => r.type === type).map(r => r.bowStyle)) ?? null
-  const bows = [...new Set(rounds.filter(r => r.type === type).map(r => r.bowStyle))].sort((a, b) => bowOrder(a) - bowOrder(b))
-  const points = trend(rounds, type, bow)
+/** A trend for each round type chosen (3.2: the filters pick the bows and dates). */
+function Trends({ rounds, types }: { rounds: Round[]; types: RoundType[] }) {
+  return <>{types.map(t => <Trend rounds={rounds} type={t} heading={types.length > 1} />)}</>
+}
+
+function Trend({ rounds, type, heading }: { rounds: Round[]; type: RoundType; heading: boolean }) {
+  const bows = new Set(rounds.filter(r => r.type === type).map(r => r.bowStyle))
+  const bow = bows.size === 1 ? [...bows][0] : null
+  const points = trend(rounds, type, null)
   return <>
-    {types.length > 1 && <Seg<RoundType> options={types} value={type} label={t => ROUND_TYPE_NAMES[t]} onChange={t => { setType(t); setBow(null) }} />}
-    <Select label="Bow" value={bow ?? undefined} options={bows} none="All bows" optionLabel={b => `${bowName(b)} (${b})`} onChange={b => setBow({ v: b ?? null })} />
+    {heading && <h3 class="section">{ROUND_TYPE_NAMES[type]}</h3>}
     <div class="split"><div>
     <Card title={`Average ${perWhat(type)}`} sub="Each dot is a round; the line is the average of the last 5.">
-      {points.length < 2 ? <div>Shoot at least two rounds of this kind to see a trend.</div> : <TrendChart points={points} max={type === 'WOODSMAN' ? 30 : 24} />}
+      {points.length < 2 ? <div>Shoot at least two rounds of this kind (in these filters) to see a trend.</div> : <TrendChart points={points} max={type === 'WOODSMAN' ? 30 : 24} />}
     </Card>
     {points.length >= 2 && <TrendSummary points={points} />}
     </div><div>
@@ -142,6 +190,7 @@ function TrendChart({ points, max }: { points: TrendPoint[]; max: number }) {
 }
 
 function Seasons({ rounds }: { rounds: Round[] }) {
+  if (!rounds.length) return <p>No finished rounds match these filters.</p>
   return <div class="grid2">{seasons(rounds).map(s => (
     <Card title={`${s.year} · ${ROUND_TYPE_NAMES[s.type]}`}
       sub={`${s.rounds} round${s.rounds === 1 ? '' : 's'} · ${s.targets} targets` + (s.locations ? ` · ${s.locations} location${s.locations === 1 ? '' : 's'}` : '') +

@@ -5,6 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import java.time.LocalDate
+import uk.co.fnurble.fieldarchery.domain.StatsFilter
+import uk.co.fnurble.fieldarchery.domain.toggled
+import uk.co.fnurble.fieldarchery.ui.components.MultiChoiceChip
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,7 +63,6 @@ import uk.co.fnurble.fieldarchery.domain.PersonalHandicap
 import uk.co.fnurble.fieldarchery.ui.StatsViewModel
 import uk.co.fnurble.fieldarchery.ui.components.FilterMenuChip
 import uk.co.fnurble.fieldarchery.ui.components.SectionCard
-import uk.co.fnurble.fieldarchery.ui.components.SegmentedChoice
 import uk.co.fnurble.fieldarchery.ui.components.UkDate
 import java.time.temporal.ChronoUnit
 import java.util.Locale
@@ -89,21 +94,56 @@ fun StatsScreen(vm: StatsViewModel, onBack: () -> Unit, onOpenRound: (roundId: S
         },
     ) { padding ->
         val list = rounds
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                list == null -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                list.isEmpty() -> Text(
-                    "Finish a round to see your stats.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                )
-                tab == 0 -> BestsTab(vm, onOpenRound)
-                tab == 1 -> TrendsTab(vm, onOpenRound)
-                else -> SeasonsTab(vm, onOpenRound)
+        val filter by vm.filter.collectAsStateWithLifecycle()
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            val f = filter
+            // 3.2 (Pete): round types, bow styles and dates, for every tab; remembered for next time.
+            if (!list.isNullOrEmpty() && f != null) StatsFilterBar(list, f) { vm.setFilter(it) }
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                when {
+                    list == null || (list.isNotEmpty() && f == null) -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                    list.isEmpty() -> Text(
+                        "Finish a round to see your stats.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.Center).padding(32.dp),
+                    )
+                    tab == 0 -> BestsTab(vm, onOpenRound)
+                    tab == 1 -> TrendsTab(vm, onOpenRound)
+                    else -> SeasonsTab(vm, onOpenRound)
+                }
             }
         }
+    }
+}
+
+// ---------------- Filters ----------------
+
+/** Round types and bow styles (several of each, never none) and the dates, as chips that open menus. */
+@Composable
+private fun StatsFilterBar(rounds: List<Round>, filter: StatsFilter, onChange: (StatsFilter) -> Unit) {
+    val today = LocalDate.now()
+    val types = StatsFilter.availableTypes(rounds)
+    val bows = StatsFilter.availableBows(rounds)
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (types.size > 1) MultiChoiceChip(
+            text = filter.types.sortedBy { it.ordinal }.joinToString(", ") { it.displayName },
+            options = types, selected = filter.types, optionLabel = { it.displayName },
+        ) { onChange(filter.copy(types = filter.types.toggled(it))) }
+        MultiChoiceChip(
+            text = filter.bows.sortedBy { it.ordinal }.let { b -> if (b.size == 1) b.first().displayName else b.joinToString(", ") { it.code } },
+            options = bows, selected = filter.bows, optionLabel = { "${it.displayName} (${it.code})" },
+        ) { onChange(filter.copy(bows = filter.bows.toggled(it))) }
+        FilterMenuChip(
+            title = "Dates", anyLabel = StatsFilter.PERIODS.last().label(today),
+            options = StatsFilter.PERIODS.dropLast(1), selected = filter.period.takeIf { it.kind != StatsFilter.PeriodKind.ALL },
+            optionLabel = { it.label(today) },
+            onSelect = { p -> onChange(filter.copy(period = p ?: StatsFilter.PERIODS.last())) },
+        )
     }
 }
 
@@ -117,17 +157,18 @@ private fun BestsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     val groups = bests.groupBy { it.key.type to it.key.bowStyle }
     val handicaps by vm.handicaps.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // The handicap always uses your last 20 rounds, whatever the filters.
         item(key = "handicap") { HandicapSummary(handicaps) }
         item(key = "about") {
             Text(
-                "Best totals for each round type, bow style and number of targets, from fully scored rounds. " +
+                "Best totals for each round type, bow style and number of targets in these dates, from fully scored rounds. " +
                     "Best average counts rounds of ${PersonalStats.MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (groups.isEmpty()) item(key = "none") {
-            Text("No fully scored rounds yet.", style = MaterialTheme.typography.bodyLarge)
+            Text("No fully scored rounds match these filters.", style = MaterialTheme.typography.bodyLarge)
         }
         groups.forEach { (k, list) ->
             item(key = "${k.first}-${k.second}") {
@@ -200,51 +241,45 @@ private fun HandicapSummary(handicaps: List<PersonalHandicap.Handicap>) {
 
 @Composable
 private fun TrendsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
-    val rounds by vm.rounds.collectAsStateWithLifecycle()
-    val type by vm.trendType.collectAsStateWithLifecycle()
-    val bow by vm.trendBow.collectAsStateWithLifecycle()
-    val points by vm.trend.collectAsStateWithLifecycle()
-    val all = rounds.orEmpty()
-    val types = all.map { it.type }.distinct().sortedBy { it.ordinal }
-    val bows = all.filter { it.type == type }.map { it.bowStyle }.distinct().sortedBy { it.ordinal }
-
+    // 3.2: a trend for each round type chosen in the filters, the chosen bows and dates together.
+    val trends by vm.trends.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item(key = "choose") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (types.size > 1) SegmentedChoice(types, type, { it.displayName }) { vm.chooseTrendType(it) }
-                FilterMenuChip("Bow", "All bows", bows, bow, { it.label }, { vm.chooseTrendBow(it) })
+        trends.forEach { (type, points) ->
+            if (trends.size > 1) item(key = "head-$type") {
+                Text(type.displayName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             }
-        }
-        item(key = "chart") {
-            SectionCard(title = "Average ${perWhat(type)}", subtitle = "Each dot is a round; the line is the average of the last 5.") {
-                if (points.size < 2) {
-                    Text("Shoot at least two rounds of this kind to see a trend.", style = MaterialTheme.typography.bodyMedium)
-                } else {
-                    TrendChart(points, max = if (type == RoundType.WOODSMAN) 30.0 else BigGameScoring.MAX_PER_ANIMAL.toDouble())
+            val oneBow = points.map { it.round.bowStyle }.distinct().size <= 1
+            item(key = "chart-$type") {
+                SectionCard(title = "Average ${perWhat(type)}", subtitle = "Each dot is a round; the line is the average of the last 5.") {
+                    if (points.size < 2) {
+                        Text("Shoot at least two rounds of this kind (in these filters) to see a trend.", style = MaterialTheme.typography.bodyMedium)
+                    } else {
+                        TrendChart(points, max = if (type == RoundType.WOODSMAN) 30.0 else BigGameScoring.MAX_PER_ANIMAL.toDouble())
+                    }
                 }
             }
-        }
-        if (points.size >= 2) item(key = "summary") { TrendSummary(points) }
-        if (points.isNotEmpty()) {
-            item(key = "recentHeader") {
-                Text("Rounds (newest first)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            }
-            items(points.reversed(), key = { it.round.id }) { p ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { onOpenRound(p.round.id) }.padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(p.date.format(UkDate), style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "${p.round.targetCount} targets · ${p.round.statsPoints} points" +
-                                (if (bow == null) " · ${p.round.bowStyle.code}" else "") +
-                                (p.round.location.name?.let { " · $it" } ?: ""),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            if (points.size >= 2) item(key = "summary-$type") { TrendSummary(points) }
+            if (points.isNotEmpty()) {
+                item(key = "recentHeader-$type") {
+                    Text("Rounds (newest first)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                items(points.reversed(), key = { "$type-" + it.round.id }) { p ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenRound(p.round.id) }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(p.date.format(UkDate), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                "${p.round.targetCount} targets · ${p.round.statsPoints} points" +
+                                    (if (!oneBow) " · ${p.round.bowStyle.code}" else "") +
+                                    (p.round.location.name?.let { " · $it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(one(p.average), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
-                    Text(one(p.average), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -337,6 +372,7 @@ private fun TrendChart(points: List<PersonalStats.TrendPoint>, max: Double) {
 private fun SeasonsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     val seasons by vm.seasons.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (seasons.isEmpty()) item(key = "none") { Text("No finished rounds match these filters.", style = MaterialTheme.typography.bodyLarge) }
         items(seasons, key = { "${it.year}-${it.type}" }) { s -> SeasonCard(s, onOpenRound) }
     }
 }

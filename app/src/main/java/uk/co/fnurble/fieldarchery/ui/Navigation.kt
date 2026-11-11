@@ -263,7 +263,7 @@ fun FieldArcheryNavHost() {
         // Personal bests, trends and seasons; each round opens its scorecard.
         composable("stats") {
             StatsScreen(
-                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository, c.handicapRepository) },
+                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository, c.handicapRepository, c.profileRepository, c.statsFilterStore) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { id -> nav.navigate(scorecardRoute(id)) },
             )
