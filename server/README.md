@@ -207,6 +207,15 @@ Run `sql/013_start_target.sql` in SSMS first (schema 9), then publish API 2.7.
 
 A round's `startTarget` is kept and comes back, can be left out, and must be 1 to the number of targets; a live group's is set by the host and can be cleared. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
+## Loading historical scorecards (3.0.01)
+
+```powershell
+.\tools\Import-HistoricalRounds.ps1 -CsvPath <csv> -Username <your username>          # dry run: lists what it would do
+.\tools\Import-HistoricalRounds.ps1 -CsvPath <csv> -Username <your username> -Apply   # loads them
+```
+
+PowerShell 7; needs API 3.0 and schema 10. Loads one archer's rows from the scorecard CSV as finished Big Game rounds through `PUT /api/rounds/{id}` (ids from the photo file names, so it's safe to run again), using an existing location with the club's name or making a name-only one. See the comments at the top of the script.
+
 ## Testing name-only locations (3.0)
 
 ```powershell
