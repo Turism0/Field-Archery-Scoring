@@ -280,9 +280,14 @@ class HistoryViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryChoices())
 
-    /** Rounds that were a new personal best when shot (marked "PB"). */
+    /** Your current personal bests (marked "PB", 3.1.08): the best average per animal for each round type and bow style. */
     val personalBests: StateFlow<Set<String>> = roundRepo.finishedRounds.map { PersonalStats.personalBestIds(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** Each round's average per animal (Woodsman: per target), fun shots left out (3.1.08): round id → average. */
+    val averages: StateFlow<Map<String, Double>> = roundRepo.finishedRounds
+        .map { rounds -> rounds.mapNotNull { r -> r.stats.averagePerAnimal?.let { r.id to it } }.toMap() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Big Game rounds' net score with the personal handicap before each (2.9): round id → (net, handicap). */
     val nets: StateFlow<Map<String, Pair<Int, Int>>> = roundRepo.finishedRounds.map { rounds -> netScores(rounds) }

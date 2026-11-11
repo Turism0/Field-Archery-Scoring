@@ -39,7 +39,8 @@ class FunShotTest {
         val plain = round("b", "2026-10-01", listOf(kill(1), kill(2), kill(3, Hit.INNER_KILL)))
         val withFun = round("c", "2026-11-02", listOf(kill(1), kill(2, Hit.INNER_KILL), funShot(3, 45)))
         assertEquals(setOf(3 to 64, 2 to 44), PersonalStats.bests(listOf(plain, withFun)).map { it.key.targetCount to it.best.statsPoints }.toSet())
-        assertTrue(PersonalStats.personalBestIds(listOf(plain, withFun)).isEmpty())
+        // The PB goes on the best average without fun shots: 44 / 2 = 22 beats 64 / 3.
+        assertEquals(setOf("c"), PersonalStats.personalBestIds(listOf(plain, withFun)))
     }
 
     @Test fun `goes through the QR check`() {

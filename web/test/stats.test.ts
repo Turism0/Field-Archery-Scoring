@@ -31,14 +31,16 @@ describe('personal stats', () => {
   it('tie goes to the first time shot', () => {
     const rs = [round('later', '2026-05-01', 18), round('first', '2026-04-01', 18)]
     expect(bests(rs)[0].best.id).toBe('first')
-    expect(personalBestIds(rs).size).toBe(0)
+    expect([...personalBestIds(rs)]).toEqual(['first'])
   })
-  it('personal bests mark rounds that beat every earlier one', () => {
+  it('the PB badge (3.1.08): only the current best average for each type and bow, any length', () => {
     const rs = [
       round('1', '2026-01-01', 15), round('2', '2026-02-01', 17), round('3', '2026-03-01', 16), round('4', '2026-04-01', 18),
       round('5', '2026-04-01', 19, { created: '2026-04-01T10:00:00.000Z' }), round('6', '2026-05-01', 20, { targets: 40 }),
     ]
-    expect([...personalBestIds(rs)].sort()).toEqual(['2', '4', '5'])
+    // 36s and 40s compared on their average: the 40-target round's 20 per animal is the one PB.
+    expect([...personalBestIds(rs)]).toEqual(['6'])
+    expect([...personalBestIds([...rs, round('bb', '2026-06-01', 14, { bow: 'BB' }), round('short', '2026-07-01', 21, { targets: 3 })])].sort()).toEqual(['bb', 'short'])
     expect(previousBest(rs[4], rs)?.id).toBe('4')
     expect(previousBest(rs[0], rs)).toBeUndefined()
   })
@@ -66,7 +68,7 @@ describe('personal stats', () => {
     expect(bg.rounds).toBe(3); expect(bg.targets).toBe(112); expect(bg.locations).toBe(2); expect(bg.bestRound?.id).toBe('c')
     expect(bg.stats.averagePerAnimal).toBeCloseTo((432 + 640 + 504) / 112)
     expect(bg.byBow.map(b => b.bowStyle)).toEqual(['BB', 'LB'])
-    expect(bg.personalBests).toBe(1)
+    expect(bg.personalBests).toBe(2)   // 3.1.08: current PBs shot that season (LB 'c' and BB 'd')
     expect(s[1].stats.averagePerAnimal).toBeCloseTo(25)
   })
   it('periods', () => {

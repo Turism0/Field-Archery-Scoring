@@ -44,7 +44,8 @@ describe('fun shots', () => {
     const plain = round('b', '2026-10-01', [kill(1), kill(2), { ...kill(3), animals: [{ state: 'SCORED', arrowNo: 1, hit: 'INNER_KILL' }] }])
     const withFun = round('c', '2026-11-02', [kill(1), { ...kill(2), animals: [{ state: 'SCORED', arrowNo: 1, hit: 'INNER_KILL' }] }, fun(3, 45)])
     expect(bests([plain, withFun]).map(b => [b.targetCount, statsTotal(b.best)])).toEqual([[2, 44], [3, 64]])
-    expect(personalBestIds([plain, withFun]).size).toBe(0)
+    // The PB badge goes on the best average without fun shots: 44 / 2 = 22 beats 64 / 3.
+    expect([...personalBestIds([plain, withFun])]).toEqual(['c'])
   })
 
   it('the paper sheet takes any whole number for a fun shot', () => {

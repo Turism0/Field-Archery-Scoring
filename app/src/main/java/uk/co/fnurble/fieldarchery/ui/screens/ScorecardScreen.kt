@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fnurble.fieldarchery.domain.Round
+import uk.co.fnurble.fieldarchery.domain.RoundType
 import uk.co.fnurble.fieldarchery.domain.RoundStats
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
 import uk.co.fnurble.fieldarchery.ui.RoundLocationViewModel
@@ -276,13 +277,13 @@ private fun PersonalBestCard(me: Round, beat: Round) {
         ),
     ) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("New personal best", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Personal best", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            // 3.1.08 (Pete): the PB is the best average per animal for the round type and bow style (fun shots left out).
+            val per = if (me.type == RoundType.WOODSMAN) "target" else "animal"
+            fun avg(r: Round) = String.format(Locale.UK, "%.1f", r.stats.averagePerAnimal ?: 0.0)
             Text(
-                // Fun shots (3.1) left out.
-                "${me.statsPoints} beats your previous best of ${beat.statsPoints} (${beat.shootDate.format(UkDate)}) for " +
-                    "${me.statsTargetCount}-target ${me.type.displayName}, ${me.bowStyle.displayName}" +
-                    (if (me.funPoints > 0 || beat.funPoints > 0) " (fun shots left out)" else "") + ". " +
-                    "+${me.statsPoints - beat.statsPoints} points.",
+                "Your best average for ${me.type.displayName}, ${me.bowStyle.displayName}: ${avg(me)} per $per" +
+                    (if (me.funPoints > 0) " (fun shots left out)" else "") + ". It beat ${avg(beat)} (${beat.shootDate.format(UkDate)}).",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

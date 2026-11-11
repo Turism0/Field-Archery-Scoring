@@ -9,7 +9,7 @@ import { ROUND_TYPE_NAMES, canGoTo, classLine, funPoints, roundStats, roundTotal
 import { TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, totalPoints } from '../domain/scoring'
 import { finished } from '../data/rounds'
 import { getModel } from '../data/handicap'
-import { personalBestIds, previousBest } from '../domain/stats'
+import { pbAverage, personalBestIds, previousBest } from '../domain/stats'
 import { applyMultiplier, handicapEntry, multiplier, net, parFor, personalHandicap } from '../domain/handicap'
 import { MoreStats } from './Stats'
 import { ExportDialog } from './Export'
@@ -48,8 +48,8 @@ export function Scorecard({ id }: { id: string }) {
       <main>
         <div class="split"><div>
         <CardHeader r={round} />
-        {beat && <Card title="New personal best" cls="hi">
-          <div>{statsTotal(round)} beats your previous best of {statsTotal(beat)} ({ukDate(beat.shootDate)}) for {statsTargetCount(round)}-target {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}{funPoints(round) || funPoints(beat) ? ' (fun shots left out)' : ''}. +{statsTotal(round) - statsTotal(beat)} points.</div>
+        {beat && <Card title="Personal best" cls="hi">
+          <div>Your best average for {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}: {pbAverage(round).toFixed(1)} per {round.type === 'WOODSMAN' ? 'target' : 'animal'}{funPoints(round) ? ' (fun shots left out)' : ''}. It beat {pbAverage(beat).toFixed(1)} ({ukDate(beat.shootDate)}).</div>
         </Card>}
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {inGroup && <GroupCard group={group} currentId={round.id} />}

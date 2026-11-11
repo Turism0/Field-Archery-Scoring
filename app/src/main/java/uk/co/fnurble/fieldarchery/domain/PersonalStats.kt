@@ -59,31 +59,27 @@ object PersonalStats {
             }
             .sortedWith(compareBy({ it.type.ordinal }, { it.bowStyle.ordinal }))
 
-    /**
-     * Rounds that were a new personal best when they were shot: a higher total than every earlier fully scored round
-     * of the same type, bow style and number of targets. The first round of a kind isn't marked (nothing to beat).
-     */
-    fun personalBestIds(rounds: List<Round>): Set<String> {
-        val ids = mutableSetOf<String>()
-        rounds.filter { it.status == RoundStatus.COMPLETED && it.isFullyScored }
-            .groupBy { it.bestKey }
-            .values.forEach { list ->
-                var bestSoFar: Int? = null
-                for (r in list.sortedWith(shotOrder)) {
-                    val previous = bestSoFar
-                    if (previous != null && r.statsPoints > previous) ids += r.id
-                    if (previous == null || r.statsPoints > previous) bestSoFar = r.statsPoints
-                }
-            }
-        return ids
-    }
+    // ---- The PB badge (3.1.08, Pete): only your current best, by average per animal, per round type and bow style ----
 
-    /** The best earlier round of the same kind (what [round] had to beat), or null if it's the first. */
+    /** Average per animal (Woodsman: per target), fun shots left out; null when nothing's scored. */
+    fun pbAverage(r: Round): Double? = r.stats.averagePerAnimal
+
+    /**
+     * The rounds that are your current personal best: the highest average per animal among finished, fully scored
+     * rounds of each round type and bow style, whatever their length (the first shot wins a tie).
+     */
+    fun personalBestIds(rounds: List<Round>): Set<String> =
+        rounds.filter { it.status == RoundStatus.COMPLETED && it.isFullyScored && pbAverage(it) != null }
+            .groupBy { it.type to it.bowStyle }
+            .values.mapNotNull { list -> list.sortedWith(shotOrder).maxByOrNull { pbAverage(it)!! }?.id }
+            .toSet()
+
+    /** The best earlier round of the same type and bow style by average (what [round] had to beat), or null. */
     fun previousBest(round: Round, rounds: List<Round>): Round? =
         rounds.filter {
-            it.id != round.id && it.status == RoundStatus.COMPLETED && it.isFullyScored && it.bestKey == round.bestKey &&
-                shotOrder.compare(it, round) < 0
-        }.sortedWith(shotOrder).maxByOrNull { it.statsPoints }
+            it.id != round.id && it.status == RoundStatus.COMPLETED && it.isFullyScored && pbAverage(it) != null &&
+                it.type == round.type && it.bowStyle == round.bowStyle && shotOrder.compare(it, round) < 0
+        }.sortedWith(shotOrder).maxByOrNull { pbAverage(it)!! }
 
     // ---- Trends ----
 

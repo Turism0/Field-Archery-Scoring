@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import uk.co.fnurble.fieldarchery.data.RoundSummary
 import uk.co.fnurble.fieldarchery.data.local.SyncState
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
+import uk.co.fnurble.fieldarchery.domain.RoundType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -35,7 +36,15 @@ import java.time.format.DateTimeFormatter
  * personal handicap before this round, and that handicap.
  */
 @Composable
-fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false, net: Pair<Int, Int>? = null, onClick: () -> Unit) {
+fun RoundCard(
+    r: RoundSummary,
+    showSync: Boolean,
+    personalBest: Boolean = false,
+    net: Pair<Int, Int>? = null,
+    /** Average per animal (Woodsman: per target), shown under the points (3.1.08). */
+    average: Double? = null,
+    onClick: () -> Unit,
+) {
     val inProgress = r.status == RoundStatus.IN_PROGRESS
     val scheme = MaterialTheme.colorScheme
     Card(
@@ -58,7 +67,7 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false,
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(r.shootDate.format(UkDateLong), style = MaterialTheme.typography.titleMedium)
-                    // A new personal best when it was shot (beat every earlier round of the same kind).
+                    // Your current personal best (3.1.08): the best average for this round type and bow style.
                     if (personalBest) PbBadge()
                 }
                 Text(
@@ -75,6 +84,13 @@ fun RoundCard(r: RoundSummary, showSync: Boolean, personalBest: Boolean = false,
             Column(horizontalAlignment = Alignment.End) {
                 Text("${r.totalPoints}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("points", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant)
+                average?.let {
+                    Text(
+                        "avg ${String.format(java.util.Locale.UK, "%.1f", it)}/${if (r.roundType == RoundType.WOODSMAN) "target" else "animal"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
                 net?.let { (n, h) -> Text("net $n (hcp $h)", style = MaterialTheme.typography.labelSmall, color = scheme.onSurfaceVariant) }
             }
         }

@@ -2,7 +2,7 @@
 // the scorecard header and target rows, and the group card.
 import { useState } from 'preact/hooks'
 import { go } from './common'
-import { classLine, roundTotal, targetsComplete, targetsLine, type Round, type RoundStats } from '../domain/round'
+import { classLine, roundStats, roundTotal, targetsComplete, targetsLine, type Round, type RoundStats } from '../domain/round'
 import { TARGET_TYPE_NAMES, animalLabel, animalPoints, describeAnimal, describeArrows, isComplete, ordinal, totalPoints, type TargetScore } from '../domain/scoring'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -58,6 +58,8 @@ export function RoundCard({ r, showSync, pb, groupSize = 1, net, onClick }: { r:
         {showSync && !going && <SyncLabel r={r} />}
       </span>
       <span style="text-align:right"><span class="num-big">{roundTotal(r)}</span><span class="sub" style="display:block">points</span>
+        {/* 3.1.08 (Pete): the average (what the PB is decided on); fun shots left out. */}
+        {(() => { const a = roundStats(r).averagePerAnimal; return a != null && <span class="sub" style="display:block">avg {a.toFixed(1)}/{r.type === 'WOODSMAN' ? 'target' : 'animal'}</span> })()}
         {net && <span class="sub" style="display:block">net {net.net} <span style="opacity:.8">(hcp {net.handicap})</span></span>}</span>
     </button>
   )

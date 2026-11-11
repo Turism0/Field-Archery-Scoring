@@ -56,23 +56,26 @@ export function bestAverages(rounds: Round[]): BestAverage[] {
   return out.sort((a, b) => typeOrder(a.type) - typeOrder(b.type) || bowOrder(a.bowStyle) - bowOrder(b.bowStyle))
 }
 
-/** Rounds that were a new personal best when shot (the first of a kind isn't marked). */
+// ---- The PB badge (3.1.08, Pete): only your current best, by average per animal, for each round type and bow style ----
+
+/** What a PB is per: round type and bow style (rounds of any length compared on their average). */
+const pbKey = (r: Round) => `${r.type}|${r.bowStyle}`
+/** Average per animal (Woodsman: per target), fun shots left out; -1 when there's nothing scored. */
+export const pbAverage = (r: Round) => roundStats(r).averagePerAnimal ?? -1
+
+/** The rounds that are your current personal best: the highest average for each round type and bow style (the first shot wins a tie). */
 export function personalBestIds(rounds: Round[]): Set<string> {
   const ids = new Set<string>()
-  for (const list of groupBy(finishedFull(rounds), bestKey).values()) {
-    let bestSoFar: number | null = null
-    for (const r of [...list].sort(shotOrder)) {
-      const t = statsTotal(r)
-      if (bestSoFar != null && t > bestSoFar) ids.add(r.id)
-      if (bestSoFar == null || t > bestSoFar) bestSoFar = t
-    }
+  for (const list of groupBy(finishedFull(rounds), pbKey).values()) {
+    const best = maxBy([...list].sort(shotOrder), pbAverage)
+    if (best && pbAverage(best) >= 0) ids.add(best.id)
   }
   return ids
 }
 
-/** The best earlier round of the same kind (what this one had to beat). */
+/** The best earlier round of the same type and bow style, by average (what this one had to beat). */
 export function previousBest(round: Round, rounds: Round[]): Round | undefined {
-  return maxBy(finishedFull(rounds).filter(r => r.id !== round.id && bestKey(r) === bestKey(round) && shotOrder(r, round) < 0).sort(shotOrder), statsTotal)
+  return maxBy(finishedFull(rounds).filter(r => r.id !== round.id && pbKey(r) === pbKey(round) && shotOrder(r, round) < 0).sort(shotOrder), pbAverage)
 }
 
 export interface TrendPoint { round: Round; date: string; average: number; rolling: number }

@@ -58,21 +58,24 @@ class PersonalStatsTest {
     fun tieGoesToTheFirstTimeShot() {
         val rounds = listOf(round("later", "2026-05-01", 18), round("first", "2026-04-01", 18))
         assertEquals("first", PersonalStats.bests(rounds).single().best.id)
-        // Equalling a best isn't a new one.
-        assertTrue(PersonalStats.personalBestIds(rounds).isEmpty())
+        // 3.1.08: the current PB; a tie goes to the first shot.
+        assertEquals(setOf("first"), PersonalStats.personalBestIds(rounds))
     }
 
     @Test
-    fun personalBestsMarkRoundsThatBeatEveryEarlierOne() {
+    fun pbIsTheCurrentBestAveragePerTypeAndBow() {
+        // 3.1.08 (Pete): only the current best, by average per animal, per round type and bow style, any length.
         val rounds = listOf(
-            round("1", "2026-01-01", 15), // first: nothing to beat, not marked
-            round("2", "2026-02-01", 17), // beats 1
-            round("3", "2026-03-01", 16), // no
-            round("4", "2026-04-01", 18), // beats 2
-            round("5", "2026-04-01", 19, created = 10), // same day, started later: beats 4
-            round("6", "2026-05-01", 20, targets = 40), // first 40-target round: not marked
+            round("1", "2026-01-01", 15),
+            round("2", "2026-02-01", 17),
+            round("3", "2026-03-01", 16),
+            round("4", "2026-04-01", 18),
+            round("5", "2026-04-01", 19, created = 10),
+            round("6", "2026-05-01", 20, targets = 40), // 36s and 40s compared on average: this is the LB PB
         )
-        assertEquals(setOf("2", "4", "5"), PersonalStats.personalBestIds(rounds))
+        assertEquals(setOf("6"), PersonalStats.personalBestIds(rounds))
+        val more = rounds + round("bb", "2026-06-01", 14, bow = BowStyle.BAREBOW) + round("short", "2026-07-01", 21, targets = 3)
+        assertEquals(setOf("bb", "short"), PersonalStats.personalBestIds(more))
         assertEquals("4", PersonalStats.previousBest(rounds.first { it.id == "5" }, rounds)?.id)
         assertNull(PersonalStats.previousBest(rounds.first { it.id == "1" }, rounds))
     }
@@ -122,7 +125,7 @@ class PersonalStatsTest {
         // (36×12 + 40×16 + 36×14) / 112 animals
         assertEquals((432 + 640 + 504) / 112.0, bg.stats.averagePerAnimal!!, 0.001)
         assertEquals(listOf(BowStyle.BAREBOW, BowStyle.LONGBOW), bg.byBow.map { it.first })
-        assertEquals(1, bg.personalBests) // b beat a (36 LB)
+        assertEquals(2, bg.personalBests) // 3.1.08: current PBs shot that season, LB c and BB d
         assertEquals(25.0, seasons[1].stats.averagePerAnimal!!, 0.001)
     }
 
