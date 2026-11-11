@@ -4,6 +4,10 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1.01
+
+- **3.1.01 (server tests; app, API and web app version only): the Owner password is asked for once per test run (Pete).** `Run-AllTests.ps1 -Username …` asks for the password at the start and passes it to the five tests that sign in as the Owner (Test-Roles, Test-Locations, Test-LocationReview, Test-Handicap, Test-Reset), instead of each asking. It's kept in memory for that run only and never saved, so the next run asks again. Run on their own, those tests still ask (or take `-OwnerPassword`). App versionCode 53, versionName 3.1.01.
+
 ## Version 3.1
 
 - **3.1 (app, web app, API and database): fun shots (Pete).** Some Big Game courses add a fun shot with unusual scoring. Any target can now be a **Fun shot**: pick it from the target type (scoring screen, app and web; on a computer, the target kind on the score sheet) and type its score, any whole number from 0 to 999. A round can have any number of them.

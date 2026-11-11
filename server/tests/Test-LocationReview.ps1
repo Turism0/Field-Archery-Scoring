@@ -12,7 +12,9 @@
 #>
 param(
     [Parameter(Mandatory)][string]$Username,
-    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk'
+    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk',
+    # 3.1.01: Run-AllTests asks once and passes it in; on its own the script asks.
+    [securestring]$OwnerPassword
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,7 +65,7 @@ if (-not $r.Body.apiVersion) { throw "The API isn't answering at $BaseUrl/health
 Expect 'API is version 2.0.17 or later' ([version]($r.Body.apiVersion -replace '\.0(\d)$', '.$1') -ge [version]'2.0.17') "(got $($r.Body.apiVersion) – publish the new build?)"
 Expect 'database is schema version 4 or later (006 run)' ($r.Body.schemaVersion -ge 4) "(got $($r.Body.schemaVersion))"
 
-$password = Read-Host "Password for $Username (Owner or Admin)" -MaskInput
+$password = if ($OwnerPassword) { ConvertFrom-SecureString $OwnerPassword -AsPlainText } else { Read-Host "Password for $Username (Owner or Admin)" -MaskInput }
 $r = Call POST '/api/auth/login' @{ username = $Username; password = $password; deviceName = 'Location review test script' }
 if ($r.Status -ne 200) { throw "Sign-in failed ($($r.Status)): $($r.Body.message)" }
 $admin = $r.Body.token

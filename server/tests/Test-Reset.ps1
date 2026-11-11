@@ -13,7 +13,9 @@
 
 param(
     [Parameter(Mandatory)][string]$Username,
-    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk'
+    [string]$BaseUrl = 'https://fieldarchery.fnurble.co.uk',
+    # 3.1.01: Run-AllTests asks once and passes it in; on its own the script asks.
+    [securestring]$OwnerPassword
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,7 +94,7 @@ $C = New-TestUser
 $r = Call POST "/api/admin/archers/$($A.Id)/reset-code" -Token $C.Token
 Expect 'a User can''t make reset codes' ($r.Status -eq 403) (Why $r)
 
-$password = Read-Host "Password for $Username (the Owner)" -MaskInput
+$password = if ($OwnerPassword) { ConvertFrom-SecureString $OwnerPassword -AsPlainText } else { Read-Host "Password for $Username (the Owner)" -MaskInput }
 $r = Call POST '/api/auth/login' @{ username = $Username; password = $password; deviceName = 'Reset test script' }
 if ($r.Status -ne 200) { throw "Owner sign-in failed ($($r.Status)): $($r.Body.message)" }
 $owner = $r.Body.token; $ownerId = $r.Body.archerId

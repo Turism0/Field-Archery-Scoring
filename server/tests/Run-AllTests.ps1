@@ -7,7 +7,8 @@
         .\Run-AllTests.ps1 -BaseUrl http://localhost:8085
 
     -Username is the Owner (or an Admin) account: Test-Roles, Test-Locations, Test-LocationReview, Test-Handicap and Test-Reset use
-    it for the admin checks and each asks for its password. Without it those five are skipped.
+    it for the admin checks. Its password is asked for once at the start (3.1.01) and passed to those five; it isn't saved
+    anywhere, so the next run asks again. Without -Username those five are skipped.
     Not included (they need you to look at the phone): Test-Download.ps1 and Test-FriendView.ps1.
     Every test makes throwaway zz_test_ accounts: run server/sql/900_delete_test_accounts.sql afterwards.
     The API allows 30 sign-ins a minute from one address, so it waits a minute before Test-Groups and each Owner test (about 6 minutes).
@@ -20,6 +21,9 @@ param(
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
          'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget', 'Test-NameOnlyLocations', 'Test-FunShots'
 $owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap', 'Test-Reset'
+
+# Asked once for the whole run (3.1.01, Pete): kept in memory only, never written to disk.
+$ownerPassword = if ($Username) { Read-Host "Password for $Username (Owner or Admin)" -AsSecureString } else { $null }
 
 $results = @()
 foreach ($name in $plain + $owner) {
@@ -36,7 +40,7 @@ foreach ($name in $plain + $owner) {
     }
     Write-Host "`n===== $name =====" -ForegroundColor Cyan
     $testParams = @{ BaseUrl = $BaseUrl }
-    if ($owner -contains $name) { $testParams.Username = $Username }
+    if ($owner -contains $name) { $testParams.Username = $Username; $testParams.OwnerPassword = $ownerPassword }
     $out = @()
     $stopped = $null
     try {
