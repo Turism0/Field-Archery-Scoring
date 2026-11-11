@@ -25,8 +25,21 @@ export const getServerState = () => serverState
 export function onServerState(l: (s: ServerState) => void): () => void { serverListeners.add(l); return () => serverListeners.delete(l) }
 function setServer(s: ServerState) { if (s !== serverState) { serverState = s; serverListeners.forEach(l => l(s)) } }
 
+/**
+ * How long a call may take before it counts as no signal (3.2.04). Weak signal in a wood can leave a request hanging for
+ * minutes, which held up every later sync and live group update; the app's own limit is the same.
+ */
+const TIMEOUT_MS = 20_000
+
 export async function request<T = any>(method: string, path: string, body?: unknown, token?: string | null): Promise<T> {
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), TIMEOUT_MS)
+  try { return await send<T>(method, path, body, token, abort.signal) } finally { clearTimeout(timer) }
+}
+
+async function send<T>(method: string, path: string, body: unknown, token: string | null | undefined, signal: AbortSignal): Promise<T> {
   let res: Response
+  let text: string
   try {
     res = await fetch(BASE + path, {
       method,
@@ -37,15 +50,18 @@ export async function request<T = any>(method: string, path: string, body?: unkn
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       cache: 'no-store',
+      signal,
     })
+    text = await res.text()
   } catch {
+    // Timed out: most likely weak signal, so the server isn't marked as down.
+    if (signal.aborted) throw new ApiError(0, 'network', "No answer in time (weak signal?). It'll catch up when the signal's better.")
     if (navigator.onLine) setServer('UNAVAILABLE')
     throw new ApiError(0, navigator.onLine ? 'network' : 'offline',
       navigator.onLine ? "The server isn't available at the moment. Try again later." : "You're offline. It'll catch up when you have signal.")
   }
   if (res.status >= 502 && res.status <= 504) { setServer('UNAVAILABLE'); throw new ApiError(0, 'network', "The server isn't available at the moment. Try again later.") }
   setServer('AVAILABLE')
-  const text = await res.text()
   let json: any = null
   try { json = text ? JSON.parse(text) : {} } catch { json = null }
   if (res.ok) return (json ?? {}) as T

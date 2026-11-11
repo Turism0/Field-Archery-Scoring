@@ -195,7 +195,15 @@ export async function takeOver(gid: string) {
 // ---- following the group ----
 
 /** Fetches the group, sends any scores still waiting, and copies saved scores into this device's rounds. */
-export async function refresh(gid: string): Promise<LiveState> {
+/** One refresh per group at a time (3.2.04): on weak signal the 3-second ticks were piling up behind a slow call. */
+const refreshing = new Map<string, Promise<LiveState>>()
+export function refresh(gid: string): Promise<LiveState> {
+  let p = refreshing.get(gid)
+  if (!p) { p = doRefresh(gid).finally(() => refreshing.delete(gid)); refreshing.set(gid, p) }
+  return p
+}
+
+async function doRefresh(gid: string): Promise<LiveState> {
   const t = await token()
   await flush(gid, t)
   const json = await request('GET', `/api/groups/${gid}`, undefined, t)

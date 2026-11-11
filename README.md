@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.04
+
+- **3.2.04 (web app; app and API version only): weak signal (Pete: real-world review).**
+  - **Calls give up after 20 seconds** (the Android app already did, at 15). On weak signal a call could hang for minutes, and every later sync waited behind it. A timeout counts as no signal ("No answer in time (weak signal?)"), not as the server being down, and is tried again as usual.
+  - **Live groups: one update at a time per group.** The 3-second updates were piling up behind a slow call on weak signal; now a tick that comes while one is still going waits for that one.
+  - App versionCode 66, versionName 3.2.04 (no app changes).
+
 ## Version 3.2.03
 
 - **3.2.03 (app and web app; API version only): two more gaps where one account's data could reach another (Pete: review after 3.2.02).**
