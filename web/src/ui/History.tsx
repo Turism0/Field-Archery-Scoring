@@ -5,9 +5,8 @@ import { useState } from 'preact/hooks'
 import { Bar, Dialog, Field, go, today, ukDate, useData, useDesktop } from './common'
 import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
-import { ROUND_TYPE_NAMES, bowName, statsTargetCount, statsTotal } from '../domain/round'
+import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { bowOrder, inPeriod, periodLabel, personalBestIds, years, type Period } from '../domain/stats'
-import { handicapEntry, net, personalHandicap } from '../domain/handicap'
 import { type RoundType } from '../domain/scoring'
 
 interface Filter { type?: RoundType; bow?: string; location?: string; period: Period }
@@ -29,15 +28,7 @@ export function History() {
   const desktop = useDesktop()
   if (!rounds) return <Bar title="Score history" />
   const pbs = personalBestIds(rounds)
-  // Net score with the personal handicap you had before each Big Game round (2.9).
-  const entries = rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
-  const netOf = (r: typeof rounds[number]) => {
-    if (r.type !== 'BIG_GAME') return null
-    // Fun shots (3.1) left out.
-    const total = statsTotal(r)
-    const h = personalHandicap(entries, r.bowStyle, { shootDate: r.shootDate, order: r.createdUtc, bowStyle: r.bowStyle, points: total, targetCount: statsTargetCount(r) })
-    return h ? { net: net(total, statsTargetCount(r), h.handicap), handicap: h.handicap } : null
-  }
+  // 3.1.09 (Pete): no handicap or net score on the tiles; they're on the scorecard.
   const now = today()
   const list = rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
     (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now))
@@ -78,7 +69,7 @@ export function History() {
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
           {!list.length && <p class="sub" style="text-align:center">No rounds match these filters.</p>}
           <div class="grid2">{list.map(r => (
-            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} net={netOf(r)} onClick={() => go(`/card/${r.id}`)} />
+            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} onClick={() => go(`/card/${r.id}`)} />
           ))}</div>
         </>}
       </main>

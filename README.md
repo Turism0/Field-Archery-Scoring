@@ -4,6 +4,10 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1.09
+
+- **3.1.09 (app and web app; API version only): no handicap or net score on the Score history tiles (Pete).** Each round's net score and the handicap before it are on its scorecard (Handicap competition card), not on the history list. The desktop Home's Recent rounds table keeps its Net column. App versionCode 61, versionName 3.1.09.
+
 ## Version 3.1.08
 
 - **3.1.08 (app and web app; API version only): the PB badge is your current best, by average (Pete).** It used to go on every round that beat your best total when it was shot, so with years of history many rounds had one. Now only one round per round type and bow style has it: the finished, fully scored round with the highest average per animal (Woodsman: per target; fun shots left out), whatever its number of targets, so 36s and 40s are compared fairly. The first shot wins a tie. Score history shows each round's average under its points ("avg 21.3/animal"). The scorecard of your PB says it's your best average and what it beat. The Stats screen's personal bests (best total for each number of targets) are unchanged; its season line counts the current PBs shot that season. Tests: Kotlin 71, web 65. App versionCode 60, versionName 3.1.08.

@@ -61,7 +61,6 @@ fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundS
     val filter by vm.filter.collectAsStateWithLifecycle()
     val choices by vm.choices.collectAsStateWithLifecycle()
     val pbs by vm.personalBests.collectAsStateWithLifecycle()
-    val nets by vm.nets.collectAsStateWithLifecycle()
     val averages by vm.averages.collectAsStateWithLifecycle()
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val lastSync by vm.lastSync.collectAsStateWithLifecycle()
@@ -141,7 +140,7 @@ fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundS
                         )
                     }
                     items(list, key = { it.id }) { r ->
-                        RoundCard(r, showSync = signedIn, personalBest = r.id in pbs, net = nets[r.id], average = averages[r.id]) { onOpenRound(r) }
+                        RoundCard(r, showSync = signedIn, personalBest = r.id in pbs, average = averages[r.id]) { onOpenRound(r) }
                     }
                 }
             }

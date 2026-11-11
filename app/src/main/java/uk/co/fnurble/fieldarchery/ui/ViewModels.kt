@@ -289,9 +289,7 @@ class HistoryViewModel(
         .map { rounds -> rounds.mapNotNull { r -> r.stats.averagePerAnimal?.let { r.id to it } }.toMap() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
-    /** Big Game rounds' net score with the personal handicap before each (2.9): round id → (net, handicap). */
-    val nets: StateFlow<Map<String, Pair<Int, Int>>> = roundRepo.finishedRounds.map { rounds -> netScores(rounds) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    // 3.1.09 (Pete): no handicap or net score on the Score history tiles; they're on the scorecard.
 }
 
 /** Each Big Game round's net score with the personal handicap you had before it (2.9): round id → (net, handicap). */
