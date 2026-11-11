@@ -1,4 +1,5 @@
 // The server (same address as this web app), as the Android app's FieldArcheryApi.kt.
+import { APP_VERSION } from '../version'
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public body?: any) { super(message) }
@@ -18,12 +19,19 @@ function defaultMessage(status: number): string {
 }
 
 // ---- is the server answering? (for the Home notice) ----
-export type ServerState = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE'
+/** UPDATE_REQUIRED (3.2.05): the server said this version is too old for it (426); it stays until the page reloads. */
+export type ServerState = 'UNKNOWN' | 'AVAILABLE' | 'UNAVAILABLE' | 'UPDATE_REQUIRED'
 let serverState: ServerState = 'UNKNOWN'
 const serverListeners = new Set<(s: ServerState) => void>()
 export const getServerState = () => serverState
+/** 3.2.05: fetch the newest web app and reload into it. */
+export async function updateApp() {
+  try { await (await navigator.serviceWorker?.getRegistration())?.update() } catch { /* reload anyway */ }
+  location.reload()
+}
+
 export function onServerState(l: (s: ServerState) => void): () => void { serverListeners.add(l); return () => serverListeners.delete(l) }
-function setServer(s: ServerState) { if (s !== serverState) { serverState = s; serverListeners.forEach(l => l(s)) } }
+function setServer(s: ServerState) { if (s !== serverState && serverState !== 'UPDATE_REQUIRED') { serverState = s; serverListeners.forEach(l => l(s)) } }
 
 /**
  * How long a call may take before it counts as no signal (3.2.04). Weak signal in a wood can leave a request hanging for
@@ -45,6 +53,7 @@ async function send<T>(method: string, path: string, body: unknown, token: strin
       method,
       headers: {
         Accept: 'application/json',
+        'X-App-Version': `web/${APP_VERSION}`,   // 3.2.05: so the server can say when this version is too old
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -61,7 +70,7 @@ async function send<T>(method: string, path: string, body: unknown, token: strin
       navigator.onLine ? "The server isn't available at the moment. Try again later." : "You're offline. It'll catch up when you have signal.")
   }
   if (res.status >= 502 && res.status <= 504) { setServer('UNAVAILABLE'); throw new ApiError(0, 'network', "The server isn't available at the moment. Try again later.") }
-  setServer('AVAILABLE')
+  setServer(res.status === 426 ? 'UPDATE_REQUIRED' : 'AVAILABLE')
   let json: any = null
   try { json = text ? JSON.parse(text) : {} } catch { json = null }
   if (res.ok) return (json ?? {}) as T

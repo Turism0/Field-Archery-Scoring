@@ -162,7 +162,7 @@ async function upload(token: string) {
       await markSynced(r.id, editedAt, false)
     } catch (e) {
       // Refused (invalid, or not yours / not a friend): not tried again until it's edited.
-      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 429) await markSynced(r.id, editedAt, true)
+      if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 401 && e.status !== 429 && e.status !== 426) await markSynced(r.id, editedAt, true)   // 426: sent again after updating
       else throw e
     }
   }

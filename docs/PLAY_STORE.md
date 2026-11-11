@@ -31,7 +31,7 @@ Check the Play Console for anything that's changed since.
 | Target audience | **13–15, 16–17 and 18 and over** (not under 13; Pete, Nov 2026). Not designed for children; the store listing doesn't target children. |
 | News app | No |
 | Health / government / financial features | None |
-| Foreground service permissions | **Connected device**: "During a live group (several archers scoring one round on their own phones), the app keeps exchanging scores with the other phones over Bluetooth / Wi-Fi (Nearby Connections) and the server while the screen is off, until the group is finished. A notification shows while it runs, with a Stop button." Google asks for a short video: make a live group, turn the screen off, show the notification and Stop. |
+| Foreground service permissions | **Connected device**: "During a live group (several archers scoring one round on their own phones), the app keeps exchanging scores with the other phones over Bluetooth / Wi-Fi (Nearby Connections) and the server while it's in the background or the screen is off, until the group is finished. A notification shows while it runs, with a Stop button." Google asks for a short video: make a live group, turn the screen off, show the notification and Stop. |
 | Account deletion | In the app: Profile → Delete account. Web: https://fieldarcheryscoring.fnurble.co.uk/delete-account. Deletes everything on the server straight away. |
 | Data safety | Below |
 
@@ -44,7 +44,7 @@ Check the Play Console for anything that's changed since.
 | Category → type | Notes |
 |---|---|
 | Personal info → **User IDs** | Username (Account management). |
-| Location → **Precise location** | Sent when a round starts to find the shoot location; **processed ephemerally** (not stored). |
+| Location → **Precise location** | **Collected, not ephemeral** (3.2.05 correction): when an archer names a new shoot location, its position is stored with the location and who named it. Optional; purpose App functionality. (The position sent when a round starts, to find the location, isn't stored.) |
 | App activity → **Other user-generated content** | Rounds and scores, friends, live groups, names of shoot locations and of guests in a group. |
 | App info and performance | Not collected. |
 | Device or other IDs | Not collected (the server notes each phone's make and model for the "signed-in phones" list; Google's categories don't include this). |

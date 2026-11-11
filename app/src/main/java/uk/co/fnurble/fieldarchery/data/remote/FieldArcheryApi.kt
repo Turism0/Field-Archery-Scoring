@@ -49,6 +49,8 @@ class FieldArcheryApi(
     private val baseUrl: String = ApiConfig.BASE_URL,
     /** Told whether each call reached the server, for the home screen notices and error wording. */
     private val network: NetworkStatus? = null,
+    /** 3.2.05: "android/66", sent with every call so the server can say when this version is too old for it. */
+    private val appVersion: String? = null,
 ) {
 
     /** Checks the server is up (no sign-in needed). Throws [ApiException] if it isn't. */
@@ -309,6 +311,7 @@ class FieldArcheryApi(
                 conn.connectTimeout = 15_000
                 conn.readTimeout = 15_000
                 conn.setRequestProperty("Accept", "application/json")
+                appVersion?.let { conn.setRequestProperty("X-App-Version", it) }
                 token?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
                 if (body != null) {
                     conn.doOutput = true
@@ -322,6 +325,7 @@ class FieldArcheryApi(
 
                 // Nginx Proxy Manager answers 502/504 when the API on Odin is down; the API says 503 if SQL is.
                 if (status in 502..504) network?.serverFailed() else network?.serverAnswered()
+                if (status == 426) network?.updateRequired()
 
                 if (status in 200..299) {
                     if (text.isBlank()) JSONObject() else JSONObject(text)

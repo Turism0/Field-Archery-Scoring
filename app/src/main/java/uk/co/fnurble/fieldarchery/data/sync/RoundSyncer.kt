@@ -101,7 +101,7 @@ class RoundSyncer(
                 dao.markSync(id, editedAt, SyncState.SYNCED.name)
             } catch (e: ApiException) {
                 // Refused (invalid, or another account's round): don't retry until it's edited again.
-                if (e.status in 400..499 && e.status != 401 && e.status != 429) {
+                if (e.status in 400..499 && e.status != 401 && e.status != 429 && e.status != 426) {   // 426: sent again after updating
                     dao.markSync(id, editedAt, SyncState.FAILED.name)
                 } else {
                     throw e
@@ -138,7 +138,7 @@ class RoundSyncer(
                 when {
                     e.status == 409 -> dao.markSync(id, editedAt, SyncState.SYNCED.name)
                     // No longer friends, or refused: don't retry until it's edited again.
-                    e.status in 400..499 && e.status != 401 && e.status != 429 -> dao.markSync(id, editedAt, SyncState.FAILED.name)
+                    e.status in 400..499 && e.status != 401 && e.status != 429 && e.status != 426 -> dao.markSync(id, editedAt, SyncState.FAILED.name)
                     else -> throw e
                 }
             }

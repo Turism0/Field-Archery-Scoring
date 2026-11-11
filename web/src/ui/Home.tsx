@@ -4,7 +4,7 @@ import { Bar, go, installed, isIos, toast, useData } from './common'
 import { getAccount, isAdmin } from '../data/account'
 import { finished, inProgress, syncNow } from '../data/rounds'
 import { getKv, setKv } from '../data/db'
-import { getServerState, onServerState, type ServerState } from '../data/api'
+import { getServerState, onServerState, updateApp, type ServerState } from '../data/api'
 import { statsTotal } from '../domain/round'
 import { handicapEntry, personalHandicaps } from '../domain/handicap'
 import {
@@ -81,7 +81,9 @@ export function Home() {
               : 'Use your browser\'s menu → "Install app" or "Add to Home screen" so it works with no signal.'}</span>
           </div>
         )}
-        {!online ? <div class="banner"><b>Device offline</b><span>Scoring works as normal. Rounds back up when you're online again.</span></div>
+        {server === 'UPDATE_REQUIRED' ? <div class="banner bad"><b>Please update the app</b><span>This version is too old for the server.
+          Scoring works as normal; rounds back up once it's updated.</span><button class="filled" onClick={updateApp}>Update now</button></div>
+          : !online ? <div class="banner"><b>Device offline</b><span>Scoring works as normal. Rounds back up when you're online again.</span></div>
           : server === 'UNAVAILABLE' && <div class="banner bad"><b>Server unavailable</b><span>Scoring works as normal. Rounds back up when the server is back.</span></div>}
         <div class="card low row between">
           <button class="grow plain" style="padding:0" onClick={() => go('/profile')}>

@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -31,11 +32,24 @@ import uk.co.fnurble.fieldarchery.R
  * is in the background or the screen is off, from making / joining a live group until it's closed. Android needs a
  * notification while it runs; its Stop button stops it until the group is opened in the app again. Starts again after
  * the phone restarts if a group is still going.
+ *
+ * 3.2.05 (Pete, battery): the phone is no longer held awake for the whole group (up to 12 hours), which drained the
+ * battery and counts against the app on Google Play (more than 2 hours a day is "excessive"). When the screen goes off
+ * it's kept awake for one more minute, to send what was just scored; after that the phone checks every 30 seconds
+ * whenever Android has it awake anyway, and catches up as soon as the screen comes on.
  */
 class LiveGroupService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private val screen = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_ON -> screenChanged(true)
+                Intent.ACTION_SCREEN_OFF -> screenChanged(false)
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -48,6 +62,21 @@ class LiveGroupService : Service() {
                 setShowBadge(false)
             },
         )
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FieldArchery:liveGroup")
+            .apply { setReferenceCounted(false) }
+        ContextCompat.registerReceiver(
+            this, screen,
+            IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    /** Screen off: a minute more awake to send what was just scored. Screen on: Android keeps the phone awake anyway. */
+    private fun screenChanged(on: Boolean) {
+        (application as FieldArcheryApp).container.liveGroupRepository.setScreenOn(on)
+        val lock = wakeLock ?: return
+        if (on) { if (lock.isHeld) lock.release() } else lock.acquire(SCREEN_OFF_AWAKE_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -68,12 +97,7 @@ class LiveGroupService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (wakeLock == null) {
-            // The CPU stays awake with the screen off so the phones keep talking (released when the group ends).
-            wakeLock = getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "FieldArchery:liveGroup")
-                .apply { acquire(MAX_HOURS * 60 * 60 * 1000L) }
-        }
+        screenChanged(getSystemService(PowerManager::class.java).isInteractive)
         if (job == null) {
             job = scope.launch {
                 live.keepRunning { text -> notify(text) }
@@ -86,6 +110,8 @@ class LiveGroupService : Service() {
     override fun onDestroy() {
         job?.cancel()
         scope.cancel()
+        runCatching { unregisterReceiver(screen) }
+        (application as FieldArcheryApp).container.liveGroupRepository.setScreenOn(true)
         wakeLock?.let { if (it.isHeld) it.release() }
         super.onDestroy()
     }
@@ -123,8 +149,8 @@ class LiveGroupService : Service() {
         private const val CHANNEL = "live_groups"
         private const val NOTIFICATION_ID = 2401
         private const val ACTION_STOP = "uk.co.fnurble.fieldarchery.STOP_LIVE"
-        /** Safety limit on keeping the CPU awake (the service itself runs until the group closes). */
-        private const val MAX_HOURS = 12L
+        /** After the screen goes off, how long the phone is kept awake to send what was just scored. */
+        private const val SCREEN_OFF_AWAKE_MS = 60_000L
 
         /** Starts (or nudges) the service; safe to call often. */
         fun start(context: Context) {

@@ -11,6 +11,7 @@ using Dapper;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.StaticFiles;
+using FieldArcheryApi;
 using FieldArcheryApi.Admin;
 using FieldArcheryApi.Auth;
 using FieldArcheryApi.Data;
@@ -59,7 +60,9 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // Slows down password guessing: limited sign-in attempts per IP per minute (kept in memory only, not logged).
-var authPerMinute = builder.Configuration.GetValue("RateLimits:AuthPerMinute", 30);
+// 3.2.05 (Pete): 120, not 30. A club on shared Wi-Fi (or a mobile network sharing addresses) is one IP address, and
+// each account still locks for 15 minutes after 5 wrong passwords, so a higher limit here costs little.
+var authPerMinute = builder.Configuration.GetValue("RateLimits:AuthPerMinute", 120);
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -126,6 +129,7 @@ app.UseStaticFiles(new StaticFileOptions
             ctx.Context.Response.Headers.CacheControl = "no-cache";
     },
 });
+app.UseAppVersionCheck();   // 3.2.05: apps too old for this server are told to update (AppVersionCheck.cs)
 app.UseRouting();   // after the static files, so /app/ is served as app/index.html before any endpoint is chosen
 app.UseExceptionHandler();
 app.UseStatusCodePages();
@@ -183,5 +187,5 @@ app.Run();
 
 static class ApiInfo
 {
-    public const string Version = "3.2.04";
+    public const string Version = "3.2.05";
 }

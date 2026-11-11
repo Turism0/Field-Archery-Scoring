@@ -199,6 +199,8 @@ class HomeViewModel(
     /** For the "Device offline" / "Server unavailable" notices. */
     val online: StateFlow<Boolean> = network.online
     val server: StateFlow<ServerState> = network.server
+    /** 3.2.05: this version is too old for the server. */
+    val updateRequired: StateFlow<Boolean> = network.updateRequired
 
     fun checkServer() {
         viewModelScope.launch { serverCheck() }

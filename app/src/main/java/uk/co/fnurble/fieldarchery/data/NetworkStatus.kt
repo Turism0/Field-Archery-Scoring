@@ -38,6 +38,12 @@ class NetworkStatus(context: Context) {
         })
     }
 
+    private val _updateRequired = MutableStateFlow(false)
+    /** 3.2.05: the server said this app version is too old for it (426); Home asks to update from Google Play. */
+    val updateRequired: StateFlow<Boolean> = _updateRequired.asStateFlow()
+
+    fun updateRequired() { _updateRequired.value = true }
+
     /** Called by the API client after every call. */
     fun serverAnswered() { _server.value = ServerState.AVAILABLE }
 

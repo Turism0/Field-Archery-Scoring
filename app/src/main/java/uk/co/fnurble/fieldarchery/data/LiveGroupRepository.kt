@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
@@ -256,6 +257,25 @@ class LiveGroupRepository(
     private val syncLock = Mutex()
     private val nearby = NearbyLink(context)
     private val dir = File(context.filesDir, "live_groups").apply { mkdirs() }
+
+    /**
+     * 3.2.05 (Pete, battery): with the screen off the phone checks every 30 seconds instead of every 3, and only while
+     * Android keeps it awake (the service no longer holds it awake for hours). Turning the screen on catches up at once.
+     */
+    @Volatile private var screenOn = true
+    private val wakeUps = MutableStateFlow(0L)
+
+    /** Told by [LiveGroupService] when the screen goes off or on. */
+    fun setScreenOn(on: Boolean) {
+        screenOn = on
+        if (on) wakeUps.update { it + 1 }
+    }
+
+    /** The wait between syncs: 3 s with the screen on, 30 s off, cut short when the screen comes on. */
+    private suspend fun pauseBetweenSyncs() {
+        val seen = wakeUps.value
+        withTimeoutOrNull(if (screenOn) POLL_MS else POLL_SCREEN_OFF_MS) { wakeUps.first { it != seen } }
+    }
 
     private val replicas = MutableStateFlow<Map<String, LiveReplica>>(emptyMap())
     /** The server's last problem with a group (null: answering). */
@@ -668,7 +688,7 @@ class LiveGroupRepository(
             } catch (e: Exception) {
                 Log.w(TAG, "Live group sync", e)
             }
-            delay(POLL_MS)
+            pauseBetweenSyncs()
         }
     }
 
@@ -1333,6 +1353,7 @@ class LiveGroupRepository(
         /** Phone-to-phone message version (2.3). */
         const val PROTOCOL = 1
         private const val POLL_MS = 3_000L
+        private const val POLL_SCREEN_OFF_MS = 30_000L
         private const val LINGER_MS = 120_000L
         private const val HOST_FRESH_MS = 20_000L
         private const val JOIN_TIMEOUT_MS = 45_000L

@@ -4,6 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.05
+
+- **3.2.05 (app, web app and API): ready for real use (Pete: review).**
+  - **Update required.** Both apps now say which version they are with every call (`X-App-Version: android/67` or `web/3.2.05`). The server's `appsettings.json` has `"MinVersions": { "Android": 0, "Web": "" }` (0 / empty = any). Raise them when a server change would break older apps: an older app then gets 426 and shows **Please update the app** on Home (Android: **Update** opens Google Play; web: **Update now** fetches the new version and reloads). Scoring carries on, and rounds waiting to upload aren't marked as failed: they go up after updating. Calls without the header (apps before 3.2.05, scripts, monitoring) are always let through, so only raise the minimums once phones have 3.2.05 or later. Signing out always works. To try it: set `"Android": 999`, recycle the app pool, pull to refresh in the app; then set it back.
+  - **Live groups and the battery (Android).** The phone was held awake for the whole group (up to 12 hours). That drains the battery, and since March 2026 Google Play counts more than 2 hours a day as "excessive", which can bring a warning on the store listing. Now: when the screen goes off the phone stays awake one more minute to send what was just scored; after that it checks every 30 seconds (not 3) whenever Android has it awake anyway, and catches up straight away when the screen comes on. Scoring with the screen on is unchanged.
+  - **Sign-in limit** raised from 30 to 120 attempts a minute per IP address (`RateLimits:AuthPerMinute`), so a club on shared Wi-Fi isn't blocked. Each account still locks for 15 minutes after 5 wrong passwords. If `appsettings.Production.json` on Odin sets `RateLimits`, change it there too.
+  - **Google Play Data safety correction** (`docs/PLAY_STORE.md` and the launch guide): precise location is **collected, not ephemeral**, because naming a new shoot location stores its position with who named it.
+  - Tests: Kotlin 83, web 77; the update notice tested in the web app against the mock server. App versionCode 67, versionName 3.2.05.
+
 ## Version 3.2.04
 
 - **3.2.04 (web app; app and API version only): weak signal (Pete: real-world review).**

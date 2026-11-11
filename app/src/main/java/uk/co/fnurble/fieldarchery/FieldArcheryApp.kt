@@ -22,7 +22,11 @@ class AppContainer(app: Application) {
     private val db = FieldArcheryDatabase.create(app)
     /** Device online / server available, for the home screen notices. */
     val networkStatus = NetworkStatus(app)
-    private val api = FieldArcheryApi(network = networkStatus)
+    /** 3.2.05: this app's versionCode, sent with every call ("android/66") so the server can ask for an update. */
+    private val versionCode: Long = runCatching {
+        androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(app.packageManager.getPackageInfo(app.packageName, 0))
+    }.getOrDefault(0L)
+    private val api = FieldArcheryApi(network = networkStatus, appVersion = "android/$versionCode")
     val accountStore = AccountStore(app)
 
     val syncScheduler = SyncScheduler(app, accountStore)
