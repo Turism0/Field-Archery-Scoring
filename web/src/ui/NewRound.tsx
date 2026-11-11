@@ -6,7 +6,7 @@ import { create, METHODS, type LiveMethod } from '../data/live'
 import { getRound } from '../data/db'
 import { captureFor } from '../data/locations'
 import {
-  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_GROUP, MAX_TARGETS, ROUND_TYPE_NAMES, ageGroupFor, type AgeGroup, type ArcherClass,
+  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_GROUP, MAX_START_TARGET, MAX_TARGETS, ROUND_TYPE_NAMES, ageGroupFor, startTargetOk, type AgeGroup, type ArcherClass,
 } from '../domain/round'
 import type { RoundType } from '../domain/scoring'
 
@@ -49,7 +49,7 @@ export function NewRound({ type }: { type: RoundType }) {
   const count = Number(targets)
   const countOk = Number.isInteger(count) && count >= 1 && count <= MAX_TARGETS
   const startN = Number(startText)
-  const startOk = !startText || (countOk && startN >= 1 && startN <= count)
+  const startOk = !startText || startTargetOk(startN)
   const exp = Number(expected)
   const expOk = !isLive || (Number.isInteger(exp) && exp >= members.length + 1 && exp <= MAX_GROUP)
   const valid = countOk && startOk && !!cls && !!age && !!bow && (mode !== 'group' || members.length > 0) && expOk && (!isLive || !!account)
@@ -107,7 +107,7 @@ export function NewRound({ type }: { type: RoundType }) {
           <Field label="Number of targets" help={targets && !countOk ? `1 to ${MAX_TARGETS}` : undefined}>
             <input inputMode="numeric" value={targets} onInput={e => setTargets((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></Field>
           <div class="row">{COMMON_COUNTS.map(n => <button class={`chip ${count === n ? 'on' : ''}`} onClick={() => setTargets(String(n))}>{n}</button>)}</div>
-          <Field label="Starting target (optional)" help={!startOk ? `1 to ${countOk ? count : '–'}` : 'The first target you shoot, if not 1. Just noted on the scorecard.'}>
+          <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : 'The course\'s number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36-target course). Just noted on the scorecard: scoring starts at 1.'}>
             <input inputMode="numeric" value={startText} onInput={e => setStartText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
         </Card>

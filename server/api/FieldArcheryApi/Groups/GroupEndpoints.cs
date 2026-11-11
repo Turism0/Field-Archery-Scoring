@@ -95,7 +95,7 @@ public static class GroupEndpoints
         if (g.TargetCount is < 1 or > RoundValidator.MaxTargets) problems.Add($"Target count must be 1 to {RoundValidator.MaxTargets}.");
         if (g.ShootDate < new DateOnly(2000, 1, 1) || g.ShootDate > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
             problems.Add("Shoot date is out of range.");
-        if (g.StartTarget is { } st && (st < 1 || st > g.TargetCount)) problems.Add($"Start target must be 1 to {g.TargetCount}.");
+        if (g.StartTarget is { } st && (st < 1 || st > RoundValidator.MaxStartTarget)) problems.Add($"Start target must be 1 to {RoundValidator.MaxStartTarget}.");
         var sent = g.Members ?? [];
         foreach (var m in sent) problems.AddRange(MemberProblems(m.ArcherClass, m.AgeGroup, m.BowStyle));
         var kinds = sent.Select(m => m.Kind?.Trim().ToUpperInvariant()).ToList();

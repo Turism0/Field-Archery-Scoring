@@ -112,7 +112,7 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
                     value = f.startTargetText,
                     onValue = { v -> vm.update { it.copy(startTargetText = v) } },
                     isError = startError,
-                    supportingText = if (startError) "1 to ${f.targetCount}"
+                    supportingText = if (startError) "1 to ${RoundRepository.MAX_START_TARGET}"
                     else if (f.groupName != null) "The same for everyone in the group." else "The first target shot, if not 1.",
                 )
             }

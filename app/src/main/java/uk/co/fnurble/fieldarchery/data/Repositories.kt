@@ -194,7 +194,7 @@ class RoundRepository(
                 createdAt = now,
                 updatedAt = now,
                 roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
-                startTarget = startTarget?.takeIf { it in 1..targetCount },
+                startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -244,7 +244,7 @@ class RoundRepository(
                     groupName = name,
                     groupArcherId = archerId,
                     groupOrder = order,
-                    startTarget = startTarget?.takeIf { it in 1..targetCount },
+                    startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
                 ),
                 targets = targets.map { it.toEntity(id, now) },
                 animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -298,7 +298,7 @@ class RoundRepository(
                 locationId = locationId,
                 locationName = locationName,
                 locationState = if (locationId != null) uk.co.fnurble.fieldarchery.data.local.LocationState.SET else null,
-                startTarget = startTarget?.takeIf { it in 1..targetCount },
+                startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -393,7 +393,7 @@ class RoundRepository(
     ) {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val r = dao.getRound(roundId) ?: return
-        val start = (if (startTarget == KEEP_START) r.startTarget else startTarget)?.takeIf { it in 1..targetCount }
+        val start = (if (startTarget == KEEP_START) r.startTarget else startTarget)?.takeIf { it in 1..MAX_START_TARGET }
         // In a group, the date, number of targets and start target are the same for everyone; class, age group and bow
         // are per archer.
         for (other in groupRoundsOf(roundId)) {
@@ -439,7 +439,7 @@ class RoundRepository(
     /** Live groups (2.7): the host's start target for every card in the group on this phone (only where it differs). */
     suspend fun setGroupStartTarget(groupId: String, startTarget: Int?) {
         for (r in dao.getGroup(groupId)) {
-            val start = startTarget?.takeIf { it in 1..r.targetCount }
+            val start = startTarget?.takeIf { it in 1..MAX_START_TARGET }
             if (r.startTarget != start) touch(r.id) { it.copy(startTarget = start) }
         }
     }
@@ -456,6 +456,8 @@ class RoundRepository(
         /** updateDetails: leave the start target as it is. */
         const val KEEP_START = -1
         const val MAX_TARGETS = 100
+        /** The highest starting target (3.1.03, Pete): any peg on the course, not just up to the number of targets shot. */
+        const val MAX_START_TARGET = 999
         /** Group size limit, including the scorer. */
         const val MAX_GROUP = 8
         /** Days guests' scores are kept. */

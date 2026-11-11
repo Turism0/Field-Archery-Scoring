@@ -5,7 +5,7 @@ import { refreshModelIfStale } from './handicap'
 import { lookUpPending, refreshNames } from './locations'
 import { getAccount, signedOutByServer, type Friend } from './account'
 import {
-  newRound, nowUtc, roundFromJson, roundToJson, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
+  newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
 } from '../domain/round'
 import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
 
@@ -221,7 +221,7 @@ export async function updateDetails(id: string, shootDate: string, targetCount: 
   startTarget: number | null = null) {
   const r = await getRound(id)
   if (!r) return
-  const start = startTarget != null && startTarget >= 1 && startTarget <= targetCount ? startTarget : null
+  const start = startTargetOk(startTarget) ? startTarget : null
   const one = (x: Round, c: ArcherClass, a: AgeGroup, b: string): Round => {
     const added = Array.from({ length: Math.max(0, targetCount - x.targetCount) }, (_, i) => newTarget(x.type, x.targetCount + i + 1))
     return {
@@ -253,7 +253,7 @@ export async function saveTypedRound(p: {
   await putRound({
     ...r, ...loc, shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle,
     targets: p.targets, status: p.finished ? 'COMPLETED' : 'IN_PROGRESS', updatedUtc: nowUtc(), pending: true, failed: false,
-    startTarget: p.startTarget != null && p.startTarget >= 1 && p.startTarget <= p.targetCount ? p.startTarget : null,
+    startTarget: startTargetOk(p.startTarget) ? p.startTarget : null,
   })
   if (p.finished) syncNow()
   return r.id

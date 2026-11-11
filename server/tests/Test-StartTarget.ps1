@@ -5,7 +5,7 @@
         .\Test-StartTarget.ps1
         .\Test-StartTarget.ps1 -BaseUrl http://localhost:8085
 
-    A round's startTarget is an optional note (1 to the number of targets) kept with the round, and a live group's
+    A round's startTarget is an optional note (any target on the course, 1 to 999; 3.1.03) kept with the round, and a live group's
     is set by the host. One throwaway account (zz_test_…). Every line should start with OK.
     Tidy up afterwards with server/sql/900_delete_test_accounts.sql.
 #>
@@ -63,8 +63,11 @@ $r = Call PUT "/api/rounds/$id2" (New-Round $null) -Token $token
 $r = Call GET "/api/rounds/$id2" -Token $token
 Expect 'no start target stays empty' ($r.Status -eq 200 -and $null -eq $r.Body.startTarget) "($($r.Status) $($r.Body.startTarget))"
 
-$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round 4) -Token $token
-Expect 'a start target past the last target is refused' ($r.Status -eq 400) "($($r.Status))"
+# 3.1.03 (Pete): any target on the course, not just up to the number shot.
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round 19) -Token $token
+Expect 'a start target past the number of targets shot is fine (19 on a 3-target round)' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.problems -join '; '))"
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round 1000) -Token $token
+Expect 'start target 1000 is refused (999 at most)' ($r.Status -eq 400) "($($r.Status))"
 $r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round 0) -Token $token
 Expect 'start target 0 is refused' ($r.Status -eq 400) "($($r.Status))"
 
@@ -76,9 +79,12 @@ $g = @{ code = $code; method = 'SINGLE'; roundType = 'BIG_GAME'; targetCount = 3
         status = 'OPEN'; members = @($host1); startTarget = 3 }
 $r = Call PUT "/api/groups/$gid" $g -Token $token
 Expect 'a live group with start target 3' ($r.Status -eq 200 -and $r.Body.startTarget -eq 3) "($($r.Status) $($r.Body.message) $($r.Body.startTarget))"
-$g.startTarget = 9
+$g.startTarget = 19
 $r = Call PUT "/api/groups/$gid" $g -Token $token
-Expect 'a group start target past the last target is refused' ($r.Status -eq 400) "($($r.Status))"
+Expect 'a group can start past the number of targets shot (19)' ($r.Status -eq 200 -and $r.Body.startTarget -eq 19) "($($r.Status) $($r.Body.message) $($r.Body.startTarget))"
+$g.startTarget = 1000
+$r = Call PUT "/api/groups/$gid" $g -Token $token
+Expect 'a group start target of 1000 is refused' ($r.Status -eq 400) "($($r.Status))"
 $g.startTarget = $null
 $r = Call PUT "/api/groups/$gid" $g -Token $token
 Expect 'and it can be cleared' ($r.Status -eq 200 -and $null -eq $r.Body.startTarget) "($($r.Status) $($r.Body.startTarget))"

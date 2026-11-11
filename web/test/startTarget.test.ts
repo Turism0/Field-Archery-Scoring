@@ -1,4 +1,5 @@
-// The target a round started on (2.7): kept with the round and in its JSON; only 1 to the number of targets.
+// The target a round started on (2.7): kept with the round and in its JSON. 3.1.03: any target 1 to 999, not just up to
+// the number shot (an 18-target half can start at 19).
 import { describe, expect, it } from 'vitest'
 import { newRound, roundFromJson, roundToJson } from '../src/domain/round'
 
@@ -13,7 +14,9 @@ describe('start target', () => {
   })
   it('is optional, and only a target on the round', () => {
     expect(newRound(base).startTarget).toBeNull()
-    expect(newRound({ ...base, startTarget: 37 }).startTarget).toBeNull()
+    expect(newRound({ ...base, startTarget: 37 }).startTarget).toBe(37)
+    expect(newRound({ ...base, startTarget: 999 }).startTarget).toBe(999)
+    expect(newRound({ ...base, startTarget: 1000 }).startTarget).toBeNull()
     expect(newRound({ ...base, startTarget: 0 }).startTarget).toBeNull()
     expect(roundToJson(newRound(base)).startTarget).toBeNull()
     expect(roundFromJson({ ...roundToJson(newRound(base)), roundId: 'x' }).startTarget).toBeNull()

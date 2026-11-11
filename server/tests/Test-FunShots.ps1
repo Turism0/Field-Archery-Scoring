@@ -31,17 +31,17 @@ function Expect([string]$What, [bool]$Ok, $Detail = '') {
     else     { Write-Host "PROBLEM: $What $Detail" -ForegroundColor Red; $script:problems++ }
 }
 
-function Kill([int]$n) {
+function New-KillTarget([int]$n) {
     @{ targetNo = $n; type = 'STANDARD'; overridePoints = $null; points = 20
        animals = @(@{ index = 0; state = 'SCORED'; arrowNo = 1; hit = 'KILL'; points = 20 }) }
 }
-function Fun([int]$n, $points) {
+function New-FunTarget([int]$n, $points) {
     @{ targetNo = $n; type = 'FUN'; overridePoints = $points; points = $(if ($null -eq $points) { 0 } else { $points }); animals = @() }
 }
 # A finished 3-target Big Game round: two kills (40) and target 3 as given.
 function New-Round($third, $LocationId = $null, [string]$Type = 'BIG_GAME') {
     $now = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
-    $targets = @((Kill 1), (Kill 2), $third)
+    $targets = @((New-KillTarget 1), (New-KillTarget 2), $third)
     @{ roundType = $Type; shootDate = (Get-Date).ToString('yyyy-MM-dd'); targetCount = 3; archerClass = 'G'; ageGroup = 'ADULT'
        bowStyle = 'LB'; status = 'COMPLETED'; totalPoints = ($targets | ForEach-Object { $_.points } | Measure-Object -Sum).Sum
        clientCreatedUtc = $now; clientUpdatedUtc = $now; locationId = $LocationId; targets = $targets }
@@ -62,25 +62,25 @@ Expect 'a test location' ($r.Status -eq 201) "($($r.Status) $($r.Body.message))"
 $loc = $r.Body.locationId
 
 $id = [guid]::NewGuid()
-$r = Call PUT "/api/rounds/$id" (New-Round (Fun 3 45) $loc) -Token $token
+$r = Call PUT "/api/rounds/$id" (New-Round (New-FunTarget 3 45) $loc) -Token $token
 Expect 'a round with a fun shot of 45 is saved' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.message) $($r.Body.problems -join '; '))"
 $r = Call GET "/api/rounds/$id" -Token $token
 $t3 = $r.Body.targets | Where-Object targetNo -eq 3
 Expect 'and comes back as a fun shot, total 85' ($t3.type -eq 'FUN' -and $t3.overridePoints -eq 45 -and $r.Body.totalPoints -eq 85) "($($t3 | ConvertTo-Json -Compress) $($r.Body.totalPoints))"
 
-$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (Fun 3 0)) -Token $token
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (New-FunTarget 3 0)) -Token $token
 Expect 'a fun shot of 0 is fine' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.problems -join '; '))"
-$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (Fun 3 999)) -Token $token
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (New-FunTarget 3 999)) -Token $token
 Expect 'a fun shot of 999 is fine' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.problems -join '; '))"
-$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (Fun 3 1000)) -Token $token
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (New-FunTarget 3 1000)) -Token $token
 Expect 'a fun shot over 999 is refused' ($r.Status -eq 400) "($($r.Status))"
-$bad = Fun 3 45; $bad.animals = @(@{ index = 0; state = 'PENDING'; arrowNo = $null; hit = $null; points = 0 })
+$bad = New-FunTarget 3 45; $bad.animals = @(@{ index = 0; state = 'PENDING'; arrowNo = $null; hit = $null; points = 0 })
 $r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round $bad) -Token $token
 Expect 'a fun shot with an animal is refused' ($r.Status -eq 400) "($($r.Status))"
-$bad = Fun 3 45; $bad.points = 40
+$bad = New-FunTarget 3 45; $bad.points = 40
 $r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round $bad) -Token $token
 Expect "a fun shot whose points don't match its score is refused" ($r.Status -eq 400) "($($r.Status))"
-$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (Fun 3 $null)) -Token $token
+$r = Call PUT "/api/rounds/$([guid]::NewGuid())" (New-Round (New-FunTarget 3 $null)) -Token $token
 Expect 'an unscored fun shot (no score yet) is saved as 0' ($r.Status -in 200, 201) "($($r.Status) $($r.Body.problems -join '; '))"
 
 $r = Call GET "/api/locations/$loc/page" -Token $token

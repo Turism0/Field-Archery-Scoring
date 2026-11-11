@@ -1334,8 +1334,9 @@ data class NewRoundForm(
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
 
     /** The start target, if one was typed and it's a target on this round. */
-    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> targetCount?.let { n in 1..it } ?: false }
-    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && targetCount != null && startTarget == null
+    // 3.1.03 (Pete): any target on the course (an 18-target half can start at 19), not just up to the number shot.
+    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> n in 1..RoundRepository.MAX_START_TARGET }
+    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && startTarget == null
 
     /** At least you and whoever's been added here; at most the group limit. */
     val liveExpectedRange: IntRange get() = (members.size + 1)..RoundRepository.MAX_GROUP
@@ -1612,8 +1613,9 @@ data class EditRoundForm(
     /** More targets on a finished round reopens it. */
     val reopens: Boolean get() = (targetCount ?: 0) > original.targetCount && original.status == RoundStatus.COMPLETED
 
-    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> targetCount?.let { n in 1..it } ?: false }
-    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && targetCount != null && startTarget == null
+    // 3.1.03 (Pete): any target on the course (an 18-target half can start at 19), not just up to the number shot.
+    val startTarget: Int? get() = startTargetText.toIntOrNull()?.takeIf { n -> n in 1..RoundRepository.MAX_START_TARGET }
+    val startTargetError: Boolean get() = startTargetText.isNotEmpty() && startTarget == null
 
     val changed: Boolean
         get() = shootDate != original.shootDate || targetCount != original.targetCount || archerClass != original.archerClass ||

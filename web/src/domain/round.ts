@@ -28,6 +28,9 @@ export const BOW_STYLES: { code: string; name: string }[] = [
 export const bowName = (code: string) => BOW_STYLES.find(b => b.code === code)?.name ?? code
 
 export const MAX_TARGETS = 100
+/** The highest starting target (3.1.03, Pete): any peg on the course, not just up to the number of targets shot. */
+export const MAX_START_TARGET = 999
+export const startTargetOk = (n: number | null | undefined): n is number => n != null && Number.isInteger(n) && n >= 1 && n <= MAX_START_TARGET
 export const MAX_GROUP = 8
 
 /** Adult 16+, Junior 12–15, Cub under 12, on the shoot date. */
@@ -203,7 +206,7 @@ export function newRound(p: {
     createdUtc: now, updatedUtc: now, pending: true, groupId: p.groupId ?? null, groupRole: p.groupRole ?? null,
     groupName: p.groupName ?? null, groupArcherId: p.groupArcherId ?? null, groupOrder: p.groupOrder ?? null,
     locationId: p.locationId ?? null, locationName: p.locationName ?? null,
-    startTarget: p.startTarget != null && p.startTarget >= 1 && p.startTarget <= p.targetCount ? p.startTarget : null,
+    startTarget: startTargetOk(p.startTarget) ? p.startTarget : null,
   }
 }
 

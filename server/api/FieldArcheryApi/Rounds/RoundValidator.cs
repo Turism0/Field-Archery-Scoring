@@ -7,6 +7,8 @@ namespace FieldArcheryApi.Rounds;
 public static class RoundValidator
 {
     public const int MaxTargets = 100;
+    /// <summary>The highest starting target (3.1.03): any peg on the course, whatever number of targets is shot.</summary>
+    public const int MaxStartTarget = 999;
     public const int MinFan = 2;
     public const int MaxFan = 6;
     public const int MaxOverride = MaxFan * 24;
@@ -63,7 +65,8 @@ public static class RoundValidator
         if (r.ShootDate < new DateOnly(2000, 1, 1) || r.ShootDate > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
             problems.Add("Shoot date is out of range.");
         if (r.ClientUpdatedUtc < r.ClientCreatedUtc) problems.Add("Updated time is before created time.");
-        if (r.StartTarget is { } st && (st < 1 || st > r.TargetCount)) problems.Add($"Start target must be 1 to {r.TargetCount}.");
+        // 3.1.03 (Pete): any target on the course, not just up to the number shot (an 18-target half can start at 19).
+        if (r.StartTarget is { } st && (st < 1 || st > MaxStartTarget)) problems.Add($"Start target must be 1 to {MaxStartTarget}.");
 
         var targets = r.Targets ?? [];
         var numbers = targets.Select(t => t.TargetNo).OrderBy(n => n).ToList();

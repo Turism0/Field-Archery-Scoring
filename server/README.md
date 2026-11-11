@@ -153,7 +153,7 @@ Rules: usernames 3–30 of letters, numbers, `.` `-` `_` (not case-sensitive); p
                  "animals": [ { "index": 0, "state": "SCORED", "arrowNo": 1, "hit": "KILL", "points": 20 } ] } ] }
 ```
 
-- `"startTarget"` (API 2.7, optional): the target the archer started on, 1 to `targetCount` (`null` when not given). Only noted on the scorecard: targets keep their own numbers.
+- `"startTarget"` (API 2.7, optional): the target the archer started on: the course's number for it, 1 to 999 (API 3.1.03; was 1 to `targetCount`), e.g. 19 for the second half of a 36-target course shot as 18 (`null` when not given). Only noted on the scorecard: targets keep their own numbers.
 - `"roundType"`: `BIG_GAME` (default when missing) or `WOODSMAN`. A Woodsman round's targets are `"type": "WOODSMAN"` with `"animals": []` and `"arrows"`: the arrows in order, `W` wound (5), `K` kill (30 / 20 / 10 on arrow 1 / 2 / 3, shooting stops), `M` miss (0), e.g. `"WK"` = 25; an unfinished target has fewer than 3 and no K. Override 0–30. Big Game targets have no arrows.
 - **Fun shots (API 3.1, schema 11):** a Big Game target can be `"type": "FUN"`: a shot with unusual scoring, `"animals": []`, its score in `overridePoints` (any whole number 0–999; null = not scored yet, `points` 0) and `points` equal to it. It counts in `totalPoints` but every stat leaves it out: friends' best / average, location page best / average / per animal, and `recent` (which gives `funShots` and `funPoints` so phones leave it out of handicaps). Round summaries (friends' rounds, location pages) give `funShots` and `funPoints`.
 - Every score is checked against the Big Game rules (allowed hit per arrow and its points, predator/prey shared arrows, fan size, overrides, target and round totals). Anything wrong is refused with a list of problems.
@@ -206,7 +206,7 @@ Run `sql/013_start_target.sql` in SSMS first (schema 9), then publish API 2.7.
 .\Test-StartTarget.ps1
 ```
 
-A round's `startTarget` is kept and comes back, can be left out, and must be 1 to the number of targets; a live group's is set by the host and can be cleared. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
+A round's `startTarget` is kept and comes back, can be left out, and can be any target on the course, 1 to 999 (3.1.03; 19 on a 3-target round is fine, 1000 isn't); a live group's is set by the host and can be cleared. Every line should start with OK; tidy up with `900_delete_test_accounts.sql`.
 
 ## Testing fun shots (3.1)
 

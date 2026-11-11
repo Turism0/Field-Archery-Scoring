@@ -5,7 +5,7 @@ import { getRound } from '../data/db'
 import { saveTypedRound } from '../data/rounds'
 import { NameTaken, createNamed, knownLabel, knownLocations, type MapLocation } from '../data/locations'
 import {
-  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_TARGETS, ROUND_TYPE_HELP, ROUND_TYPE_NAMES, ageGroupFor, type AgeGroup, type ArcherClass, type Round,
+  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_START_TARGET, MAX_TARGETS, ROUND_TYPE_HELP, ROUND_TYPE_NAMES, ageGroupFor, startTargetOk, type AgeGroup, type ArcherClass, type Round,
 } from '../domain/round'
 import { MAX_FAN, MIN_FAN, isComplete, totalPoints, type RoundType, type TargetScore, type TargetType } from '../domain/scoring'
 import { cellDisabled, emptyRow, rowToTarget, targetToRow, withRowType, type RowEntry } from '../domain/paper'
@@ -70,7 +70,7 @@ export function PaperEntry({ id }: { id?: string }) {
   const targets = results.map(x => ('target' in x ? x.target : null))
   const scored = targets.filter(t => t && isComplete(t)).length
   const total = targets.reduce((s, t) => s + (t ? totalPoints(t) : 0), 0)
-  const startOk = !start || (countOk && Number(start) >= 1 && Number(start) <= n)
+  const startOk = !start || startTargetOk(Number(start))
   const newOk = locId !== NEW_NAME || newName.trim().length >= 2
   const valid = countOk && startOk && newOk && cls && age && bow && date && !errors && rows.length === n
 
@@ -123,7 +123,7 @@ export function PaperEntry({ id }: { id?: string }) {
               <Field label="Shoot date"><input type="date" value={date} max={today()} disabled={!!existing?.groupId} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
               <Field label="Targets"><input inputMode="numeric" value={count} disabled={!!existing?.groupId} onInput={e => setCount((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></Field>
             </div>
-            <Field label="Starting target (optional)" help={!startOk ? `1 to ${countOk ? n : '–'}` : 'The first target shot, if not 1. Targets keep their numbers.'}>
+            <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : 'The course\'s number on the first target shot, if not 1 (any target on the course). The sheet still starts at 1.'}>
               <input inputMode="numeric" value={start} style="max-width:120px" onInput={e => setStart((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
             </Field>
             {existing?.groupId && <div class="sub">A group round: change its date or number of targets with Edit round details (it changes everyone's).</div>}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { Bar, Card, Dialog, Field, Select, Seg, back } from './common'
 import { getRound } from '../data/db'
 import { updateDetails } from '../data/rounds'
-import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_TARGETS, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
+import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_START_TARGET, MAX_TARGETS, startTargetOk, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { isComplete } from '../domain/scoring'
 
 /**
@@ -28,7 +28,7 @@ export function EditRound({ id }: { id: string }) {
   const n = Number(count)
   const countOk = Number.isInteger(n) && n >= 1 && n <= MAX_TARGETS
   const startN = start ? Number(start) : null
-  const startOk = startN == null || (countOk && startN >= 1 && startN <= n)
+  const startOk = startN == null || startTargetOk(startN)
   const removed = countOk ? r.targets.filter(t => t.targetNo > n && isComplete(t)).map(t => t.targetNo) : []
   const reopens = countOk && n > r.targetCount && r.status === 'COMPLETED'
   const changed = date !== r.shootDate || n !== r.targetCount || cls !== r.archerClass || age !== r.ageGroup || bow !== r.bowStyle || startN !== (r.startTarget ?? null)
@@ -47,7 +47,7 @@ export function EditRound({ id }: { id: string }) {
             : reopens ? 'Adds unscored targets and reopens the round' : undefined}>
             <input inputMode="numeric" value={count} onInput={e => setCount((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
-          <Field label="Starting target (optional)" help={!startOk ? `1 to ${countOk ? n : '–'}` : r.groupId ? 'The same for everyone in the group.' : 'The first target shot, if not 1.'}>
+          <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : r.groupId ? 'The same for everyone in the group.' : 'The first target shot, if not 1.'}>
             <input inputMode="numeric" value={start} onInput={e => setStart((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
         </Card>

@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.1.03
+
+- **3.1.03 (app, web app and API): the starting target can be any target on the course (Pete).** It was limited to 1 to the number of targets being shot, so an 18-target half of a 36-target course couldn't start at 19. Now it's any number from 1 to 999 (new round, Add a round, Round details; the server and live groups the same). It's still only noted on the scorecard ("Started at target 19"): scoring and the score sheet always start at 1, the first target shot. No database change; publish API 3.1.03 (an older API refuses a start target above the number of targets). `Test-StartTarget.ps1` checks 19 on a 3-target round is saved and 1000 is refused. App versionCode 55, versionName 3.1.03.
+
+## Version 3.1.02
+
+- **3.1.02 (server test fix; app, API and web app version only):** `Test-FunShots.ps1` stopped with "Cannot find a process with the process identifier 1": its helper was called `Kill`, which on Windows is PowerShell's alias for Stop-Process (aliases win over functions), so `Kill 1` tried to stop process 1. The helpers are now `New-KillTarget` and `New-FunTarget`. App versionCode 54, versionName 3.1.02.
+
 ## Version 3.1.01
 
 - **3.1.01 (server tests; app, API and web app version only): the Owner password is asked for once per test run (Pete).** `Run-AllTests.ps1 -Username …` asks for the password at the start and passes it to the five tests that sign in as the Owner (Test-Roles, Test-Locations, Test-LocationReview, Test-Handicap, Test-Reset), instead of each asking. It's kept in memory for that run only and never saved, so the next run asks again. Run on their own, those tests still ask (or take `-OwnerPassword`). App versionCode 53, versionName 3.1.01.

@@ -209,7 +209,8 @@ fun NewRoundScreen(
                     value = f.startTargetText,
                     onValue = { v -> vm.update { it.copy(startTargetText = v) } },
                     isError = startError,
-                    supportingText = if (startError) "1 to ${f.targetCount}" else "The first target you shoot, if not 1. Just noted on the scorecard.",
+                    supportingText = if (startError) "1 to ${RoundRepository.MAX_START_TARGET}"
+                    else "The course's number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36). Just noted on the scorecard: scoring starts at 1.",
                 )
             }
 
