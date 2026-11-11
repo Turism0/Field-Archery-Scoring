@@ -113,6 +113,9 @@ fun LocationSheet(
     val known by vm.known.collectAsStateWithLifecycle()
     var name by rememberSaveable { mutableStateOf("") }
     var private by rememberSaveable { mutableStateOf(false) }
+    // 3.0: naming a location with no map pin (a shoot you can't place, e.g. a Nationals years ago).
+    var noPin by rememberSaveable { mutableStateOf(false) }
+    var pinless by rememberSaveable { mutableStateOf("") }
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         if (result.values.any { it }) vm.captureNow()
     }
@@ -141,6 +144,51 @@ fun LocationSheet(
             }
             if (known.isNotEmpty()) {
                 KnownLocationsDropdown(known, enabled = !busy) { vm.chooseKnown(it, onDismiss) }
+            }
+            if (!noPin) {
+                OutlinedButton(onClick = { noPin = true; vm.clearTaken() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text("Name only – no map pin")
+                }
+            } else {
+                Text("Name only – no map pin", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "For a shoot you can't put on the map, e.g. a Nationals years ago. If it's already known, pick it from " +
+                        "Known locations above. The name shows on the scorecard; it isn't on the map until you put it there from its location page.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = pinless,
+                    onValueChange = { pinless = it.take(60) },
+                    label = { Text("Shoot name") },
+                    singleLine = true,
+                    enabled = !busy,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (pinless.trim().length >= 2) vm.nameOnly(pinless, private, onDismiss) }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                taken?.let { existing ->
+                    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("There's already a location called \"${existing.name}\".")
+                            TextButton(onClick = { vm.choose(existing, onDismiss) }, enabled = !busy) { Text("Use ${existing.name}") }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Private", style = MaterialTheme.typography.bodyLarge)
+                        Text("Only you see it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(checked = private, onCheckedChange = { private = it }, enabled = !busy)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { noPin = false; vm.clearTaken() }, enabled = !busy) { Text("Cancel") }
+                    Button(onClick = { vm.nameOnly(pinless, private, onDismiss) }, enabled = !busy && pinless.trim().length >= 2) {
+                        Text("Save name only")
+                    }
+                }
+                return@Column
             }
 
             if (!hasFix) {
@@ -237,7 +285,7 @@ fun LocationSheet(
     }
 }
 
-/** Drop-down of every location you can use (public ones and your own private ones), by name. */
+/** Drop-down of every location you can use (public ones, your own private ones and name-only ones), by name. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun KnownLocationsDropdown(known: List<MapLocation>, enabled: Boolean, onPick: (MapLocation) -> Unit) {
@@ -256,7 +304,7 @@ private fun KnownLocationsDropdown(known: List<MapLocation>, enabled: Boolean, o
         ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             known.forEach { loc ->
                 DropdownMenuItem(
-                    text = { Text(loc.name + if (loc.isPrivate) " (private)" else "") },
+                    text = { Text(loc.label) },
                     onClick = { open = false; onPick(loc) },
                 )
             }

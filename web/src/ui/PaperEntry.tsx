@@ -3,7 +3,7 @@ import { Bar, Card, Dialog, Field, Select, Seg, back, errorText, replace, toast,
 import { getAccount, getProfile } from '../data/account'
 import { getRound } from '../data/db'
 import { saveTypedRound } from '../data/rounds'
-import { mapLocations, type MapLocation } from '../data/locations'
+import { NameTaken, createNamed, knownLabel, knownLocations, type MapLocation } from '../data/locations'
 import {
   AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_TARGETS, ROUND_TYPE_HELP, ROUND_TYPE_NAMES, ageGroupFor, type AgeGroup, type ArcherClass, type Round,
 } from '../domain/round'
@@ -15,6 +15,9 @@ const KINDS: { value: string; label: string }[] = [
   ...Array.from({ length: MAX_FAN - MIN_FAN + 1 }, (_, i) => ({ value: `FAN${i + MIN_FAN}`, label: `Fan of ${i + MIN_FAN}` })),
 ]
 const kindOf = (r: RowEntry) => (r.type === 'FAN' ? `FAN${r.cells.length}` : r.type)
+
+/** The location choice for typing a new name-only location (3.0). */
+const NEW_NAME = '__new_name_only'
 
 /**
  * Desktop (2.6.02): type in a round shot and scored on paper, or change a round's scores. One box per animal
@@ -31,6 +34,8 @@ export function PaperEntry({ id }: { id?: string }) {
   const [bow, setBow] = useState<string>()
   const [locId, setLocId] = useState<string>('')
   const [start, setStart] = useState('')
+  // 3.0: a new name-only location (no map pin) typed here, made when the round is saved.
+  const [newName, setNewName] = useState('')
   const [known, setKnown] = useState<MapLocation[]>([])
   const [rows, setRows] = useState<RowEntry[]>([])
   const [busy, setBusy] = useState(false)
@@ -42,14 +47,14 @@ export function PaperEntry({ id }: { id?: string }) {
       setExisting(r); setType(r.type); setDate(r.shootDate); setCount(String(r.targetCount)); setCls(r.archerClass); setAge(r.ageGroup)
       setBow(r.bowStyle); setLocId(r.locationId ?? ''); setStart(r.startTarget ? String(r.startTarget) : '')
       setRows(Array.from({ length: r.targetCount }, (_, i) => { const t = r.targets.find(x => x.targetNo === i + 1); return t ? targetToRow(t) : emptyRow(r.type) }))
-      if (r.locationId && r.locationName) setKnown(k => k.some(x => x.id === r.locationId) ? k : [...k, { id: r.locationId!, name: r.locationName!, latitude: 0, longitude: 0, isPrivate: false, myRounds: 0, rounds: 0 }])
+      if (r.locationId && r.locationName) setKnown(k => k.some(x => x.id === r.locationId) ? k : [...k, { id: r.locationId!, name: r.locationName!, latitude: null, longitude: null, isPrivate: false, myRounds: 0, rounds: 0 }])
     })
     else getProfile().then(p => {
       setCls(p.archerClass); setBow(p.bowStyle)
       setAge(p.ageGroupManual ?? (p.dateOfBirth ? ageGroupFor(p.dateOfBirth, today()) ?? undefined : undefined))
     })
   }, [id])
-  useEffect(() => { if (account) mapLocations().then(l => setKnown(k => [...l, ...k.filter(x => !l.some(y => y.id === x.id))]), () => {}) }, [account?.token])
+  useEffect(() => { if (account) knownLocations().then(l => setKnown(k => [...l, ...k.filter(x => !l.some(y => y.id === x.id))]), () => {}) }, [account?.token])
 
   const n = Number(count)
   const countOk = Number.isInteger(n) && n >= 1 && n <= MAX_TARGETS
@@ -65,7 +70,8 @@ export function PaperEntry({ id }: { id?: string }) {
   const scored = targets.filter(t => t && isComplete(t)).length
   const total = targets.reduce((s, t) => s + (t ? totalPoints(t) : 0), 0)
   const startOk = !start || (countOk && Number(start) >= 1 && Number(start) <= n)
-  const valid = countOk && startOk && cls && age && bow && date && !errors && rows.length === n
+  const newOk = locId !== NEW_NAME || newName.trim().length >= 2
+  const valid = countOk && startOk && newOk && cls && age && bow && date && !errors && rows.length === n
 
   const setCell = (i: number, j: number, v: string) => setRows(rs => rs.map((r, k) => k === i ? { ...r, cells: r.cells.map((c, m) => m === j ? v : c) } : r))
   const setKind = (i: number, v: string) => setRows(rs => rs.map((r, k) => {
@@ -85,7 +91,13 @@ export function PaperEntry({ id }: { id?: string }) {
   async function save(finished: boolean) {
     setAsk(null); setBusy(true)
     try {
-      const loc = known.find(k => k.id === locId)
+      let loc: { id: string; name: string } | undefined = known.find(k => k.id === locId)
+      if (locId === NEW_NAME) {
+        try { loc = await createNamed(newName, false) } catch (e) {
+          if (!(e instanceof NameTaken)) throw e
+          loc = e.existing; toast(`Used the existing location "${e.existing.name}".`)
+        }
+      }
       const rid = await saveTypedRound({
         id: existing?.id, type, shootDate: date, targetCount: n, archerClass: cls!, ageGroup: age!, bowStyle: bow!,
         targets: targets as TargetScore[],
@@ -123,10 +135,13 @@ export function PaperEntry({ id }: { id?: string }) {
             <label class="field">Shoot location
               <select value={locId} onChange={e => setLocId((e.target as HTMLSelectElement).value)} disabled={!account}>
                 <option value="">{account ? 'No location' : 'Sign in to choose a location'}</option>
-                {known.map(k => <option value={k.id}>{k.name}{k.isPrivate ? ' (private)' : ''}</option>)}
+                {known.map(k => <option value={k.id}>{knownLabel(k)}</option>)}
+                {account && <option value={NEW_NAME}>New name only – no map pin…</option>}
               </select>
-              <span class="sub">Not listed? Add it on the map (Shoot locations → New), or later from the scorecard.</span>
+              {locId !== NEW_NAME && <span class="sub">Not listed? Add it on the map (Shoot locations → New), or as a name only (e.g. a championship years ago), or later from the scorecard.</span>}
             </label>
+            {locId === NEW_NAME && <Field label="Shoot name" help="Shows on the scorecard; not on the map. You can put it on the map later from its location page.">
+              <input maxLength={60} value={newName} onInput={e => setNewName((e.target as HTMLInputElement).value)} /></Field>}
           </Card>
           <Card cls="hi">
             <div class="stats">

@@ -5,13 +5,15 @@ import { setKv } from './db'
 
 export interface AdminArcher { archerId: string; username: string; role: string; createdUtc: string | null; lastLoginUtc: string | null }
 export interface AdminLocation {
-  id: string; name: string; latitude: number; longitude: number; createdUtc: string | null; createdBy: string | null
+  /** latitude / longitude null: a name-only location (3.0, no map pin), or someone's hidden private one. */
+  id: string; name: string; latitude: number | null; longitude: number | null; createdUtc: string | null; createdBy: string | null
   rounds: number; isPrivate: boolean; hidden: boolean
 }
-export interface DuplicatePair { a: AdminLocation; b: AdminLocation; distanceMetres: number; reasons: string[] }
+/** distanceMetres null when either has no map pin (3.0): paired on their names. */
+export interface DuplicatePair { a: AdminLocation; b: AdminLocation; distanceMetres: number | null; reasons: string[] }
 
 const toLoc = (l: any): AdminLocation => ({
-  id: l.locationId, name: l.name, latitude: l.latitude ?? 0, longitude: l.longitude ?? 0, createdUtc: l.createdUtc ?? null,
+  id: l.locationId, name: l.name, latitude: l.latitude ?? null, longitude: l.longitude ?? null, createdUtc: l.createdUtc ?? null,
   createdBy: l.createdBy ?? null, rounds: l.rounds ?? 0, isPrivate: !!l.isPrivate, hidden: !!l.hidden,
 })
 
@@ -31,7 +33,7 @@ export async function locations(): Promise<AdminLocation[]> {
 }
 export async function duplicates(): Promise<DuplicatePair[]> {
   const list: DuplicatePair[] = (await authed(t => request('GET', '/api/admin/locations/duplicates', undefined, t))).pairs.map((p: any) => ({
-    a: toLoc(p.a), b: toLoc(p.b), distanceMetres: p.distanceMetres, reasons: p.reasons ?? [],
+    a: toLoc(p.a), b: toLoc(p.b), distanceMetres: p.distanceMetres ?? null, reasons: p.reasons ?? [],
   }))
   await setKv('duplicateLocations', list.length)
   return list

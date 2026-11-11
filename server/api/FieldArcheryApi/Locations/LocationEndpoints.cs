@@ -14,12 +14,19 @@ namespace FieldArcheryApi.Locations;
 ///   GET  /api/locations/nearby?lat=&amp;lon=&amp;radius=   → { locations: [{ locationId, name, distanceMetres }] } nearest first;
 ///                                                    radius in metres, default the catchment (about a quarter mile), max 10 km
 ///   POST /api/locations          { name, latitude, longitude, isPrivate? } → 201 { locationId, name }; 409 name_taken with the existing one
+///                                (API 3.0: { name, noPin: true, isPrivate? } makes a name-only location: no map pin)
+///   GET  /api/locations/named    (API 3.0) → { locations: [{ locationId, name, isPrivate, myRounds, rounds }] } name-only locations
+///                                you can see (public, and your own private ones), by name: for choosing one for a round
+///   PUT  /api/locations/{id}/position { latitude, longitude } (API 3.0) → { locationId, name, latitude, longitude }: puts a
+///                                name-only location on the map; its creator or an Admin; 409 already_placed if it has a pin
 ///   POST /api/locations/resolve  { ids: [...] }   → { locations: [{ requestedId, locationId, name }] } current id and name
 ///                                                    for ids a phone holds (follows merges; unknown ids left out)
 ///  Admins and Owner:
 ///   GET  /api/admin/locations                     → { locations: [{ locationId, name, latitude, longitude, createdUtc, createdBy, rounds }] }
+///                                                    (latitude / longitude null for a name-only location, API 3.0)
 ///   PUT  /api/admin/locations/{id}   { name, isPrivate? } → { locationId, name }; 409 name_taken
 ///   GET  /api/admin/locations/duplicates          → { pairs: [{ a, b, distanceMetres, reasons: [nearby|same_name|similar_name] }] }
+///                                                    (API 3.0: distanceMetres null when either has no pin; then names only)
 ///   POST /api/admin/locations/duplicates/approve { aId, bId } → 204: different places, stop flagging them
 ///   POST /api/admin/locations/{id}/merge { intoId } → { locationId, name, roundsMoved }: the duplicate's rounds move to intoId
 /// </summary>
@@ -29,14 +36,15 @@ public static class LocationEndpoints
     public const int MaxName = 60;
     private const int MaxRadius = 10_000;
 
-    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null);
+    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null, bool? NoPin = null);
+    public sealed record PositionRequest(double? Latitude, double? Longitude);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
     public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
     public sealed record ApproveRequest(Guid? AId, Guid? BId);
     public sealed record MergeRequest(Guid? IntoId);
 
     private sealed record LocationRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude);
-    private sealed record AdminRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude,
+    private sealed record AdminRow(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude,
         DateTime CreatedUtc, string? CreatedBy, int Rounds, bool IsPrivate);
 
     /// <summary>What other archers see instead of a private location's name.</summary>
@@ -59,6 +67,8 @@ public static class LocationEndpoints
             Nearby(n.Latitude, n.Longitude, n.RadiusMetres, user, db, config, ct));
         locations.MapPost("/", Create);
         locations.MapPost("/resolve", Resolve);
+        locations.MapGet("/named", Named);
+        locations.MapPut("/{locationId:guid}/position", Place);
 
         var admin = app.MapGroup("/api/admin/locations").RequireAuthorization();
         admin.MapGet("/", AdminList);
@@ -84,6 +94,7 @@ public static class LocationEndpoints
             FROM dbo.ShootLocation
             WHERE MergedIntoId IS NULL
               AND (IsPrivate = 0 OR CreatedById = @me)   -- someone else's private location is never matched
+              AND Latitude IS NOT NULL                    -- name-only locations (3.0) are never matched by position
               AND Latitude BETWEEN @minLat AND @maxLat
               AND Longitude BETWEEN @minLon AND @maxLon;
             """,
@@ -104,7 +115,11 @@ public static class LocationEndpoints
 
     private static async Task<IResult> Create(NewLocation req, ClaimsPrincipal user, Db db, CancellationToken ct)
     {
-        if (PositionProblem(req.Latitude, req.Longitude) is { } bad) return bad;
+        // API 3.0: a name-only location has no position at all.
+        var noPin = req.NoPin == true;
+        if (noPin && (req.Latitude is not null || req.Longitude is not null))
+            return Error(400, "invalid_position", "A location with no map pin can't have a position.");
+        if (!noPin && PositionProblem(req.Latitude, req.Longitude) is { } bad) return bad;
         var name = CleanName(req.Name);
         if (NameProblem(name) is { } badName) return badName;
 
@@ -118,11 +133,11 @@ public static class LocationEndpoints
                 """,
                 new
                 {
-                    name, lat = Round5(req.Latitude!.Value), lon = Round5(req.Longitude!.Value), by = user.ArcherId(),
-                    isPrivate = req.IsPrivate == true,
+                    name, lat = noPin ? (decimal?)null : Round5(req.Latitude!.Value), lon = noPin ? (decimal?)null : Round5(req.Longitude!.Value),
+                    by = user.ArcherId(), isPrivate = req.IsPrivate == true,
                 },
                 cancellationToken: ct));
-            return Results.Created($"/api/locations/{id}", new { locationId = id, name, isPrivate = req.IsPrivate == true });
+            return Results.Created($"/api/locations/{id}", new { locationId = id, name, isPrivate = req.IsPrivate == true, noPin });
         }
         catch (SqlException ex) when (Db.IsDuplicateKey(ex))
         {
@@ -150,6 +165,57 @@ public static class LocationEndpoints
         }
         return Results.Ok(new { locations = result });
     }
+
+    private sealed record NamedRow(Guid LocationId, string Name, bool IsPrivate, int MyRounds, int Rounds);
+
+    /// <summary>
+    /// Name-only locations (3.0) you can see – public ones and your own private ones – for choosing one for a round:
+    /// they aren't on the map. myRounds / rounds count finished rounds (yours / everyone's).
+    /// </summary>
+    private static async Task<IResult> Named(ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        await using var conn = await db.OpenAsync(ct);
+        var rows = await conn.QueryAsync<NamedRow>(new CommandDefinition("""
+            WITH done AS (
+                SELECT LocationId, ArcherId FROM dbo.Round
+                WHERE LocationId IS NOT NULL AND Status = 'COMPLETED' AND IsDeleted = 0)
+            SELECT l.LocationId, l.Name, l.IsPrivate,
+                   (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId AND d.ArcherId = @me) AS MyRounds,
+                   (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId) AS Rounds
+            FROM dbo.ShootLocation l
+            WHERE l.MergedIntoId IS NULL AND l.Latitude IS NULL
+              AND (l.IsPrivate = 0 OR l.CreatedById = @me)
+            ORDER BY l.Name;
+            """, new { me = user.ArcherId() }, cancellationToken: ct));
+        return Results.Ok(new { locations = rows });
+    }
+
+    /// <summary>
+    /// Puts a name-only location on the map (3.0): its creator or an Admin (not someone else's private location).
+    /// From then on it's an ordinary location: on the map and matched by position.
+    /// </summary>
+    private static async Task<IResult> Place(Guid locationId, PositionRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        if (PositionProblem(req.Latitude, req.Longitude) is { } bad) return bad;
+        await using var conn = await db.OpenAsync(ct);
+        var loc = await conn.QuerySingleOrDefaultAsync<PlaceRow>(new CommandDefinition(
+            "SELECT Name, Latitude, IsPrivate, CreatedById FROM dbo.ShootLocation WHERE LocationId = @locationId AND MergedIntoId IS NULL;",
+            new { locationId }, cancellationToken: ct));
+        var mine = loc is not null && loc.CreatedById == user.ArcherId();
+        if (loc is null || (loc.IsPrivate && !mine))
+            return Error(404, "no_such_location", "There's no location with that id (or it was merged into another).");
+        if (!mine && !user.IsAdmin())
+            return Error(403, "not_creator", "Only the archer who named a location, or an Admin, can put it on the map.");
+        if (loc.Latitude is not null) return Error(409, "already_placed", "That location is already on the map.");
+        var lat = Round5(req.Latitude!.Value);
+        var lon = Round5(req.Longitude!.Value);
+        await conn.ExecuteAsync(new CommandDefinition(
+            "UPDATE dbo.ShootLocation SET Latitude = @lat, Longitude = @lon WHERE LocationId = @locationId AND Latitude IS NULL;",
+            new { locationId, lat, lon }, cancellationToken: ct));
+        return Results.Ok(new { locationId, name = loc.Name, latitude = (double)lat, longitude = (double)lon });
+    }
+
+    private sealed record PlaceRow(string Name, decimal? Latitude, bool IsPrivate, Guid? CreatedById);
 
     /// <summary>
     /// Admin list (2.0.17): public locations and your own private ones. The Owner also sees that other people's private
@@ -181,8 +247,8 @@ public static class LocationEndpoints
                 {
                     r.LocationId,
                     name = hidden ? PrivateName : r.Name,
-                    latitude = hidden ? (double?)null : (double)r.Latitude,
-                    longitude = hidden ? (double?)null : (double)r.Longitude,
+                    latitude = hidden ? null : (double?)r.Latitude,
+                    longitude = hidden ? null : (double?)r.Longitude,
                     createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds, r.IsPrivate,
                     hidden,
                 };
@@ -286,7 +352,7 @@ public static class LocationEndpoints
         static object Summary(DuplicateFinder.Loc l) => new
         {
             l.LocationId, l.Name, l.IsPrivate, l.CreatedBy, l.Rounds,
-            latitude = (double)l.Latitude, longitude = (double)l.Longitude,
+            latitude = (double?)l.Latitude, longitude = (double?)l.Longitude,
         };
     }
 

@@ -32,13 +32,16 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
   const [priv, setPriv] = useState(false)
   const [busy, setBusy] = useState(false)
   const [taken, setTaken] = useState<loc.NearbyLocation | null>(null)
+  // 3.0: naming a location with no map pin (a shoot you can't place, e.g. a Nationals years ago).
+  const [noPin, setNoPin] = useState(false)
+  const [pinless, setPinless] = useState('')
   const hasFix = round?.fixLat != null
   const desktop = useDesktop()
 
   useEffect(() => {
     if (!open || !round) return
-    setNear(null); setTaken(null)
-    loc.mapLocations().then(setKnown, () => setKnown([]))
+    setNear(null); setTaken(null); setNoPin(false); setPinless('')
+    loc.knownLocations().then(setKnown, () => setKnown([]))
     if (hasFix) loc.nearby(round).then(list => setNear({ list }), e => setNear({ error: errorText(e) }))
   }, [open, hasFix])
 
@@ -62,9 +65,13 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
         {known.length > 0 && <label class="field">Known locations
           <select disabled={busy} value="" onChange={e => { const l = known.find(k => k.id === (e.target as HTMLSelectElement).value); if (l) choose(l.id, l.name) }}>
             <option value="">Pick a known location</option>
-            {known.map(k => <option value={k.id}>{k.name}{k.isPrivate ? ' (private)' : ''}</option>)}
+            {known.map(k => <option value={k.id}>{loc.knownLabel(k)}</option>)}
           </select></label>}
-        {!hasFix && desktop ? <div class="sub">Pick a known location, or choose on the map: tap a pin to use it, or tap where the shoot is to name a new location.</div>
+        {noPin ? <NameOnlyForm name={pinless} setName={setPinless} priv={priv} setPriv={setPriv} busy={busy} taken={taken}
+          onUse={t => choose(t.id, t.name)} onCancel={() => { setNoPin(false); setTaken(null) }}
+          onSave={() => run(async () => { await loc.nameOnly(roundId, pinless, priv); onClose() })} />
+        : <button class="outlined" disabled={busy} onClick={() => { setNoPin(true); setTaken(null) }}>Name only – no map pin</button>}
+        {noPin ? null : !hasFix && desktop ? <div class="sub">Pick a known location, or choose on the map: tap a pin to use it, or tap where the shoot is to name a new location.</div>
         : !hasFix ? <>
           <div class="sub">This round has no GPS position. If you're at the shoot now, get your position to find or name the location.</div>
           <button class="filled" disabled={busy} onClick={() => run(async () => { if (!(await loc.captureNow(roundId))) toast("Couldn't get your position. Check location is allowed for this site in Settings.") })}>
@@ -91,6 +98,26 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
   )
 }
 
+/**
+ * A new location with a name and no map pin (3.0), for a shoot whose place you don't know – a historical score, say.
+ * It's on scorecards and has a page but isn't on the map; its creator or an Admin can put it on the map later.
+ */
+function NameOnlyForm({ name, setName, priv, setPriv, busy, taken, onUse, onSave, onCancel }: {
+  name: string; setName: (s: string) => void; priv: boolean; setPriv: (b: boolean) => void; busy: boolean
+  taken: loc.NearbyLocation | null; onUse: (t: loc.NearbyLocation) => void; onSave: () => void; onCancel: () => void
+}) {
+  return <>
+    <h3 class="section">Name only – no map pin</h3>
+    <div class="sub">For a shoot you can't put on the map, e.g. a Nationals years ago. If it's already known, pick it from Known locations above. The name shows on the scorecard; it isn't on the map until you put it there from its location page.</div>
+    <Field label="Shoot name"><input maxLength={60} value={name} disabled={busy} onInput={e => setName((e.target as HTMLInputElement).value)} /></Field>
+    {taken && <div class="banner">There's already a location called "{taken.name}".
+      <button onClick={() => onUse(taken)} disabled={busy}>Use {taken.name}</button></div>}
+    <PrivateSwitch value={priv} onChange={setPriv} />
+    <div class="row"><button onClick={onCancel} disabled={busy}>Cancel</button>
+      <button class="filled" disabled={busy || name.trim().length < 2} onClick={onSave}>Save name only</button></div>
+  </>
+}
+
 function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <label class="row" style="flex-wrap:nowrap;align-items:flex-start">
@@ -100,12 +127,17 @@ function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: bool
   )
 }
 
-/** Map of shoot locations (OpenStreetMap). Pick mode: choosing a location for a round. */
-export function LocationMap({ pick }: { pick?: string }) {
+/**
+ * Map of shoot locations (OpenStreetMap). Pick mode: choosing a location for a round. Place mode (3.0): putting a
+ * name-only location on the map. Name-only locations are listed under the map.
+ */
+export function LocationMap({ pick, place }: { pick?: string; place?: string }) {
   // null when signed out, undefined while it's still being read (2.7.05: getAccount gives undefined when signed out,
   // so the "Sign in" card never showed and a signed-out browser got an empty map box).
   const account = useData(async () => (await getAccount()) ?? null)
   const [data, retry] = useLoad(async () => (account ? loc.mapLocations() : null), [account?.token])
+  const named = useData(async () => (account ? loc.namedLocations().catch(() => []) : []), [account?.token])
+  const placing1 = place ? named?.find(l => l.id === place) : undefined
   const [placing, setPlacing] = useState(false)
   const [newAt, setNewAt] = useState<{ lat: number; lon: number } | null>(null)
   const [name, setName] = useState('')
@@ -114,7 +146,7 @@ export function LocationMap({ pick }: { pick?: string }) {
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const tapRef = useRef<(lat: number, lon: number) => void>()
-  tapRef.current = (lat, lon) => { if (pick || placing) { setNewAt({ lat, lon }); setName(''); setTaken(null) } }
+  tapRef.current = (lat, lon) => { if (pick || placing || place) { setNewAt({ lat, lon }); setName(''); setTaken(null) } }
 
   useEffect(() => {
     if (data.state !== 'ready' || !data.value || !box.current) return
@@ -148,7 +180,8 @@ export function LocationMap({ pick }: { pick?: string }) {
     if (!newAt) return
     setBusy(true)
     try {
-      if (pick) { await loc.nameAt(pick, name, newAt.lat, newAt.lon, priv); setNewAt(null); back() }
+      if (place) { await loc.placeLocation(place, newAt.lat, newAt.lon); setNewAt(null); toast(`${placing1?.name ?? 'The location'} is on the map.`); back() }
+      else if (pick) { await loc.nameAt(pick, name, newAt.lat, newAt.lon, priv); setNewAt(null); back() }
       else { await loc.createLocation(name, newAt.lat, newAt.lon, priv); setNewAt(null); setPlacing(false); toast('Location added.'); retry() }
     } catch (e) {
       if (e instanceof loc.NameTaken) { if (pick) setTaken(e.existing); else toast(e.message) }
@@ -160,19 +193,32 @@ export function LocationMap({ pick }: { pick?: string }) {
   const list = data.state === 'ready' ? data.value ?? [] : []
   return (
     <>
-      <Bar title={pick ? 'Choose the shoot location' : 'Shoot locations'}>
-        {!pick && !placing && data.state === 'ready' && <button class="tonal" onClick={() => setPlacing(true)}>＋ New</button>}
+      <Bar title={place ? 'Put it on the map' : pick ? 'Choose the shoot location' : 'Shoot locations'}>
+        {!pick && !place && !placing && data.state === 'ready' && <button class="tonal" onClick={() => setPlacing(true)}>＋ New</button>}
       </Bar>
       <main>
+        {place && <div class="banner">Tap the map where {placing1?.name ?? 'the shoot'} is.</div>}
         {pick && <div class="banner">Tap a pin, then "Use this location". Or tap the map where the shoot is to name a new location.</div>}
         {placing && <div class="banner row between" style="flex-direction:row">Tap the map where the new location is.<button onClick={() => setPlacing(false)}>Cancel</button></div>}
         <Loading load={data} retry={retry}>{() => <>
           <div ref={box} class="map" />
           <div class="row sub"><span class="legend" style="background:var(--primary)" /> Shot here ({list.filter(l => l.myRounds > 0).length})
             <span class="legend" style="background:#8a8a8a" /> Not yet ({list.filter(l => !l.myRounds).length})</div>
+          {!place && !!named?.length && <>
+            <h3 class="section">No map pin ({named.length})</h3>
+            <div class="sub">Shoots known by name only, e.g. championships from years ago.{pick ? ' Tap one to use it for this round.' : ''}</div>
+            {named.map(l => <button class="row between plain" onClick={async () => {
+              if (pick) { await loc.setLocation(pick, l.id, l.name); back() } else go(`/location/${l.id}`)
+            }}><span>{l.name}{l.isPrivate ? ' (private)' : ''}</span>
+              <span class="sub">{l.myRounds > 0 ? `You: ${l.myRounds}` : 'Not shot'}{l.isPrivate ? '' : ` · everyone: ${l.rounds}`}</span></button>)}
+          </>}
         </>}</Loading>
       </main>
-      <Dialog open={!!newAt} title="New shoot location" onClose={() => setNewAt(null)}
+      <Dialog open={!!newAt && !!place} title="Put it on the map" onClose={() => setNewAt(null)}
+        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy} onClick={save}>Put it here</button></>}>
+        <div>Put <b>{placing1?.name ?? 'this location'}</b> at the point you tapped? From then on it's on the map and phones scoring there are matched to it. It can't be moved afterwards (an Admin can merge it into another location).</div>
+      </Dialog>
+      <Dialog open={!!newAt && !place} title="New shoot location" onClose={() => setNewAt(null)}
         actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy || name.trim().length < 2} onClick={save}>Save</button></>}>
         <div class="col">
           <div>{pick ? "Name the location at the point you tapped. It's used for this round." : 'Name the location at the point you tapped.'}</div>
@@ -208,6 +254,9 @@ export function LocationPageScreen({ id }: { id: string }) {
         const types = [...new Set(shown.map(b => b.roundType))]
         return <div class="split"><div>
           {p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 Private: only you see it</span>}
+          {!loc.hasPin(p.location) && <Card title="No map pin" sub="This shoot is known by its name only, so it isn't on the map.">
+            {p.location.canPlace && <button class="tonal" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}`)}>📍 Put it on the map</button>}
+          </Card>}
           <h3 class="section">Your scorecards here</h3>
           {!p.myRounds.length ? <div class="sub">You haven't finished a round here yet.</div> : <>
             <div class="sub">{p.myRounds.length} round{p.myRounds.length === 1 ? '' : 's'}{best != null ? ` · best ${best}` : ''}</div>

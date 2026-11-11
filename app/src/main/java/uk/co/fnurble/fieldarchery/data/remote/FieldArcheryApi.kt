@@ -145,7 +145,7 @@ class FieldArcheryApi(
             JSONObject().put("name", name).apply { isPrivate?.let { put("isPrivate", it) } }, token,
         )
 
-    /** Admins and Owner: { pairs: [ { a: {...}, b: {...}, distanceMetres, reasons: [...] } ] } */
+    /** Admins and Owner: { pairs: [ { a: {...}, b: {...}, distanceMetres, reasons: [...] } ] } (distanceMetres null when one has no pin, 3.0) */
     suspend fun duplicateLocations(token: String): JSONObject =
         request("GET", "/api/admin/locations/duplicates", body = null, token = token)
 
@@ -171,6 +171,17 @@ class FieldArcheryApi(
             "POST", "/api/locations",
             JSONObject().put("name", name).put("latitude", lat).put("longitude", lon).put("isPrivate", isPrivate), token,
         )
+
+    /** 3.0: a name-only location (no map pin). 201 { locationId, name, noPin }; 409 name_taken as [createLocation]. */
+    suspend fun createNamedLocation(token: String, name: String, isPrivate: Boolean = false): JSONObject =
+        request("POST", "/api/locations", JSONObject().put("name", name).put("noPin", true).put("isPrivate", isPrivate), token)
+
+    /** 3.0: { locations: [ { locationId, name, isPrivate, myRounds, rounds } ] } name-only locations you can see. */
+    suspend fun namedLocations(token: String): JSONObject = request("GET", "/api/locations/named", body = null, token = token)
+
+    /** 3.0: puts a name-only location on the map (its creator or an Admin). 409 already_placed; 403 not_creator. */
+    suspend fun placeLocation(token: String, locationId: String, lat: Double, lon: Double): JSONObject =
+        request("PUT", "/api/locations/$locationId/position", JSONObject().put("latitude", lat).put("longitude", lon), token)
 
     /** { locations: [ { requestedId, locationId, name } ] }: current id and name for ids this phone holds. */
     suspend fun resolveLocations(token: String, ids: List<String>): JSONObject =

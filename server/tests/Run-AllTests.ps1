@@ -18,7 +18,7 @@ param(
 )
 
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
-         'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget'
+         'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget', 'Test-NameOnlyLocations'
 $owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap', 'Test-Reset'
 
 $results = @()
@@ -30,7 +30,7 @@ foreach ($name in $plain + $owner) {
     }
     # The API allows 30 sign-ins / new accounts a minute from one address (RateLimits:AuthPerMinute); the tests before
     # use most of that, so wait a minute before Test-Groups and each Owner test (2.4) rather than get 429 Too Many Requests.
-    if ($owner -contains $name -or ($name -in @('Test-Groups', 'Test-Delete'))) {
+    if ($owner -contains $name -or ($name -in @('Test-Groups', 'Test-Delete', 'Test-NameOnlyLocations'))) {
         Write-Host "`nWaiting a minute before $name (sign-in limit)..." -ForegroundColor DarkGray
         Start-Sleep -Seconds 61
     }

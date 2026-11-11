@@ -10,7 +10,11 @@ import { AGE_NAMES, CLASS_NAMES, nowUtc, type AgeGroup, type ArcherClass, type R
 import { classLineOf, targetsLineOf, type RoundSummary } from './friends'
 
 export interface NearbyLocation { id: string; name: string; distanceMetres: number }
-export interface MapLocation { id: string; name: string; latitude: number; longitude: number; isPrivate: boolean; myRounds: number; rounds: number }
+/** latitude / longitude null for a name-only location (3.0: no map pin, e.g. a Nationals years ago). */
+export interface MapLocation { id: string; name: string; latitude: number | null; longitude: number | null; isPrivate: boolean; myRounds: number; rounds: number }
+/** A location on the map (it has a pin). */
+export type PinnedLocation = MapLocation & { latitude: number; longitude: number }
+export const hasPin = (l: MapLocation): l is PinnedLocation => l.latitude != null && l.longitude != null
 export const NOT_HERE_RADIUS = 10_000
 
 /** One position, or null (refused, unavailable or timed out). */
@@ -117,6 +121,29 @@ export async function createLocation(name: string, lat: number, lon: number, isP
   }
 }
 
+/** A new name-only location (3.0): no map pin; 409 name_taken → NameTaken with the existing one. */
+export async function createNamed(name: string, isPrivate: boolean): Promise<NearbyLocation> {
+  try {
+    const j = await authed(t => request('POST', '/api/locations', { name: name.trim(), noPin: true, isPrivate }, t))
+    return { id: j.locationId, name: j.name, distanceMetres: -1 }
+  } catch (e) {
+    const ex = e instanceof ApiError ? e.body?.existing : null
+    if (e instanceof ApiError && e.code === 'name_taken' && ex) throw new NameTaken({ id: ex.locationId, name: ex.name, distanceMetres: -1 }, e.message)
+    throw e
+  }
+}
+
+/** Names a new name-only location and gives it to the round. */
+export async function nameOnly(roundId: string, name: string, isPrivate: boolean) {
+  const l = await createNamed(name, isPrivate)
+  await setLocation(roundId, l.id, l.name)
+}
+
+/** Puts a name-only location on the map (its creator or an Admin). */
+export async function placeLocation(id: string, lat: number, lon: number) {
+  await authed(t => request('PUT', `/api/locations/${id}/position`, { latitude: lat, longitude: lon }, t))
+}
+
 /** Names a new location at a point and gives it to the round. */
 export async function nameAt(roundId: string, name: string, lat: number, lon: number, isPrivate: boolean) {
   const l = await createLocation(name, lat, lon, isPrivate)
@@ -125,12 +152,33 @@ export async function nameAt(roundId: string, name: string, lat: number, lon: nu
 
 // ---- map and location pages (straight from the server) ----
 
-const toMap = (l: any): MapLocation => ({ id: l.locationId, name: l.name, latitude: l.latitude, longitude: l.longitude,
+const toMap = (l: any): MapLocation => ({ id: l.locationId, name: l.name, latitude: l.latitude ?? null, longitude: l.longitude ?? null,
   isPrivate: !!l.isPrivate, myRounds: l.myRounds ?? 0, rounds: l.rounds ?? 0 })
 
-export async function mapLocations(): Promise<MapLocation[]> {
-  return (await authed(t => request('GET', '/api/locations/map', undefined, t))).locations.map(toMap)
+/** The locations on the map (with a pin). */
+export async function mapLocations(): Promise<PinnedLocation[]> {
+  return (await authed(t => request('GET', '/api/locations/map', undefined, t))).locations.map(toMap).filter(hasPin)
 }
+
+/** Name-only locations (3.0): no map pin. An older server without them gives an empty list. */
+export async function namedLocations(): Promise<MapLocation[]> {
+  try {
+    return (await authed(t => request('GET', '/api/locations/named', undefined, t))).locations.map(toMap)
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return []
+    throw e
+  }
+}
+
+/** Every location you can pick for a round, by name: on the map and name-only. */
+export async function knownLocations(): Promise<MapLocation[]> {
+  const [pinned, named] = await Promise.all([mapLocations(), namedLocations()])
+  return [...pinned, ...named].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+}
+
+/** "Name (private)", "Name (no map pin)" for a pick list. */
+export const knownLabel = (l: MapLocation) =>
+  l.name + [l.isPrivate ? 'private' : null, hasPin(l) ? null : 'no map pin'].filter(Boolean).map(x => ` (${x})`).join('')
 
 export interface LocationFriend {
   archerId: string; username: string; roundType: string; rounds: number; bestTotal: number | null
@@ -141,7 +189,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -156,7 +204,7 @@ const bowStats = (b: any, withClass: boolean): BowStyleStats => ({
 export async function locationPage(id: string): Promise<LocationPage> {
   const j = await authed(t => request('GET', `/api/locations/${id}/page`, undefined, t))
   return {
-    location: toMap(j.location),
+    location: { ...toMap(j.location), canPlace: !!j.location.canPlace },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({
       archerId: f.archerId, username: f.username, roundType: f.roundType ?? 'BIG_GAME', rounds: f.rounds, bestTotal: f.bestTotal ?? null,

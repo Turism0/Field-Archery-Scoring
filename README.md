@@ -4,6 +4,17 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.0
+
+- **3.0 (app, web app, API and database): shoot locations with a name but no map pin (Pete).** For historical scores where you know the shoot's name but not where it was, e.g. a Nationals years ago.
+  - **Naming one:** the location sheet (scorecard or scoring screen, app and web) has **Name only – no map pin**: type the shoot's name (or pick an existing one from Known locations, which now lists name-only locations too, marked "no map pin"). On a computer, **Add a round** has **New name only – no map pin…** in the Shoot location list. A name already used offers that location instead (Add a round uses it and says so).
+  - **What it does:** the name shows on scorecards, Score history, friends' rounds and the export like any location, and it has a location page (your scorecards, friends', all-archer stats). It isn't on the map and phones are never matched to it by GPS. Everyone can see and pick it, like a public location (unless made private).
+  - **Map:** Shoot locations lists them under **No map pin** (web: under the map; app: a button on the map). In pick mode, tap one to use it for the round.
+  - **Putting it on the map later:** its creator, or an Admin, gets **Put it on the map** on its location page (Admins also in Admin → Shoot locations); tap where it is. From then on it's an ordinary location. It can only be placed once (an Admin can merge it into another location).
+  - **Admin:** name-only locations say "no map pin"; Possible duplicates pairs them by name only ("one has no map pin" instead of a distance); merging lists the others by name when there's no distance.
+  - **Server: run `sql/014_location_no_pin.sql` in SSMS on Mimir first (schema 10: `ShootLocation.Latitude` / `Longitude` nullable, both or neither), then publish API 3.0** (`Update-Api.ps1`), then run `Test-NameOnlyLocations.ps1`. API 3.0: `POST /api/locations` takes `noPin: true`; new `GET /api/locations/named` and `PUT /api/locations/{id}/position`; the map and nearby leave name-only locations out; location pages give a null position and `canPlace`. Older apps keep working (they never see name-only locations on the map; a round at one shows its name).
+  - App versionCode 49, versionName 3.0.
+
 ## Version 2.9.03
 
 - **2.9.03 (app and web app; API version only): screens scale to the phone (Pete).**

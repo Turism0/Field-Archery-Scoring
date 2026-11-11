@@ -20,8 +20,9 @@ data class ResetCode(val username: String, val code: String, val expiresUtc: Ins
 data class AdminLocation(
     val id: String,
     val name: String,
-    val latitude: Double,
-    val longitude: Double,
+    /** Null for a name-only location (3.0, no map pin) or someone else's hidden private one. */
+    val latitude: Double?,
+    val longitude: Double?,
     val createdUtc: Instant?,
     val createdBy: String?,
     val rounds: Int,
@@ -31,7 +32,8 @@ data class AdminLocation(
 )
 
 /** Two locations that might be the same place. [reasons]: nearby, same_name, similar_name. */
-data class DuplicatePair(val a: AdminLocation, val b: AdminLocation, val distanceMetres: Int, val reasons: List<String>)
+/** [distanceMetres] null when either has no map pin (3.0): paired on their names. */
+data class DuplicatePair(val a: AdminLocation, val b: AdminLocation, val distanceMetres: Int?, val reasons: List<String>)
 
 /**
  * Admin menu, straight from the server (nothing stored on the phone). Needs signal.
@@ -74,8 +76,8 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
                 id = l.getString("locationId"),
                 name = l.getString("name"),
                 // Hidden private locations come without a position.
-                latitude = if (l.isNull("latitude")) 0.0 else l.getDouble("latitude"),
-                longitude = if (l.isNull("longitude")) 0.0 else l.getDouble("longitude"),
+                latitude = if (l.isNull("latitude")) null else l.getDouble("latitude"),
+                longitude = if (l.isNull("longitude")) null else l.getDouble("longitude"),
                 createdUtc = l.instantOrNull("createdUtc"),
                 createdBy = if (l.isNull("createdBy")) null else l.getString("createdBy"),
                 rounds = l.getInt("rounds"),
@@ -94,7 +96,7 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
             DuplicatePair(
                 a = p.getJSONObject("a").toLocation(),
                 b = p.getJSONObject("b").toLocation(),
-                distanceMetres = p.getInt("distanceMetres"),
+                distanceMetres = if (p.isNull("distanceMetres")) null else p.getInt("distanceMetres"),
                 reasons = (0 until reasons.length()).map { reasons.getString(it) },
             )
         }.also { accounts.setDuplicateLocations(it.size) }
@@ -131,8 +133,8 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
 private fun JSONObject.toLocation() = AdminLocation(
     id = getString("locationId"),
     name = getString("name"),
-    latitude = getDouble("latitude"),
-    longitude = getDouble("longitude"),
+    latitude = if (isNull("latitude")) null else getDouble("latitude"),
+    longitude = if (isNull("longitude")) null else getDouble("longitude"),
     createdUtc = null,
     createdBy = if (isNull("createdBy")) null else getString("createdBy"),
     rounds = getInt("rounds"),

@@ -147,6 +147,24 @@ class LocationRepository(
         onChanged()
     }
 
+    /**
+     * 3.0: names a new location with no map pin (a shoot you can't place, e.g. a Nationals years ago) and gives it to
+     * the round. Same [NameTaken] rule.
+     */
+    suspend fun nameOnly(roundId: String, name: String, isPrivate: Boolean = false) {
+        val json = try {
+            call { token -> api.createNamedLocation(token, name.trim(), isPrivate) }
+        } catch (e: ApiException) {
+            val existing = e.body?.optJSONObject("existing")
+            if (e.code == "name_taken" && existing != null) {
+                throw NameTaken(NearbyLocation(existing.getString("locationId"), existing.getString("name"), -1), e.message)
+            }
+            throw e
+        }
+        dao.setLocation(roundId, json.getString("locationId"), json.getString("name"), now())
+        onChanged()
+    }
+
     class NameTaken(val existing: NearbyLocation, message: String) : Exception(message)
 
     private suspend fun <T> call(block: suspend (String) -> T): T {

@@ -13,6 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -32,6 +37,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import uk.co.fnurble.fieldarchery.ui.ClassChoice
 import uk.co.fnurble.fieldarchery.ui.components.FilterMenuChip
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +73,8 @@ fun LocationPageScreen(
     onBack: () -> Unit,
     onOpenMyRound: (roundId: String) -> Unit,
     onOpenFriendRound: (friend: LocationFriend, round: FriendRoundSummary) -> Unit,
+    /** 3.0: put this name-only location on the map (its creator or an Admin). */
+    onPlace: (id: String, name: String) -> Unit = { _, _ -> },
 ) {
     val page by vm.page.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
@@ -74,6 +82,16 @@ fun LocationPageScreen(
     // Class filter for the all-archer table (2.4): "G-ADULT", "L-JUNIOR" … or "" for all classes.
     var classKey by rememberSaveable { mutableStateOf("") }
     val title = (page as? Load.Ready)?.value?.location?.name ?: "Shoot location"
+    // Back from putting it on the map: reload so the page shows it has a pin.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val placing = remember { booleanArrayOf(false) }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && placing[0]) { placing[0] = false; vm.load() }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         topBar = {
@@ -109,6 +127,24 @@ fun LocationPageScreen(
                                     PrivateBadge()
                                     Text("Only you can see this location.", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+
+                        if (!data.location.hasPin) {
+                            item(key = "noPin") {
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("No map pin", style = MaterialTheme.typography.titleMedium)
+                                        Text("This shoot is known by its name only, so it isn't on the map.",
+                                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        if (data.location.canPlace) {
+                                            FilledTonalButton(onClick = { placing[0] = true; onPlace(data.location.id, data.location.name) }) {
+                                                Icon(Icons.Filled.LocationOn, contentDescription = null)
+                                                Text("Put it on the map", Modifier.padding(start = 8.dp))
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

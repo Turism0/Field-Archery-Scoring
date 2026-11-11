@@ -41,7 +41,7 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
     case 'friend': return <><FriendRounds id={parts[1]} name={q.get('name') ?? ''} /></>
     case 'friendcard': return <><FriendScorecard id={parts[1]} roundId={parts[2]} name={q.get('name') ?? ''} /></>
     case 'offer': return <><Offer roundId={parts[1]} /></>
-    case 'map': return <><LocationMap pick={q.get('pick') ?? undefined} /></>
+    case 'map': return <><LocationMap pick={q.get('pick') ?? undefined} place={q.get('place') ?? undefined} /></>
     case 'location': return <><LocationPageScreen id={parts[1]} /></>
     case 'edit': return <><EditRound id={parts[1]} /></>
     case 'admin': return <>{parts[1] === 'duplicates' ? <AdminDuplicates /> : parts[1] === 'locations' ? <AdminLocations /> : parts[1] === 'handicap' ? <AdminHandicap /> : <Admin />}</>

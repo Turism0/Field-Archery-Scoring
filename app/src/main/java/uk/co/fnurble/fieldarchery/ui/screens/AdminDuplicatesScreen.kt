@@ -170,7 +170,7 @@ private fun PairCard(
                         "similar_name" -> "Similar name"
                         else -> it
                     }
-                } + " · " + distance(pair.distanceMetres) + " apart",
+                } + " · " + (pair.distanceMetres?.let { distance(it) + " apart" } ?: "one has no map pin"),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -208,6 +208,7 @@ private fun LocationLine(loc: AdminLocation) {
             listOfNotNull(
                 "${loc.rounds} round${if (loc.rounds == 1) "" else "s"}",
                 loc.createdBy?.let { "named by $it" },
+                if (loc.latitude == null) "no map pin" else null,
             ).joinToString(" · "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

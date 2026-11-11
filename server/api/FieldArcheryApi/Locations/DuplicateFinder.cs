@@ -8,14 +8,16 @@ namespace FieldArcheryApi.Locations;
 /// Finds pairs of live shoot locations that might be the same place: within the catchment of each
 /// other, or with the same or a similar name (ignoring case, punctuation and words like "Archers",
 /// "Bowmen", "Club", "Field"). Pairs an Admin has approved as different are left out.
+/// Name-only locations (3.0, no map pin) can't be nearby anything, so they're paired on their names only.
 /// Private locations (2.0.17) are only flagged against a public location: that's the one time Admins see a private
 /// location, so they can merge it or mark it as a different place. Two private locations are never paired.
 /// </summary>
 public static class DuplicateFinder
 {
-    public sealed record Loc(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, string? CreatedBy, int Rounds);
+    public sealed record Loc(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate, string? CreatedBy, int Rounds);
 
-    public sealed record Pair(Loc A, Loc B, int DistanceMetres, IReadOnlyList<string> Reasons);
+    /// <summary>[DistanceMetres] null when either has no map pin (3.0).</summary>
+    public sealed record Pair(Loc A, Loc B, int? DistanceMetres, IReadOnlyList<string> Reasons);
 
     /// <summary>Words that don't tell clubs apart.</summary>
     private static readonly HashSet<string> CommonWords =
@@ -49,8 +51,9 @@ public static class DuplicateFinder
                 if (approved.Contains((a.LocationId, b.LocationId))) continue;
                 if (a.IsPrivate && b.IsPrivate) continue;   // only private vs public counts as a conflict
 
-                var metres = (int)Math.Round(LocationEndpoints.Metres(
-                    (double)a.Latitude, (double)a.Longitude, (double)b.Latitude, (double)b.Longitude));
+                int? metres = a.Latitude is { } aLat && a.Longitude is { } aLon && b.Latitude is { } bLat && b.Longitude is { } bLon
+                    ? (int)Math.Round(LocationEndpoints.Metres((double)aLat, (double)aLon, (double)bLat, (double)bLon))
+                    : null;
                 var reasons = new List<string>();
                 if (metres <= catchmentMetres) reasons.Add("nearby");
                 var ka = keys[a.LocationId];
@@ -62,7 +65,7 @@ public static class DuplicateFinder
             }
         }
         // Most likely duplicates first: both reasons, then nearest.
-        return pairs.OrderByDescending(p => p.Reasons.Count).ThenBy(p => p.DistanceMetres).ToList();
+        return pairs.OrderByDescending(p => p.Reasons.Count).ThenBy(p => p.DistanceMetres ?? int.MaxValue).ToList();
     }
 
     /// <summary>True if the two locations are a possible duplicate pair right now (in either order).</summary>

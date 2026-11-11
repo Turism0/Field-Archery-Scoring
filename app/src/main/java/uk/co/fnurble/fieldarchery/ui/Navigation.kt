@@ -1,5 +1,6 @@
 package uk.co.fnurble.fieldarchery.ui
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -104,6 +105,25 @@ fun FieldArcheryNavHost() {
                 onBack = { nav.popBackStack() },
                 onOpenMyRound = { id -> nav.navigate(scorecardRoute(id)) },
                 onOpenFriendRound = { f, r -> nav.navigate("friendCard/${f.archerId}/${f.username}/${r.roundId}") },
+                onPlace = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}") },
+            )
+        }
+        // 3.0: put a name-only location on the map (from its page, or Admin → Shoot locations).
+        composable(
+            "placeLocation/{locationId}?name={name}",
+            arguments = listOf(
+                navArgument("locationId") { type = NavType.StringType },
+                navArgument("name") { type = NavType.StringType; nullable = true; defaultValue = null },
+            ),
+        ) { entry ->
+            LocationMapScreen(
+                vm = appViewModel { c, _ -> LocationMapViewModel(c.locationPageRepository, c.accountRepository) },
+                onBack = { nav.popBackStack() },
+                onProfile = { nav.navigate("profile") },
+                onOpenLocation = {},
+                placeId = entry.arguments?.getString("locationId"),
+                placeName = entry.arguments?.getString("name"),
+                onPlaced = { nav.popBackStack() },
             )
         }
         // Admin menu: Admins and the Owner only (the tile is hidden for everyone else; the server checks too).
@@ -140,6 +160,7 @@ fun FieldArcheryNavHost() {
             AdminLocationsScreen(
                 vm = appViewModel { c, _ -> AdminLocationsViewModel(c.adminRepository, c.locationRepository, c.accountStore) },
                 onBack = { nav.popBackStack() },
+                onPlace = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}") },
             )
         }
         // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).

@@ -68,7 +68,12 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
+fun AdminLocationsScreen(
+    vm: AdminLocationsViewModel,
+    onBack: () -> Unit,
+    /** 3.0: put a name-only location on the map. */
+    onPlace: (id: String, name: String) -> Unit = { _, _ -> },
+) {
     val role by vm.role.collectAsStateWithLifecycle()
     val list by vm.list.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
@@ -161,6 +166,7 @@ fun AdminLocationsScreen(vm: AdminLocationsViewModel, onBack: () -> Unit) {
             onRename = { name, private -> vm.rename(loc, name, private) { selected = null } },
             onMerge = { keep -> vm.merge(loc, keep) { selected = null } },
             onDismiss = { selected = null },
+            onPlace = { selected = null; onPlace(loc.id, loc.name) },
         )
     }
 }
@@ -184,6 +190,7 @@ private fun LocationCard(loc: AdminLocation, onClick: (() -> Unit)?) {
                         "${loc.rounds} round${if (loc.rounds == 1) "" else "s"}",
                         loc.createdBy?.let { "named by $it" },
                         loc.createdUtc?.let { it.atZone(ZoneId.systemDefault()).toLocalDate().format(UkDate) },
+                        if (loc.latitude == null && !loc.hidden) "no map pin" else null,
                     ).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -204,14 +211,19 @@ private fun LocationActions(
     onRename: (String, Boolean) -> Unit,
     onMerge: (AdminLocation) -> Unit,
     onDismiss: () -> Unit,
+    onPlace: () -> Unit = {},
 ) {
     var name by remember(location.id) { mutableStateOf(location.name) }
     var private by remember(location.id) { mutableStateOf(location.isPrivate) }
     var picking by remember(location.id) { mutableStateOf(false) }
     var confirmInto by remember(location.id) { mutableStateOf<AdminLocation?>(null) }
     val nearestFirst = remember(location.id, others) {
-        others.map { it to metresBetween(location.latitude, location.longitude, it.latitude, it.longitude) }
-            .sortedBy { it.second }
+        // Nearest first; with no map pin on either (3.0) there's no distance, so those go last, by name.
+        others.map { o ->
+            val m = if (location.latitude != null && location.longitude != null && o.latitude != null && o.longitude != null)
+                metresBetween(location.latitude, location.longitude, o.latitude, o.longitude) else null
+            o to m
+        }.sortedWith(compareBy<Pair<AdminLocation, Double?>> { it.second ?: Double.MAX_VALUE }.thenBy { it.first.name.lowercase() })
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -246,19 +258,25 @@ private fun LocationActions(
                     enabled = !busy && name.trim().length >= 2 && (name.trim() != location.name || private != location.isPrivate),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Save") }
+                if (location.latitude == null) {
+                    OutlinedButton(onClick = onPlace, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Put it on the map") }
+                }
                 OutlinedButton(
                     onClick = { picking = true },
                     enabled = !busy && others.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Merge into another location…") }
             } else {
-                Text("Merge into which location? Nearest first.", style = MaterialTheme.typography.titleMedium,
+                Text("Merge into which location? Nearest first." + if (location.latitude == null) " (This one has no map pin.)" else "", style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary)
                 LazyColumn(Modifier.heightIn(max = 360.dp)) {
                     items(nearestFirst, key = { it.first.id }) { (other, metres) ->
                         ListItem(
                             headlineContent = { Text(other.name) },
-                            supportingContent = { Text("${distance(metres)} · ${other.rounds} round${if (other.rounds == 1) "" else "s"}") },
+                            supportingContent = {
+                                val where = metres?.let { distance(it) } ?: if (other.latitude == null) "No map pin" else "On the map"
+                                Text("$where · ${other.rounds} round${if (other.rounds == 1) "" else "s"}")
+                            },
                             leadingContent = { Icon(Icons.Filled.LocationOn, contentDescription = null) },
                             modifier = Modifier.clickable(enabled = !busy) { confirmInto = other },
                         )

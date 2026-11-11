@@ -30,6 +30,7 @@
       - 2c. Admin: rename locations, merge duplicates (two offline phones can create the same new club). *Done in 1.6.04* (Admin → Shoot locations).
       - Privacy: the phone's raw position stays on the phone until matched; the server stores only which location a round was at (club coordinates are fine to store).
    2d. **Location extras (agreed 2 Nov 2026, in this order):** (1) possible-duplicate alerts for Admins: a badge on the Admin tile and a list (nearby, same or similar name) with Merge or **Approve** (approved pairs stop showing); (2) **private** locations: only the creator sees the name (2.0.17: Admins too only when it clashes with a public location, in Possible duplicates, where they can merge it into the public one or mark them as different; the Owner sees that others' private locations exist in the Admin list, names and positions hidden), never matched for anyone else, friends see "Private location", left out of the map and all-archer stats; (3) a **location page**: your scorecards there, friends' scorecards and stats there, and all-archer stats per bow style; (4) a **map** of shoot locations (OpenStreetMap via osmdroid, no API key), ones you've shot at highlighted, tap for the location page. *Server for (1) and (2) done in 1.7.01; app in 1.7.02. Server for (3) and (4) in 1.7.03; app in 1.8.*
+   2e. **Name-only locations (3.0, Pete)** for historical scores (e.g. a Nationals years ago): `ShootLocation.Latitude` / `Longitude` nullable (schema 10, both or neither). Made from the location sheet or Add a round (web) with a name only; on scorecards and with a page like any location, visible to everyone (unless private), never on the map or matched by GPS. Its creator or an Admin can put it on the map later (once): `PUT /api/locations/{id}/position`. Possible duplicates pairs them by name only.
    3. **Round types:** *Done: DB + API 1.9.01, app 1.9.05.* Phone database v3: `round.round_type` (null = Big Game), `target.arrows` (W/K/M); target type WOODSMAN has no animal rows. Woodsman stats are per target (out of 30).
       - 3a. Groundwork: `RoundType` table and a type on every round (server and phone), per-type rules in the API, Big Game-only database checks relaxed; uploads without a type count as Big Game.
       - 3b. **Woodsman:** single animal per target; shoot until you kill, up to 3 arrows; wound 5 on any arrow; kill 30 / 20 / 10 on the 1st / 2nd / 3rd arrow; miss 0 (e.g. wound + kill 25; miss, wound, kill 15; three wounds 15; max 30). Needs each arrow recorded, so a per-arrow field. Own scoring screen, scorecard and stats; type shown in history and to friends; friends' summaries per type.
@@ -128,7 +129,8 @@ home ─┬─ scoreRound ─┬─ (continue) ───────────
       │   (round/{id} or card/{id} → location sheet → pickLocation/{roundId}: the map in pick mode)
       │   (round/{id} or card/{id} ⋮ → editRound/{roundId}: date, targets, class, age group, bow style)
       ├─ map ─▶ location/{locationId} ─┬▶ card/{roundId}  (yours)
-      │                                 └▶ friendCard/…    (a friend's, read-only)
+      │                                 ├▶ friendCard/…    (a friend's, read-only)
+      │                                 └▶ placeLocation/{locationId}?name=  (3.0: put a name-only location on the map)
       ├─ admin ─┬▶ adminDuplicates  (possible duplicate locations: merge / approve)
       │         └▶ adminLocations   (rename, private / public, merge)   — Admins and Owner only
       └─ profile ─▶ account
@@ -160,7 +162,7 @@ Scripts in `server/sql/`, run in order in SSMS:
 | `Archer` | `ArcherId` (server GUID) | `Username` (unique, case-insensitive, 3–30 of A–Z 0–9 _ . -), `PasswordHash`, created / last login, failed-login count and lockout, disabled flag, `Role` (USER / ADMIN / OWNER, only one OWNER; schema v2, `004_roles.sql`) with who changed it and when |
 | `AuthToken` | `TokenId` | One per signed-in phone: SHA-256 `TokenHash`, device name, created / last used / expires / revoked |
 | `Round` | `RoundId` (phone GUID) | `ArcherId`, shoot date, target count, class (L/G), age group, bow style, status, total, deleted flag, phone created/updated times, server updated time, rowversion, `LocationId` (v3, optional) |
-| `ShootLocation` | `LocationId` (server GUID) | Name (2–60, unique among live locations, case-insensitive), latitude/longitude where first named (5 dp), who named / renamed / merged it and when, `MergedIntoId` (a merged duplicate points at the location kept) |
+| `ShootLocation` | `LocationId` (server GUID) | Name (2–60, unique among live locations, case-insensitive), latitude/longitude where first named (5 dp; both null for a name-only location, schema 10, 3.0), who named / renamed / merged it and when, `MergedIntoId` (a merged duplicate points at the location kept) |
 | `TargetScore` | `RoundId` + `TargetNo` | Target type, override, points |
 | `AnimalScore` | `RoundId` + `TargetNo` + `AnimalIndex` | State, arrow, hit, points (checks enforce valid combinations, inner kill on 1st arrow only) |
 | `Friendship` | `ArcherLowId` + `ArcherHighId` | One row per pair: who asked, PENDING / ACCEPTED, dates. Declining or removing deletes the row |

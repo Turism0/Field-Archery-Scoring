@@ -39,6 +39,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -71,6 +79,7 @@ import uk.co.fnurble.fieldarchery.ui.LocationMapViewModel
 /**
  * Map of shoot locations (OpenStreetMap). Locations you've shot at are in the primary colour, others grey;
  * your private ones are included. Tap a pin for its name, tap the name for the location page.
+ * Name-only locations (3.0, no map pin) are listed from the "No map pin" button. Place mode puts one on the map.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,11 +94,18 @@ fun LocationMapScreen(
     roundId: String? = null,
     /** Pick mode: called after a new location has been named and given to the round. */
     onPicked: () -> Unit = {},
+    /** Place mode (3.0): the name-only location to put on the map where the archer taps. */
+    placeId: String? = null,
+    placeName: String? = null,
+    /** Place mode: called once it's on the map. */
+    onPlaced: () -> Unit = {},
 ) {
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val locations by vm.locations.collectAsStateWithLifecycle()
     val taken by vm.taken.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val named by vm.named.collectAsStateWithLifecycle()
+    var showNamed by remember { mutableStateOf(false) }
     var newAt by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     /** "New location" tapped: the next tap on the map is where it goes. */
     var placing by remember { mutableStateOf(false) }
@@ -107,7 +123,7 @@ fun LocationMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (pickMode) "Choose the shoot location" else "Shoot locations") },
+                title = { Text(if (placeId != null) "Put it on the map" else if (pickMode) "Choose the shoot location" else "Shoot locations") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
@@ -115,7 +131,7 @@ fun LocationMapScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
         floatingActionButton = {
-            if (!pickMode && signedIn && !placing && locations is Load.Ready) {
+            if (!pickMode && placeId == null && signedIn && !placing && locations is Load.Ready) {
                 ExtendedFloatingActionButton(
                     onClick = { placing = true },
                     icon = { Icon(Icons.Filled.Add, contentDescription = null) },
@@ -148,8 +164,25 @@ fun LocationMapScreen(
                     is Load.Ready -> {
                         LocationMap(
                             l.value, onOpenLocation, pickMode,
-                            onMapTap = if ((pickMode && roundId != null) || placing) { lat, lon -> newAt = lat to lon } else null,
+                            onMapTap = if ((pickMode && roundId != null) || placing || placeId != null) { lat, lon -> newAt = lat to lon } else null,
                         )
+                        if (placeId != null) {
+                            Surface(
+                                Modifier.align(Alignment.TopCenter).padding(12.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shadowElevation = 2.dp,
+                            ) {
+                                Text("Tap the map where ${placeName ?: "the shoot"} is.", style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                            }
+                        } else if (named.isNotEmpty() && !placing) {
+                            // Name-only locations aren't on the map: a button lists them.
+                            FilledTonalButton(
+                                onClick = { showNamed = true },
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).padding(bottom = if (pickMode) 0.dp else 72.dp),
+                            ) { Text("No map pin (${named.size})") }
+                        }
                         Legend(Modifier.align(Alignment.BottomStart).padding(12.dp), shot = l.value.count { it.myRounds > 0 }, total = l.value.size)
                         if (placing) {
                             Surface(
@@ -185,8 +218,46 @@ fun LocationMapScreen(
         }
     }
 
+    if (showNamed) {
+        ModalBottomSheet(onDismissRequest = { showNamed = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("No map pin", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "Shoots known by name only, e.g. championships from years ago." + if (pickMode) " Tap one to use it for this round." else "",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                    items(named, key = { it.id }) { loc ->
+                        ListItem(
+                            headlineContent = { Text(loc.name + if (loc.isPrivate) " (private)" else "") },
+                            supportingContent = {
+                                Text((if (loc.myRounds > 0) "You: ${loc.myRounds}" else "Not shot") + if (loc.isPrivate) "" else " · everyone: ${loc.rounds}")
+                            },
+                            modifier = Modifier.clickable { showNamed = false; onOpenLocation(loc) },
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
+
     val point = newAt
-    if (point != null && roundId != null) {
+    if (point != null && placeId != null) {
+        AlertDialog(
+            onDismissRequest = { newAt = null },
+            title = { Text("Put it on the map") },
+            text = {
+                Text(
+                    "Put ${placeName ?: "this location"} at the point you tapped? From then on it's on the map and phones scoring " +
+                        "there are matched to it. It can't be moved afterwards (an Admin can merge it into another location).",
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.place(placeId, point.first, point.second) { newAt = null; onPlaced() } }) { Text("Put it here") } },
+            dismissButton = { TextButton(onClick = { newAt = null }) { Text("Cancel") } },
+        )
+    } else if (point != null && roundId != null) {
         NewLocationDialog(
             taken = taken?.name,
             onDismiss = { newAt = null; vm.clearTaken() },
@@ -310,8 +381,10 @@ private fun LocationMap(
         update = { map ->
             map.overlays.removeAll { it is Marker }
             locations.forEach { loc ->
+                val lat = loc.latitude ?: return@forEach   // only pinned locations come here
+                val lon = loc.longitude ?: return@forEach
                 val marker = Marker(map).apply {
-                    position = GeoPoint(loc.latitude, loc.longitude)
+                    position = GeoPoint(lat, lon)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     icon = tinted(icon, if (loc.myRounds > 0) shotColour else otherColour)
                     title = loc.name + if (loc.isPrivate) " (private)" else ""
@@ -343,13 +416,14 @@ private fun LocationMap(
                 map.overlays.add(marker)
             }
             // First time: zoom to fit the pins (shot-at ones if there are any).
-            if (!fitted[0] && locations.isNotEmpty()) {
-                val focus = locations.filter { it.myRounds > 0 }.ifEmpty { locations }
+            val pinned = locations.filter { it.hasPin }
+            if (!fitted[0] && pinned.isNotEmpty()) {
+                val focus = pinned.filter { it.myRounds > 0 }.ifEmpty { pinned }
                 if (focus.size == 1) {
                     map.controller.setZoom(12.0)
-                    map.controller.setCenter(GeoPoint(focus[0].latitude, focus[0].longitude))
+                    map.controller.setCenter(GeoPoint(focus[0].latitude!!, focus[0].longitude!!))
                 } else {
-                    val box = BoundingBox.fromGeoPoints(focus.map { GeoPoint(it.latitude, it.longitude) })
+                    val box = BoundingBox.fromGeoPoints(focus.map { GeoPoint(it.latitude!!, it.longitude!!) })
                     map.post { map.zoomToBoundingBox(box.increaseByScale(1.3f), false, 64) }
                 }
                 fitted[0] = true

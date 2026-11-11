@@ -99,8 +99,8 @@ export function AdminDuplicates() {
           {!pairs.length && <p class="sub">Nothing to check. All locations look distinct.</p>}
           <div class="grid2">{pairs.map(p => (
             <div class="card low">
-              <div class="sub">{p.reasons.map(r => REASONS[r] ?? r).join(' · ')} · {p.distanceMetres < 1000 ? `${p.distanceMetres} m` : `${(p.distanceMetres / 1000).toFixed(1)} km`} apart</div>
-              {[p.a, p.b].map((l, i) => <div><b>{i + 1}. {l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}<div class="sub">{locLine(l)}</div></div>)}
+              <div class="sub">{p.reasons.map(r => REASONS[r] ?? r).join(' · ')} · {p.distanceMetres == null ? 'one has no map pin' : `${p.distanceMetres < 1000 ? `${p.distanceMetres} m` : `${(p.distanceMetres / 1000).toFixed(1)} km`} apart`}</div>
+              {[p.a, p.b].map((l, i) => <div><b>{i + 1}. {l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}{l.latitude == null && <span class="sub"> · NO MAP PIN</span>}<div class="sub">{locLine(l)}</div></div>)}
               <div class="row">
                 <button class="outlined" disabled={busy || p.b.isPrivate} onClick={() => setMerge([p.a, p.b])}>Keep 2nd</button>
                 <button class="outlined" disabled={busy || p.a.isPrivate} onClick={() => setMerge([p.b, p.a])}>Keep 1st</button>
@@ -126,7 +126,9 @@ function MergeDialog({ pair, onClose, onMerge }: { pair: [admin.AdminLocation, a
   )
 }
 
-function metres(a: admin.AdminLocation, b: admin.AdminLocation) {
+/** Metres apart, or null when either has no map pin (3.0). */
+function metres(a: admin.AdminLocation, b: admin.AdminLocation): number | null {
+  if (a.latitude == null || a.longitude == null || b.latitude == null || b.longitude == null) return null
   const r = 6_371_000, rad = (d: number) => (d * Math.PI) / 180
   const dLat = rad(b.latitude - a.latitude), dLon = rad(b.longitude - a.longitude)
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2
@@ -156,7 +158,7 @@ export function AdminLocations() {
           {!list.length && <p class="sub">No shoot locations yet. They appear as archers name them.</p>}
           <div class="grid2">{list.map(l => (
             <button class="tile" disabled={l.hidden} onClick={() => { setSel(l); setName(l.name); setPriv(l.isPrivate); setMerging(false) }}>
-              <span class="grow"><b>{l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}
+              <span class="grow"><b>{l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}{l.latitude == null && !l.hidden && <span class="sub"> · NO MAP PIN</span>}
                 <span class="sub" style="display:block">{l.rounds} round{l.rounds === 1 ? '' : 's'}{l.createdBy ? ` · named by ${l.createdBy}` : ''}{l.createdUtc ? ` · ${ukDate(l.createdUtc)}` : ''}</span></span>
             </button>
           ))}</div>
@@ -172,14 +174,16 @@ export function AdminLocations() {
           <Field label="Name"><input maxLength={60} value={name} onInput={e => setName((e.target as HTMLInputElement).value)} /></Field>
           <label class="row" style="flex-wrap:nowrap"><span class="grow"><b>Private</b><div class="sub">Only the archer who named it sees it</div></span>
             <input type="checkbox" style="width:auto" checked={priv} onChange={e => setPriv((e.target as HTMLInputElement).checked)} /></label>
+          {sel.latitude == null && <button class="outlined" onClick={() => { setSel(null); go(`/map?place=${sel.id}`) }}>📍 Put it on the map</button>}
           <button class="outlined" onClick={() => setMerging(true)}>Merge into another location…</button>
         </div>}
         {sel && merging && <div class="col">
-          <div>Merge into which location? Nearest first.</div>
-          {all.filter(o => o.id !== sel.id && !o.hidden).sort((a, b) => metres(sel, a) - metres(sel, b)).map(o => (
-            <button class="row between plain" onClick={() => setMerge([sel, o])}>
-              <span><b>{o.name}</b><div class="sub">{distanceText(Math.round(metres(sel, o)))} · {o.rounds} round{o.rounds === 1 ? '' : 's'}</div></span></button>
-          ))}
+          <div>Merge into which location? Nearest first{sel.latitude == null ? ' (this one has no map pin, so by name)' : ''}.</div>
+          {all.filter(o => o.id !== sel.id && !o.hidden).sort((a, b) => (metres(sel, a) ?? Infinity) - (metres(sel, b) ?? Infinity) || a.name.localeCompare(b.name)).map(o => {
+            const m = metres(sel, o)
+            return <button class="row between plain" onClick={() => setMerge([sel, o])}>
+              <span><b>{o.name}</b><div class="sub">{m != null ? distanceText(Math.round(m)) : o.latitude == null ? 'No map pin' : 'On the map'} · {o.rounds} round{o.rounds === 1 ? '' : 's'}</div></span></button>
+          })}
         </div>}
       </Dialog>
       <MergeDialog pair={merge} onClose={() => setMerge(null)} onMerge={(dup, keep) => act(async () => toast(`Merged: ${await admin.merge(dup.id, keep.id)} rounds moved.`))} />

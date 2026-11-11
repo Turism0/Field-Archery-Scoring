@@ -9,7 +9,7 @@ namespace FieldArcheryApi.Locations;
 /// <summary>
 /// Shoot location map and location page (API 1.7.03). All calls need "Authorization: Bearer &lt;token&gt;".
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
-///                                    public live locations, plus your own private ones;
+///                                    public live locations, plus your own private ones (not name-only ones, API 3.0);
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
 ///   (2.0.05: friends and bowStyles get average36 / average40 = average per animal × 36 / 40;
 ///    rounds get animalCount, predatorPrey, fans.)
@@ -17,6 +17,7 @@ namespace FieldArcheryApi.Locations;
 ///                                    averagePerAnimal, roundsList: [...] }], bowStyles: [{ roundType, bowStyle, archers, rounds,
 ///                                    bestTotal, averageTotal, averagePerAnimal }] }  (one row per round type)
 ///   (API 2.4: bowClasses: the same per bow style, class (G / L) and age group, for the app's class filter.)
+///   (API 3.0: location.latitude / longitude null for a name-only location; location.canPlace: you can put it on the map.)
 /// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it and
 /// Admins, and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
 /// </summary>
@@ -24,7 +25,7 @@ public static class LocationPageEndpoints
 {
     private sealed record MapRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, int MyRounds, int Rounds);
 
-    private sealed record Loc(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, Guid? CreatedById);
+    private sealed record Loc(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate, Guid? CreatedById);
 
     public sealed record RoundRow(Guid RoundId, Guid ArcherId, DateTime ShootDate, short TargetCount, string ArcherClass,
         string AgeGroup, string BowStyle, int TotalPoints, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0);
@@ -64,6 +65,7 @@ public static class LocationPageEndpoints
                    (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId) AS Rounds
             FROM dbo.ShootLocation l
             WHERE l.MergedIntoId IS NULL
+              AND l.Latitude IS NOT NULL   -- name-only locations (3.0) aren't on the map
               AND (l.IsPrivate = 0 OR l.CreatedById = @me)
             ORDER BY l.Name;
             """, new { me = user.ArcherId(), isAdmin = user.IsAdmin() }, cancellationToken: ct));
@@ -197,7 +199,9 @@ public static class LocationPageEndpoints
         {
             location = new
             {
-                loc.LocationId, loc.Name, latitude = (double)loc.Latitude, longitude = (double)loc.Longitude, loc.IsPrivate,
+                loc.LocationId, loc.Name, latitude = (double?)loc.Latitude, longitude = (double?)loc.Longitude, loc.IsPrivate,
+                // API 3.0: a name-only location can be put on the map by its creator or an Admin.
+                canPlace = loc.Latitude is null && (mine || user.IsAdmin()),
             },
             myRounds = myRounds.Select(Summary),
             friends,

@@ -664,7 +664,26 @@ class LocationMapViewModel(
     private val _locations = MutableStateFlow<Load<List<MapLocation>>>(Load.Loading)
     val locations: StateFlow<Load<List<MapLocation>>> = _locations.asStateFlow()
 
+    private val _named = MutableStateFlow<List<MapLocation>>(emptyList())
+    /** Name-only locations (3.0): not on the map, listed beside it. */
+    val named: StateFlow<List<MapLocation>> = _named.asStateFlow()
+
+    /** Place mode (3.0): puts a name-only location on the map at the point tapped, then [onDone]. */
+    fun place(locationId: String, lat: Double, lon: Double, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.place(locationId, lat, lon)
+                _message.value = "It's on the map."
+                onDone()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            }
+        }
+    }
+
     fun load() {
+        viewModelScope.launch { runCatching { repo.named() }.onSuccess { _named.value = it } }
         viewModelScope.launch {
             if (_locations.value !is Load.Ready) _locations.value = Load.Loading
             _locations.value = try {
@@ -1470,7 +1489,7 @@ class RoundLocationViewModel(
     private val roundId: String = checkNotNull(saved["roundId"])
 
     private val _known = MutableStateFlow<List<MapLocation>>(emptyList())
-    /** Every location you can use (public ones and your own private ones), by name, for the drop-down. */
+    /** Every location you can use (public ones, your own private ones and name-only ones), by name, for the drop-down. */
     val known: StateFlow<List<MapLocation>> = _known.asStateFlow()
 
     fun chooseKnown(location: MapLocation, onDone: () -> Unit) =
@@ -1505,7 +1524,7 @@ class RoundLocationViewModel(
         _taken.value = null
         pages?.let { repo ->
             viewModelScope.launch {
-                runCatching { repo.map() }.onSuccess { list -> _known.value = list.sortedBy { it.name.lowercase() } }
+                runCatching { repo.known() }.onSuccess { list -> _known.value = list }
             }
         }
         viewModelScope.launch {
@@ -1539,6 +1558,18 @@ class RoundLocationViewModel(
             _taken.value = e.existing
         }
     }
+
+    /** 3.0: a new location with a name and no map pin. */
+    fun nameOnly(name: String, isPrivate: Boolean, onDone: () -> Unit) = act {
+        try {
+            locations.nameOnly(roundId, name, isPrivate)
+            onDone()
+        } catch (e: LocationRepository.NameTaken) {
+            _taken.value = e.existing
+        }
+    }
+
+    fun clearTaken() { _taken.value = null }
 
     private fun act(block: suspend () -> Unit) {
         if (_busy.value) return
