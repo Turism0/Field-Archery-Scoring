@@ -33,6 +33,10 @@ interface ProfileDao {
     @Query("SELECT * FROM profile WHERE id = 1")
     suspend fun get(): ProfileEntity?
 
+    /** Signing out clears the phone (3.2.02). */
+    @Query("DELETE FROM profile")
+    suspend fun clear()
+
     @Upsert
     suspend fun upsert(profile: ProfileEntity)
 }
@@ -124,6 +128,32 @@ abstract class RoundDao {
     open suspend fun loadRound(id: String): RoundData? {
         val round = getRound(id) ?: return null
         return RoundData(round, getTargets(id), getAnimals(id))
+    }
+
+    // ---- Whose rounds are on this phone (3.2.02): signing out clears it, signing in may ask ----
+
+    /** Your own rounds here (not friends', guests' or copies of other phones' cards), in progress or finished. */
+    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND (group_role IS NULL OR group_role = 'SCORER')")
+    abstract suspend fun ownRoundCount(): Int
+
+    /** Your own rounds still being scored (they're only sent to the server once finished). */
+    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND status = 'IN_PROGRESS' AND (group_role IS NULL OR group_role = 'SCORER')")
+    abstract suspend fun inProgressCount(): Int
+
+    /** Rounds kept when signing in go up to that account, even ones backed up before to an account since deleted. */
+    @Query("UPDATE round SET sync_state = 'PENDING' WHERE deleted = 0 AND (group_role IS NULL OR group_role = 'SCORER')")
+    abstract suspend fun markOwnPending()
+
+    @Query("DELETE FROM animal") abstract suspend fun deleteEveryAnimal()
+    @Query("DELETE FROM target") abstract suspend fun deleteEveryTarget()
+    @Query("DELETE FROM round") abstract suspend fun deleteEveryRound()
+
+    /** Every round on the phone, with its targets and animals. */
+    @Transaction
+    open suspend fun clearRounds() {
+        deleteEveryAnimal()
+        deleteEveryTarget()
+        deleteEveryRound()
     }
 
     /** Rounds waiting to go to the server: finished rounds and deletions (in-progress rounds stay on the phone). */

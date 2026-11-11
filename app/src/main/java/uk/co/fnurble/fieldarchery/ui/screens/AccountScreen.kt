@@ -61,6 +61,27 @@ fun AccountScreen(vm: AccountViewModel, onBack: () -> Unit) {
     // Signed in: back, once any new recovery code has been written down.
     LaunchedEffect(s.signedIn, s.recoveryCode) { if (s.signedIn && s.recoveryCode == null) onBack() }
     s.recoveryCode?.let { RecoveryCodeDialog(it, onDone = vm::recoveryCodeSeen) }
+    // 3.2.02: rounds on this phone scored while nobody was signed in.
+    s.askRounds?.let { n ->
+        val them = if (n == 1) "it" else "them"
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { vm.answerRounds(null) },
+            title = { Text("Rounds on this phone") },
+            text = {
+                Text(
+                    "${if (n == 1) "There is 1 round" else "There are $n rounds"} on this phone scored while nobody was signed in. " +
+                        "Add $them to ${s.username}'s account, or remove $them from this phone?",
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.answerRounds(true) }) { Text("Add to ${s.username}") } },
+            dismissButton = {
+                androidx.compose.foundation.layout.Row {
+                    TextButton(onClick = { vm.answerRounds(null) }) { Text("Cancel") }
+                    TextButton(onClick = { vm.answerRounds(false) }) { Text("Remove $them", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {

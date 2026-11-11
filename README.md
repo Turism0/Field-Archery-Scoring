@@ -4,9 +4,19 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.02
+
+- **3.2.02 (app and web app; API version only): signing out clears the device (Pete, bug fix).** Before, signing out left everything on the phone or browser, so the next account to sign in saw the last person's rounds, profile and friends.
+  - **Signing out** now removes every round, the profile (including real name and date of birth, which are never backed up), friends, live groups, sync state and the Stats filters. Home's layout and the handicap model stay. Your rounds come back from the server when you sign in again.
+  - The sign-out dialog says what will go, and warns (**Sign out anyway**) if any changes haven't been backed up yet or a round is still in progress.
+  - **Signing in** keeps the rounds on the device if they're that account's. It removes another account's without asking (left behind when the server ended a sign-in, e.g. a password reset elsewhere). For rounds scored while nobody was signed in it asks: **Add to <username>** (they're backed up to that account), **Remove them**, or Cancel (not signed in).
+  - Deleting your account still leaves its rounds on the device; the next sign-in asks about them.
+  - Devices signed in before 3.2.02 count their rounds as that account's.
+  - Tests: Kotlin 83, web 77 (new `DeviceDataRulesTest.kt`, `deviceData.test.ts`). App versionCode 64, versionName 3.2.02.
+
 ## Version 3.2.01
 
-- **3.2.01 (app and web app; API version only): sort Score history (Pete).** A Sort choice with the filters: newest first (as before, the default each time), oldest first, highest average or lowest average. The average is the one on each tile (per animal; Woodsman per target; fun shots left out); rounds with nothing scored go last, and a tie goes newest first. Works with the filters and the export (in the shown order). Tests: Kotlin 81, web 74. App versionCode 63, versionName 3.2.01.
+- **3.2.01 (app and web app; API version only): sort Score history (Pete).** A Sort choice with the filters: newest first (as before, the default each time), oldest first, highest average or lowest average. The average is the one on each tile (per animal; Woodsman per target; fun shots left out); rounds with nothing scored go last, and a tie goes newest first. Works with the filters; the web Export uses the shown order. Tests: Kotlin 81, web 74. App versionCode 63, versionName 3.2.01.
 
 ## Version 3.2
 

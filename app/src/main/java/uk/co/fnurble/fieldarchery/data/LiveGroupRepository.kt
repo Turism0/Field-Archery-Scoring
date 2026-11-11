@@ -1077,6 +1077,14 @@ class LiveGroupRepository(
         )
     }.getOrNull()
 
+    /** Signing out clears the phone (3.2.02): every live group this phone was in is forgotten here. */
+    suspend fun clearAll() {
+        prefs.edit().clear().commit()
+        lock.withLock { replicas.value = emptyMap() }
+        serverProblem.value = emptyMap()
+        dir.listFiles()?.forEach { it.delete() }
+    }
+
     private suspend fun forget(groupId: String) {
         prefs.edit().remove(groupId).remove("$groupId:code").remove("$groupId:method").remove("$groupId:host").remove("$groupId:server").apply()
         lock.withLock { replicas.update { it - groupId } }

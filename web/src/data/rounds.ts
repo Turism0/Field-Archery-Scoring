@@ -3,7 +3,7 @@ import { allRounds, everyRoundEvenDeleted, getKv, getRound, getRoundEvenDeleted,
 import { ApiError, request } from './api'
 import { refreshModelIfStale } from './handicap'
 import { lookUpPending, refreshNames } from './locations'
-import { getAccount, signedOutByServer, type Friend } from './account'
+import { claimDeviceData, getAccount, signedOutByServer, type Friend } from './account'
 import {
   newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
 } from '../domain/round'
@@ -113,6 +113,7 @@ export function syncNow(): Promise<SyncReport> {
 async function doSync(): Promise<SyncReport> {
   const account = await getAccount()
   if (!account) return { ok: false, message: 'Sign in (Profile) to back up your rounds.' }
+  await claimDeviceData(account)
   const token = account.token
   try {
     const me = await request('GET', '/api/me', undefined, token)

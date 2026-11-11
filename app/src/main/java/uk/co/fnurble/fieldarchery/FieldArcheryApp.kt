@@ -46,7 +46,9 @@ class AppContainer(app: Application) {
         runCatching { api.health() }
     }
 
-    val accountRepository = AccountRepository(api, accountStore, profileRepository, onSignedIn = { syncScheduler.request() })
+    /** Whose rounds are on this phone (3.2.02). */
+    private val deviceData = uk.co.fnurble.fieldarchery.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository)
+    val accountRepository = AccountRepository(api, accountStore, profileRepository, deviceData, onSignedIn = { syncScheduler.request() })
 }
 
 class FieldArcheryApp : Application() {

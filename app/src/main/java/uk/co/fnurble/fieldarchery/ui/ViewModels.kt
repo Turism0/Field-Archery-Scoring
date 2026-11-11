@@ -45,6 +45,7 @@ import uk.co.fnurble.fieldarchery.data.LiveMethod
 import uk.co.fnurble.fieldarchery.data.LivePoll
 import uk.co.fnurble.fieldarchery.data.NewGroupMember
 import uk.co.fnurble.fieldarchery.data.RoundOffer
+import uk.co.fnurble.fieldarchery.data.SignInStep
 import uk.co.fnurble.fieldarchery.data.CachedFriend
 import uk.co.fnurble.fieldarchery.data.local.GroupRole
 import uk.co.fnurble.fieldarchery.data.LocationPage
@@ -1127,7 +1128,15 @@ class ProfileViewModel(
     /** Signed-in account, or null when using the app offline only. */
     val account: StateFlow<Account?> = accounts.account
 
-    fun signOut() = viewModelScope.launch { accounts.signOut() }
+    /** What signing out would lose, for the dialog (null: nothing). */
+    suspend fun signOutWarning(): String? = accounts.signOutWarning()
+
+    /** Signs out and clears the phone (3.2.02), then [onDone]. */
+    fun signOut(onDone: () -> Unit) = viewModelScope.launch {
+        accounts.signOut()
+        _state.value = Profile()
+        onDone()
+    }
 
     private val _recovery = MutableStateFlow<RecoveryState>(RecoveryState())
     /** Making a new recovery code (2.4): busy, the code to show, or a problem. */
@@ -1200,6 +1209,8 @@ data class AccountUiState(
     val signedIn: Boolean = false,
     /** A recovery code to show once (after creating the account or a reset); the screen closes once it's been seen. */
     val recoveryCode: String? = null,
+    /** 3.2.02: rounds on this phone scored while nobody was signed in: add them to this account or remove them? */
+    val askRounds: Int? = null,
 )
 
 /**
@@ -1233,6 +1244,36 @@ class AccountViewModel(
     /** The recovery code has been written down. */
     fun recoveryCodeSeen() = _state.update { it.copy(recoveryCode = null) }
 
+    /** A sign-in waiting on [AccountUiState.askRounds]. */
+    private var pending: SignInStep? = null
+
+    /** Signed in, or a question first about rounds scored here while nobody was signed in (3.2.02). */
+    private fun signedIn(step: SignInStep) {
+        val ask = step.pending
+        if (ask != null) {
+            pending = step
+            _state.update { it.copy(askRounds = ask.roundCount) }
+        } else {
+            _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", code = "", recoveryCode = step.recoveryCode) }
+        }
+    }
+
+    /** The answer: true adds the rounds to this account, false removes them, null cancels signing in. */
+    fun answerRounds(keep: Boolean?) {
+        val step = pending ?: return
+        val ask = step.pending ?: return
+        pending = null
+        _state.update { it.copy(askRounds = null) }
+        if (keep == null) {
+            viewModelScope.launch { accounts.cancelSignIn(ask) }
+            return
+        }
+        launchCall {
+            accounts.finishSignIn(ask, keep)
+            signedIn(step.copy(pending = null))
+        }
+    }
+
     fun resetPassword() {
         val s = _state.value
         if (s.code.isBlank()) {
@@ -1244,8 +1285,7 @@ class AccountViewModel(
             return
         }
         launchCall {
-            val recovery = accounts.resetPassword(s.username, s.code, s.password)
-            _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", code = "", recoveryCode = recovery) }
+            signedIn(accounts.resetPassword(s.username, s.code, s.password))
         }
     }
 
@@ -1278,8 +1318,7 @@ class AccountViewModel(
             return
         }
         launchCall {
-            accounts.login(s.username, s.password)
-            _state.update { it.copy(signedIn = true, password = "") }
+            signedIn(accounts.login(s.username, s.password))
         }
     }
 
@@ -1291,8 +1330,7 @@ class AccountViewModel(
         }
         launchCall {
             try {
-                val recovery = accounts.register(s.username, s.password)
-                _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", recoveryCode = recovery) }
+                signedIn(accounts.register(s.username, s.password))
             } catch (e: ApiException) {
                 if (e.code == "username_taken") {
                     // Someone took it in the meantime: switch to signing in.

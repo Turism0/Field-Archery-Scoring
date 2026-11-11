@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Bar, Card, Dialog, Field, Select, Seg, back, errorText, go, toast, useData } from './common'
 import {
-  checkUsername, deleteAccount, getAccount, getProfile, login, newRecoveryCode, register, resetPassword, saveProfile, signOut,
-  type Profile,
+  cancelSignIn, checkUsername, deleteAccount, finishSignIn, getAccount, getProfile, login, newRecoveryCode, register, resetPassword,
+  saveProfile, signOut, signOutCheck, type PendingSignIn, type Profile, type SignInStep,
 } from '../data/account'
 import { syncNow } from '../data/rounds'
+import { signOutWarning } from '../domain/deviceData'
 import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, ageGroupFor, type AgeGroup, type ArcherClass } from '../domain/round'
 import { today } from './common'
 
@@ -34,12 +35,22 @@ export function AccountScreen() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [recovery, setRecovery] = useState<string | null>(null)
+  const [pending, setPending] = useState<SignInStep | null>(null)
 
   async function run(f: () => Promise<void>) {
     setBusy(true); setError(null)
     try { await f() } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
   const done = () => { syncNow(); go('/') }
+  /** Signed in, or a question first about rounds scored here while nobody was signed in (3.2.02). */
+  const signedIn = (s: SignInStep) => { if (s.pending) setPending(s); else if (s.recoveryCode) setRecovery(s.recoveryCode); else done() }
+  async function answer(keep: boolean | null) {
+    const s = pending!, p = s.pending as PendingSignIn
+    setPending(null)
+    if (keep === null) { await cancelSignIn(p); return }
+    await run(async () => { await finishSignIn(p, keep); signedIn({ ...s, pending: null }) })
+  }
+  const n = pending?.pending?.rounds ?? 0, them = n === 1 ? 'it' : 'them'
   const newPasswordProblem = () =>
     password.length < 8 ? 'Passwords are at least 8 characters.' : password !== confirm ? "The two passwords don't match." : null
 
@@ -61,7 +72,7 @@ export function AccountScreen() {
         {step === 'existing' && (
           <Card title="That username already exists" sub={`If ${username} is your account, enter your password.`}>
             <Field label="Password"><input type="password" autocomplete="current-password" value={password} onInput={e => setPassword((e.target as HTMLInputElement).value)} /></Field>
-            <button class="filled wide" disabled={busy || !password} onClick={() => run(async () => { await login(username, password); done() })}>Sign in</button>
+            <button class="filled wide" disabled={busy || !password} onClick={() => run(async () => signedIn(await login(username, password)))}>Sign in</button>
             <button onClick={() => { setStep('reset'); setPassword('') }}>Forgot your password?</button>
             <button onClick={() => { setStep('name'); setPassword('') }}>Use a different username</button>
           </Card>
@@ -72,7 +83,7 @@ export function AccountScreen() {
             <Field label="Type the password again"><input type="password" autocomplete="new-password" value={confirm} onInput={e => setConfirm((e.target as HTMLInputElement).value)} /></Field>
             <div class="sub">At least 8 characters. Next you'll get a recovery code to keep, in case you forget it.</div>
             <button class="filled wide" disabled={busy} onClick={() => newPasswordProblem()
-              ? setError(newPasswordProblem()) : run(async () => setRecovery(await register(username, password)))}>Create account</button>
+              ? setError(newPasswordProblem()) : run(async () => signedIn(await register(username, password)))}>Create account</button>
             <button onClick={() => { setStep('name'); setPassword(''); setConfirm('') }}>Use a different username</button>
           </Card>
         )}
@@ -83,12 +94,19 @@ export function AccountScreen() {
             <Field label="Type the new password again"><input type="password" autocomplete="new-password" value={confirm} onInput={e => setConfirm((e.target as HTMLInputElement).value)} /></Field>
             <div class="sub">Your other phones are signed out, and you get a new recovery code (the old one stops working). No code? Ask the owner or an admin for a reset code: they'll check it's you.</div>
             <button class="filled wide" disabled={busy || !code} onClick={() => newPasswordProblem()
-              ? setError(newPasswordProblem()) : run(async () => setRecovery(await resetPassword(username, code, password)))}>Set new password</button>
+              ? setError(newPasswordProblem()) : run(async () => signedIn(await resetPassword(username, code, password)))}>Set new password</button>
           </Card>
         )}
         {error && <div class="card err">{error}</div>}
       </main>
       <RecoveryDialog code={recovery} onDone={() => { setRecovery(null); done() }} />
+      <Dialog open={!!pending} title="Rounds on this device" onClose={() => answer(null)}
+        actions={<><button onClick={() => answer(null)}>Cancel</button>
+          <button class="danger" onClick={() => answer(false)}>Remove {them}</button>
+          <button class="filled" onClick={() => answer(true)}>Add to {username}</button></>}>
+        {n === 1 ? 'There is 1 round' : `There are ${n} rounds`} on this device scored while nobody was signed in.
+        Add {them} to {username}'s account, or remove {them} from this device?
+      </Dialog>
     </>
   )
 }
@@ -102,6 +120,7 @@ export function ProfileScreen() {
   const [password, setPassword] = useState('')
   const [recovery, setRecovery] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [loss, setLoss] = useState<string | null>(null)
   const [deleted, setDeleted] = useState(false)
   if (!p) return null
   const update = (change: Partial<Profile>) => setP({ ...p, ...change })
@@ -123,7 +142,7 @@ export function ProfileScreen() {
         <Card title="Account" sub="Optional. Scoring works without it.">
           {account ? <>
             <div class="row between"><div><div class="sub">Signed in as</div><b style="font-size:20px">{account.username}</b></div>
-              <button class="outlined" onClick={() => setSigningOut(true)}>Sign out</button></div>
+              <button class="outlined" onClick={async () => { setLoss(signOutWarning(await signOutCheck())); setSigningOut(true) }}>Sign out</button></div>
             <div class="sub">Lost your recovery code, or made your account before there was one? Make a new one (the old one stops working).</div>
             <button class="outlined" onClick={() => setAsk('recovery')}>New recovery code</button>
             <button class="danger" onClick={() => setAsk('delete')}>Delete account</button>
@@ -148,8 +167,11 @@ export function ProfileScreen() {
         </Card>
       </main>
       <Dialog open={signingOut} title="Sign out?" onClose={() => setSigningOut(false)}
-        actions={<><button onClick={() => setSigningOut(false)}>Cancel</button><button onClick={async () => { setSigningOut(false); await signOut() }}>Sign out</button></>}>
-        Your rounds stay on this phone. Sign in again any time with your username and password.
+        actions={<><button onClick={() => setSigningOut(false)}>Cancel</button>
+          <button class={loss ? 'danger' : ''} onClick={async () => { setSigningOut(false); await signOut(); toast('Signed out.'); go('/') }}>{loss ? 'Sign out anyway' : 'Sign out'}</button></>}>
+        <p>Signing out removes your rounds, profile and friends from this device, ready for someone else. Your rounds come back
+          when you sign in again; your real name and date of birth don't (they're never sent anywhere).</p>
+        {loss && <div class="card err">{loss}</div>}
       </Dialog>
       <Dialog open={!!ask} title={ask === 'delete' ? 'Delete your account?' : 'New recovery code'} onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Cancel</button>

@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +54,9 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
     val profile by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
+    /** What signing out would lose (3.2.02), worked out when Sign out is tapped. */
+    var signOutLoss by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     var askPassword by remember { mutableStateOf(false) }
     val deleting by vm.deleting.collectAsStateWithLifecycle()
@@ -93,7 +98,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(a.username, style = MaterialTheme.typography.titleLarge)
                         }
-                        OutlinedButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
+                        OutlinedButton(onClick = { scope.launch { signOutLoss = vm.signOutWarning(); confirmSignOut = true } }) { Text("Sign out") }
                     }
                     // Password reset with no email (2.4): a recovery code to keep somewhere safe.
                     Text(
@@ -106,7 +111,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                         Text(if (recovery.busy) "Making a recovery code…" else "New recovery code")
                     }
                     recovery.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                    // Google Play: accounts can be deleted in the app (2.4.02); also at fieldarchery.fnurble.co.uk/delete-account.
+                    // Google Play: accounts can be deleted in the app (2.4.02); also at fieldarcheryscoring.fnurble.co.uk/delete-account.
                     TextButton(onClick = { confirmDelete = true }, enabled = !deleting.busy, modifier = Modifier.fillMaxWidth()) {
                         Text(if (deleting.busy) "Deleting…" else "Delete account", color = MaterialTheme.colorScheme.error)
                     }
@@ -225,8 +230,20 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
             title = { Text("Sign out?") },
-            text = { Text("Your rounds stay on this phone. Sign in again any time with your username and password.") },
-            confirmButton = { TextButton(onClick = { confirmSignOut = false; vm.signOut() }) { Text("Sign out") } },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Signing out removes your rounds, profile and friends from this phone, ready for someone else. Your " +
+                            "rounds come back when you sign in again; your real name and date of birth don't (they never leave the phone).",
+                    )
+                    signOutLoss?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmSignOut = false; vm.signOut(onDone = onBack) }) {
+                    Text(if (signOutLoss != null) "Sign out anyway" else "Sign out", color = if (signOutLoss != null) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified)
+                }
+            },
             dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },
         )
     }

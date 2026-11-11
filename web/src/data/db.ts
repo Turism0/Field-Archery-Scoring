@@ -60,6 +60,27 @@ export async function setKv(key: string, value: unknown) {
   changed()
 }
 
+// ---- signing out (3.2.02) ----
+
+/** Kept when the device is cleared: settings that belong to the device, not an account. */
+const DEVICE_KEYS = new Set(['homeLayout', 'handicapJson', 'handicapFetched'])
+
+/**
+ * Removes every round from this device and, unless [roundsOnly], everything else an account leaves here (profile,
+ * friends, live groups, sync state, the Stats filters). Home's layout and the public handicap model stay.
+ */
+export async function clearDevice(roundsOnly = false) {
+  const tx = (await db()).transaction(['rounds', 'kv'], 'readwrite')
+  await tx.objectStore('rounds').clear()
+  if (!roundsOnly) {
+    const kv = tx.objectStore('kv')
+    for (const k of await kv.getAllKeys()) if (!DEVICE_KEYS.has(String(k))) await kv.delete(k)
+  }
+  await tx.done
+  if (!roundsOnly) { try { localStorage.removeItem('statsFilter') } catch { /* nothing kept */ } }
+  changed()
+}
+
 /** Ask the browser to keep this site's data (Safari and Chrome may agree once the app is installed). */
 export async function askToPersist(): Promise<boolean> {
   try { return (await navigator.storage?.persist?.()) ?? false } catch { return false }

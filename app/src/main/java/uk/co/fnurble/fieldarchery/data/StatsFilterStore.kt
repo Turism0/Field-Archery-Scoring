@@ -18,6 +18,12 @@ class StatsFilterStore(context: Context) {
         prefs.edit().putString(KEY, text).apply()
     }
 
+    /** Signing out clears the phone (3.2.02). */
+    fun clear() {
+        _saved.value = null
+        prefs.edit().clear().apply()
+    }
+
     private companion object {
         const val KEY = "filter"
     }
