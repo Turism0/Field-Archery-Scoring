@@ -4,6 +4,10 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.11
+
+- **3.2.11 (app; API and web app version only): native debug symbols in the release bundle (Pete, Play Console warning).** `ndk { debugSymbolLevel = "FULL" }` on the release build, so the native code in the libraries (Google Play services) comes with whatever debug symbols they ship, for readable crash reports. Libraries that ship stripped code have none, so Play Console may still show the warning; it doesn't block releasing. The "no deobfuscation file" warning doesn't apply: code shrinking (R8) is off, so crash reports already show real names. App versionCode 73, versionName 3.2.11.
+
 ## Version 3.2.10
 
 - **3.2.10 (app; API and web app version only): the app's package is renamed `uk.co.fieldarcheryscoring` (Pete)** (was uk.co.fnurble.fieldarchery): `applicationId`, `namespace`, the source folders (`app/src/main/java/uk/co/fieldarcheryscoring/`, same for `src/test`), every `package` / `import`, the live group notification's Stop action, and the Room schema folder (`app/schemas/uk.co.fieldarcheryscoring.data.local.FieldArcheryDatabase/`, versions 4 to 6 copied over). The phone database file (`fieldarchery.db`) and the class names are unchanged.

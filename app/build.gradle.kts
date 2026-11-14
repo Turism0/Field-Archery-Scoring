@@ -12,13 +12,15 @@ android {
         applicationId = "uk.co.fieldarcheryscoring"
         minSdk = 26
         targetSdk = 36
-        versionCode = 72
-        versionName = "3.2.10"
+        versionCode = 73
+        versionName = "3.2.11"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 3.2.11: the libraries' native debug symbols go in the bundle, for readable crash reports in Play Console.
+            ndk { debugSymbolLevel = "FULL" }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
