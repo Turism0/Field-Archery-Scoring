@@ -1,0 +1,351 @@
+package uk.co.fieldarcheryscoring.data.sync
+
+import org.json.JSONArray
+import org.json.JSONObject
+import uk.co.fieldarcheryscoring.data.AccountStore
+import uk.co.fieldarcheryscoring.data.CachedFriend
+import uk.co.fieldarcheryscoring.data.LocationRepository
+import uk.co.fieldarcheryscoring.data.local.LocationState
+import uk.co.fieldarcheryscoring.data.local.AnimalEntity
+import uk.co.fieldarcheryscoring.data.local.AnimalState
+import uk.co.fieldarcheryscoring.data.local.RoundDao
+import uk.co.fieldarcheryscoring.data.local.RoundData
+import uk.co.fieldarcheryscoring.data.local.RoundEntity
+import uk.co.fieldarcheryscoring.data.local.SyncState
+import uk.co.fieldarcheryscoring.data.local.TargetEntity
+import uk.co.fieldarcheryscoring.data.remote.ApiException
+import uk.co.fieldarcheryscoring.data.remote.FieldArcheryApi
+import uk.co.fieldarcheryscoring.domain.AccountRole
+import uk.co.fieldarcheryscoring.domain.AgeGroup
+import uk.co.fieldarcheryscoring.domain.ArcherClass
+import uk.co.fieldarcheryscoring.domain.BowStyle
+import uk.co.fieldarcheryscoring.domain.DeviceDataRules
+import uk.co.fieldarcheryscoring.domain.Hit
+import uk.co.fieldarcheryscoring.domain.RoundStatus
+import uk.co.fieldarcheryscoring.domain.TargetType
+import java.time.Instant
+import java.time.LocalDate
+
+/**
+ * Two-way round sync for the signed-in archer:
+ *  0. refresh this account's role (for the Admin menu), look up shoot locations waiting for signal
+ *     and pick up renamed / merged locations;
+ *  1. upload: finished rounds and deletions waiting on this phone;
+ *  2. download: this archer's rounds changed on the server since the last download
+ *     (a new or reset phone gets everything; a second phone picks up the other's edits).
+ * Both directions use "newest edit wins", by the time the round was last changed on a phone.
+ */
+class RoundSyncer(
+    private val dao: RoundDao,
+    private val api: FieldArcheryApi,
+    private val accounts: AccountStore,
+    private val locations: LocationRepository,
+) {
+    enum class Outcome { DONE, NOT_SIGNED_IN, RETRY_LATER, SIGNED_OUT, FAILED }
+
+    /**
+     * What happened, for the home screen's pull-to-refresh message.
+     * [message] explains a problem; [skipped] counts downloaded rounds this app version couldn't read.
+     */
+    data class Report(val outcome: Outcome, val message: String? = null, val skipped: Int = 0)
+
+    suspend fun syncAll(): Report {
+        val account = accounts.account.value ?: return Report(Outcome.NOT_SIGNED_IN)
+        return try {
+            // Role first (one small call), so the Admin menu appears or goes on the next sync.
+            val me = api.me(account.token)
+            accounts.setRole(AccountRole.fromCode(me.optString("role")))
+            accounts.setDuplicateLocations(me.optInt("duplicateLocations"))
+            accounts.setRoundOffers(me.optInt("roundOffers"))
+            // Shoot locations before uploading, so finished rounds go up with theirs.
+            try {
+                locations.lookUpPending()
+                locations.refreshNames()
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401) throw e   // anything else: rounds still sync
+            }
+            upload(account.token)
+            uploadOffers(account.token)
+            val skipped = download(account.token)
+            // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
+            if (stillSignedIn(account.token)) sendMissing(account.token)
+            // Signed out while syncing (3.2.02): nothing more is kept for that account.
+            if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
+            // Remember friends for adding them to group rounds with no signal (not essential).
+            try {
+                cacheFriends(account.token)
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401) throw e
+            }
+            if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
+            accounts.setLastSync(Instant.now())
+            Report(Outcome.DONE, skipped = skipped)
+        } catch (e: ApiException) {
+            when {
+                // No signal, server down or busy: WorkManager tries again later.
+                e.isNetwork || e.status == 429 || e.status >= 500 || e.status < 0 -> Report(Outcome.RETRY_LATER, e.message)
+                // Token revoked or expired: sign out on this phone so Profile asks to sign in again.
+                e.status == 401 -> {
+                    accounts.clear()
+                    Report(Outcome.SIGNED_OUT, e.message)
+                }
+                // Anything else (e.g. the server is an older version without the download list).
+                else -> Report(Outcome.FAILED, "${e.message} (${e.status})")
+            }
+        }
+    }
+
+    private suspend fun upload(token: String) {
+        for (id in dao.pendingUploadIds()) {
+            val data = dao.loadRound(id) ?: continue
+            val editedAt = data.round.updatedAt.toEpochMilli()
+            try {
+                if (data.round.deleted) api.deleteRound(token, id) else api.uploadRound(token, id, data.toJson())
+                dao.markSync(id, editedAt, SyncState.SYNCED.name)
+            } catch (e: ApiException) {
+                // Refused (invalid, or another account's round): don't retry until it's edited again.
+                if (e.status in 400..499 && e.status != 401 && e.status != 429 && e.status != 426) {   // 426: sent again after updating
+                    dao.markSync(id, editedAt, SyncState.FAILED.name)
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    /**
+     * Rounds scored for friends in a group on this phone: finished ones go to the friend as a request (sent again if
+     * corrected), deleted ones are withdrawn. Once the friend has accepted, the server refuses changes (409): the
+     * round is theirs now, so it's marked sent.
+     */
+    private suspend fun uploadOffers(token: String) {
+        for (id in dao.pendingOfferIds()) {
+            val data = dao.loadRound(id) ?: continue
+            val editedAt = data.round.updatedAt.toEpochMilli()
+            val friend = data.round.groupArcherId
+            try {
+                when {
+                    data.round.deleted -> try {
+                        api.withdrawOffer(token, id)
+                    } catch (e: ApiException) {
+                        if (e.status != 404) throw e   // never sent, or already answered
+                    }
+                    friend == null -> {
+                        dao.markSync(id, editedAt, SyncState.FAILED.name)
+                        continue
+                    }
+                    else -> api.offerRound(token, id, friend, data.round.groupId, data.toJson())
+                }
+                dao.markSync(id, editedAt, SyncState.SYNCED.name)
+            } catch (e: ApiException) {
+                when {
+                    e.status == 409 -> dao.markSync(id, editedAt, SyncState.SYNCED.name)
+                    // No longer friends, or refused: don't retry until it's edited again.
+                    e.status in 400..499 && e.status != 401 && e.status != 429 && e.status != 426 -> dao.markSync(id, editedAt, SyncState.FAILED.name)
+                    else -> throw e
+                }
+            }
+        }
+    }
+
+    private suspend fun sendMissing(token: String) {
+        if (System.currentTimeMillis() - accounts.missingChecked < DAY_MS) return
+        val serverIds = try {
+            api.roundIds(token)
+        } catch (e: ApiException) {
+            if (e.status == 404) return   // a server older than 3.2.09
+            throw e
+        }
+        val missing = DeviceDataRules.missingOnServer(dao.backedUpIds(), serverIds)
+        if (missing.isNotEmpty()) {
+            dao.markPending(missing)
+            upload(token)
+        }
+        accounts.missingChecked = System.currentTimeMillis()
+    }
+
+    /** False once this sign-in has ended (signed out, or another account) mid-sync: its rounds mustn't land on a cleared phone. */
+    private fun stillSignedIn(token: String) = accounts.account.value?.token == token
+
+    private suspend fun cacheFriends(token: String) {
+        val list = api.friends(token).getJSONArray("friends")
+        if (!stillSignedIn(token)) return
+        accounts.setCachedFriends((0 until list.length()).map { list.getJSONObject(it) }
+            .map { CachedFriend(it.getString("archerId"), it.getString("username")) })
+    }
+
+    /** Returns how many downloaded rounds couldn't be read. */
+    private suspend fun download(token: String): Int {
+        var skipped = 0
+        val saved = accounts.pullCursor()
+        // Start a few minutes before the last cursor: a change saved on the server just as we
+        // last downloaded can't be missed, and re-reading a round we already have is harmless.
+        var since: String? = saved?.let { Instant.parse(it).minusSeconds(OVERLAP_SECONDS).toString() }
+        var afterId: String? = null
+        var newest: Instant? = saved?.let(Instant::parse)
+
+        do {
+            val page = api.changedRounds(token, since, afterId)
+            val rounds = page.getJSONArray("rounds")
+            for (i in 0 until rounds.length()) {
+                if (!stillSignedIn(token)) return skipped
+                val json = rounds.getJSONObject(i)
+                // Skip (and count) a round this version of the app can't read.
+                if (runCatching { applyRemote(json) }.isFailure) skipped++
+                since = json.getString("serverUpdatedUtc")
+                afterId = json.getString("roundId")
+                val changed = Instant.parse(since)
+                if (newest == null || changed.isAfter(newest)) newest = changed
+            }
+        } while (page.optBoolean("more"))
+
+        if (stillSignedIn(token)) newest?.let { accounts.setPullCursor(it.toString()) }
+        return skipped
+    }
+
+    /** Applies one downloaded round, unless this phone has the same or a newer edit of it. */
+    private suspend fun applyRemote(json: JSONObject) {
+        val id = json.getString("roundId")
+        val remoteEditedAt = Instant.parse(json.getString("clientUpdatedUtc"))
+        val local = dao.getRound(id)
+        // 3.2.09: the same round put away for another account here (e.g. one scored for a friend on this phone): left alone.
+        if (local?.hiddenOwner != null) return
+        if (local != null && !local.updatedAt.isBefore(remoteEditedAt)) return
+
+        if (json.getBoolean("isDeleted")) {
+            // Deleted on another phone: hide it here too (nothing to do if we never had it).
+            if (local != null) {
+                dao.upsertRound(local.copy(deleted = true, updatedAt = remoteEditedAt, syncState = SyncState.SYNCED))
+            }
+            return
+        }
+        val data = json.toRoundData()
+        // Keep this phone's own GPS position (never on the server), and a lookup still waiting here.
+        val withFix = if (local != null && local.fixLat != null) {
+            data.round.copy(
+                fixLat = local.fixLat,
+                fixLon = local.fixLon,
+                locationState = data.round.locationState ?: local.locationState,
+            )
+        } else data.round
+        // And its place in a group scored on this phone (the server doesn't send it back).
+        val merged = if (local?.groupId != null) {
+            withFix.copy(
+                groupId = local.groupId,
+                groupRole = local.groupRole,
+                groupName = local.groupName,
+                groupArcherId = local.groupArcherId,
+                groupOrder = local.groupOrder,
+            )
+        } else withFix
+        dao.replaceRound(merged, data.targets, data.animals)
+    }
+
+    private companion object {
+        const val OVERLAP_SECONDS = 300L
+        const val DAY_MS = 24 * 60 * 60 * 1000L
+    }
+}
+
+/** The round in the API's JSON shape (see server/README.md). */
+internal fun RoundData.toJson(): JSONObject {
+    val animalsByTarget = animals.groupBy { it.targetNo }
+    val targetArray = JSONArray()
+    targets.sortedBy { it.targetNo }.forEach { t ->
+        val animalArray = JSONArray()
+        animalsByTarget[t.targetNo].orEmpty().sortedBy { it.animalIndex }.forEach { a ->
+            animalArray.put(
+                JSONObject()
+                    .put("index", a.animalIndex)
+                    .put("state", a.state.name)
+                    .put("arrowNo", a.arrowNo ?: JSONObject.NULL)
+                    .put("hit", a.hit?.name ?: JSONObject.NULL)
+                    .put("points", a.points),
+            )
+        }
+        targetArray.put(
+            JSONObject()
+                .put("targetNo", t.targetNo)
+                .put("type", t.type.name)
+                .put("overridePoints", t.overridePoints ?: JSONObject.NULL)
+                .put("points", t.points)
+                .put("animals", animalArray)
+                .apply { if (t.type == TargetType.WOODSMAN) put("arrows", t.arrows.orEmpty()) },
+        )
+    }
+    return JSONObject()
+        .put("shootDate", round.shootDate.toString())
+        .put("targetCount", round.targetCount)
+        .put("archerClass", if (round.archerClass == ArcherClass.LADIES) "L" else "G")
+        .put("ageGroup", round.ageGroup.name)
+        .put("bowStyle", round.bowStyle.code)
+        .put("status", round.status.name)
+        .put("totalPoints", round.totalPoints)
+        .put("clientCreatedUtc", round.createdAt.toString())
+        .put("clientUpdatedUtc", round.updatedAt.toString())
+        .put("locationId", round.locationId ?: JSONObject.NULL)
+        .put("roundType", round.roundType ?: "BIG_GAME")
+        .put("groupId", round.groupId ?: JSONObject.NULL)
+        .put("startTarget", round.startTarget ?: JSONObject.NULL)
+        .put("targets", targetArray)
+}
+
+/** A round downloaded from the server, as phone database rows (marked as already synced). */
+internal fun JSONObject.toRoundData(): RoundData {
+    val id = getString("roundId")
+    val editedAt = Instant.parse(getString("clientUpdatedUtc"))
+    val round = RoundEntity(
+        id = id,
+        shootDate = LocalDate.parse(getString("shootDate")),
+        targetCount = getInt("targetCount"),
+        archerClass = if (getString("archerClass") == "L") ArcherClass.LADIES else ArcherClass.GENTS,
+        ageGroup = AgeGroup.valueOf(getString("ageGroup")),
+        bowStyle = requireNotNull(BowStyle.fromCode(getString("bowStyle"))) { "Unknown bow style" },
+        status = RoundStatus.valueOf(getString("status")),
+        totalPoints = getInt("totalPoints"),
+        createdAt = Instant.parse(getString("clientCreatedUtc")),
+        updatedAt = editedAt,
+        syncState = SyncState.SYNCED,
+        deleted = false,
+        locationId = optStringOrNull("locationId"),
+        locationName = optStringOrNull("locationName"),
+        locationState = if (optStringOrNull("locationId") != null) LocationState.SET else null,
+        // Big Game is stored as null on the phone (as before round types).
+        roundType = optStringOrNull("roundType")?.takeIf { it != "BIG_GAME" },
+        startTarget = if (has("startTarget") && !isNull("startTarget")) getInt("startTarget") else null,
+    )
+    val targets = mutableListOf<TargetEntity>()
+    val animals = mutableListOf<AnimalEntity>()
+    val targetArray = getJSONArray("targets")
+    for (i in 0 until targetArray.length()) {
+        val t = targetArray.getJSONObject(i)
+        val targetNo = t.getInt("targetNo")
+        targets += TargetEntity(
+            roundId = id,
+            targetNo = targetNo,
+            type = TargetType.valueOf(t.getString("type")),
+            overridePoints = if (t.isNull("overridePoints")) null else t.getInt("overridePoints"),
+            points = t.getInt("points"),
+            updatedAt = editedAt,
+            syncState = SyncState.SYNCED,
+            arrows = t.optStringOrNull("arrows"),
+        )
+        val animalArray = t.getJSONArray("animals")
+        for (j in 0 until animalArray.length()) {
+            val a = animalArray.getJSONObject(j)
+            animals += AnimalEntity(
+                roundId = id,
+                targetNo = targetNo,
+                animalIndex = a.getInt("index"),
+                state = AnimalState.valueOf(a.getString("state")),
+                arrowNo = if (a.isNull("arrowNo")) null else a.getInt("arrowNo"),
+                hit = if (a.isNull("hit")) null else Hit.valueOf(a.getString("hit")),
+                points = a.getInt("points"),
+            )
+        }
+    }
+    return RoundData(round, targets, animals)
+}
+
+/** Null for a missing or JSON-null field (older servers don't send newer fields). */
+private fun JSONObject.optStringOrNull(name: String): String? = if (isNull(name)) null else optString(name)
