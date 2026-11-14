@@ -151,7 +151,7 @@ class RoundRepository(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     fun round(id: String): Flow<Round?> = dao.observeRound(id).mapLatest {
-        dao.loadRound(id)?.takeUnless { it.round.deleted }?.let { d -> d.round.toDomain(d.targets, d.animals) }
+        dao.loadRound(id)?.takeUnless { it.round.deleted || it.round.hiddenOwner != null }?.let { d -> d.round.toDomain(d.targets, d.animals) }
     }
 
     /** Every finished round of your own, in full (for history filters, personal bests, trends and seasons). */
@@ -165,7 +165,7 @@ class RoundRepository(
 
     /** The round as it is now (not a flow), or null if it's gone. */
     suspend fun get(id: String): Round? =
-        dao.loadRound(id)?.takeUnless { it.round.deleted }?.let { d -> d.round.toDomain(d.targets, d.animals) }
+        dao.loadRound(id)?.takeUnless { it.round.deleted || it.round.hiddenOwner != null }?.let { d -> d.round.toDomain(d.targets, d.animals) }
 
     /** Creates a round with every target set up as a Standard target. Returns the new id. */
     suspend fun createRound(

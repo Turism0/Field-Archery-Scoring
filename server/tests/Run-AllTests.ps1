@@ -19,7 +19,7 @@ param(
 )
 
 $plain = 'Test-Accounts', 'Test-Rounds', 'Test-Friends', 'Test-Woodsman', 'Test-LocationPage', 'Test-CourseAverages',
-         'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget', 'Test-NameOnlyLocations', 'Test-FunShots'
+         'Test-Groups', 'Test-Offers', 'Test-Delete', 'Test-StartTarget', 'Test-NameOnlyLocations', 'Test-FunShots', 'Test-RoundIds'
 $owner = 'Test-Roles', 'Test-Locations', 'Test-LocationReview', 'Test-Handicap', 'Test-Reset'
 
 # Asked once for the whole run (3.1.01, Pete): kept in memory only, never written to disk.

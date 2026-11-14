@@ -98,14 +98,24 @@ class AccountStore(context: Context) {
         prefs.edit().putString(K_PULL_CURSOR, serverUpdatedUtc).apply()
     }
 
+    /** 3.2.09: told which account's sign-in ended (signing out, or the server ending it), after it's cleared. */
+    var onCleared: ((archerId: String) -> Unit)? = null
+
     fun clear() {
+        val ended = _account.value?.archerId
         prefs.edit().clear().apply()
         _account.value = null
         _lastSync.value = null
         _role.value = AccountRole.USER
         _duplicateLocations.value = 0
         _roundOffers.value = 0
+        ended?.let { onCleared?.invoke(it) }
     }
+
+    /** 3.2.09: when this sign-in last checked the server has all its finished rounds (cleared with the sign-in). */
+    var missingChecked: Long
+        get() = prefs.getLong(K_MISSING_CHECKED, 0L)
+        set(value) { prefs.edit().putLong(K_MISSING_CHECKED, value).apply() }
 
     private fun load(): Account? = try {
         val token = prefs.getString(K_TOKEN, null)?.let(::decrypt)
@@ -161,6 +171,7 @@ class AccountStore(context: Context) {
         const val K_TOKEN = "token"
         const val K_EXPIRES = "expires_utc"
         const val K_PULL_CURSOR = "pull_cursor"
+        const val K_MISSING_CHECKED = "missing_checked"
         const val K_LAST_SYNC = "last_sync"
         const val K_ROLE = "role"
         const val K_FRIENDS = "friends_cache"

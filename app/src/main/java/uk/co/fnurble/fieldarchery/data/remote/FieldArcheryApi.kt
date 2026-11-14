@@ -106,6 +106,12 @@ class FieldArcheryApi(
      * One page of this archer's rounds changed after the cursor (oldest change first, deletions included):
      * { rounds: [ { roundId, ..., isDeleted, serverUpdatedUtc, targets: [...] } ], more: true|false }.
      */
+    /** 3.2.09: the ids of every round the server has for this account (deleted ones too). */
+    suspend fun roundIds(token: String): Set<String> {
+        val ids = request("GET", "/api/rounds/ids", body = null, token = token).getJSONArray("ids")
+        return (0 until ids.length()).map { ids.getString(it) }.toSet()
+    }
+
     suspend fun changedRounds(token: String, since: String?, afterId: String?): JSONObject {
         val query = listOfNotNull(
             since?.let { "since=" + URLEncoder.encode(it, "UTF-8") },

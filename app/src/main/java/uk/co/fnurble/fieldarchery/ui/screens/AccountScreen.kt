@@ -67,12 +67,7 @@ fun AccountScreen(vm: AccountViewModel, onBack: () -> Unit) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { vm.answerRounds(null) },
             title = { Text("Rounds on this phone") },
-            text = {
-                Text(
-                    "${if (n == 1) "There is 1 round" else "There are $n rounds"} on this phone scored while nobody was signed in. " +
-                        "Add $them to ${s.username}'s account, or remove $them from this phone?",
-                )
-            },
+            text = { Text(s.askText.orEmpty()) },
             confirmButton = { TextButton(onClick = { vm.answerRounds(true) }) { Text("Add to ${s.username}") } },
             dismissButton = {
                 androidx.compose.foundation.layout.Row {

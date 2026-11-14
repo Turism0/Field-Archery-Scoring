@@ -8,6 +8,7 @@ import {
   newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
 } from '../domain/round'
 import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
+import { missingOnServer } from '../domain/deviceData'
 
 // ---- on this device ----
 
@@ -154,6 +155,8 @@ async function doSync(): Promise<SyncReport> {
     try { await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
     await upload(token)
     await download(token)
+    // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
+    if (await stillSignedIn(token)) await sendMissing(token)
     // Signed out while syncing (3.2.02): nothing more is kept for that account.
     if (!(await stillSignedIn(token))) return { ok: false, message: 'Signed out.' }
     try {
@@ -204,6 +207,25 @@ async function markSynced(id: string, editedAt: string, failed: boolean) {
   if (r && r.updatedUtc === editedAt) await putRound({ ...r, pending: false, failed }, false)
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+async function sendMissing(token: string) {
+  const last = await getKv<string>('missingChecked')
+  if (last && Date.now() - new Date(last).getTime() < DAY_MS) return
+  let ids: string[]
+  try { ids = (await request('GET', '/api/rounds/ids', undefined, token)).ids } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return   // a server older than 3.2.09
+    throw e
+  }
+  const missing = missingOnServer(await allRounds(), new Set(ids))
+  if (missing.length) {
+    const byId = new Set(missing)
+    await putRounds((await allRounds()).filter(r => byId.has(r.id)).map(r => ({ ...r, pending: true, failed: false })))
+    await upload(token)
+  }
+  await setKv('missingChecked', new Date().toISOString())
+}
+
 /** False once this sign-in has ended (signed out, or another account) mid-sync: its rounds mustn't land on a cleared device. */
 async function stillSignedIn(token: string) { return (await getAccount())?.token === token }
 
@@ -231,6 +253,8 @@ async function download(token: string) {
 /** One downloaded round, unless this device has the same or a newer edit. */
 async function applyRemote(j: any) {
   const local = await getRoundEvenDeleted(j.roundId)
+  // 3.2.09: the same round put away for another account here (e.g. one scored for a friend on this device): left alone.
+  if (local?.hiddenOwner) return
   if (local && new Date(local.updatedUtc).getTime() >= new Date(j.clientUpdatedUtc).getTime()) return
   if (j.isDeleted) {
     if (local) await putRound({ ...local, deleted: true, updatedUtc: j.clientUpdatedUtc, pending: false }, false)

@@ -1133,9 +1133,9 @@ class ProfileViewModel(
     /** What signing out would lose, for the dialog (null: nothing). */
     suspend fun signOutWarning(): String? = accounts.signOutWarning()
 
-    /** Signs out and clears the phone (3.2.02), then [onDone]. */
-    fun signOut(onDone: () -> Unit) = viewModelScope.launch {
-        accounts.signOut()
+    /** Signs out (3.2.09: rounds put away, or with [remove] deleted from the phone), then [onDone]. */
+    fun signOut(remove: Boolean, onDone: () -> Unit) = viewModelScope.launch {
+        accounts.signOut(remove)
         _state.value = Profile()
         onDone()
     }
@@ -1211,8 +1211,9 @@ data class AccountUiState(
     val signedIn: Boolean = false,
     /** A recovery code to show once (after creating the account or a reset); the screen closes once it's been seen. */
     val recoveryCode: String? = null,
-    /** 3.2.02: rounds on this phone scored while nobody was signed in: add them to this account or remove them? */
+    /** 3.2.02: rounds on this phone that aren't on the account: how many, and the question to ask (3.2.09). */
     val askRounds: Int? = null,
+    val askText: String? = null,
 )
 
 /**
@@ -1254,7 +1255,7 @@ class AccountViewModel(
         val ask = step.pending
         if (ask != null) {
             pending = step
-            _state.update { it.copy(askRounds = ask.roundCount) }
+            _state.update { it.copy(askRounds = ask.roundCount, askText = ask.question) }
         } else {
             _state.update { it.copy(signedIn = true, password = "", confirmPassword = "", code = "", recoveryCode = step.recoveryCode) }
         }
@@ -1265,7 +1266,7 @@ class AccountViewModel(
         val step = pending ?: return
         val ask = step.pending ?: return
         pending = null
-        _state.update { it.copy(askRounds = null) }
+        _state.update { it.copy(askRounds = null, askText = null) }
         if (keep == null) {
             viewModelScope.launch { accounts.cancelSignIn(ask) }
             return

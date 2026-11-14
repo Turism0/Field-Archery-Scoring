@@ -184,8 +184,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
     <div class="scoring">
       <Bar title={inGroup ? `Target ${n} · ${name}` : `Target ${n} of ${round.targetCount}`}
         sub={(inGroup ? `of ${round.targetCount} · ` : '') + `${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onBack={() => go('/')}
-        start={editing ? <button style="padding:8px 12px" onClick={cancelEdits}>Cancel</button> : undefined}>
-        {editing && <button style="padding:8px 12px;font-weight:600" onClick={saveEdits}>Save</button>}
+        start={editing ? <button style="padding:8px 12px;font-weight:600" onClick={saveEdits}>Save</button> : undefined}>
+        {editing && <button style="padding:8px 12px" onClick={cancelEdits}>Cancel</button>}
         <button class="icon" aria-label="Scorecard" onClick={() => setAsk('card')}>☰</button>
         <Menu items={[
           finished ? { text: `Reopen ${what}`, onClick: () => setStatus(round, 'IN_PROGRESS') } : { text: `Finish ${what}`, onClick: () => setAsk('finish') },

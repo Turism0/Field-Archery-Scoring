@@ -19,6 +19,7 @@ import uk.co.fnurble.fieldarchery.domain.AccountRole
 import uk.co.fnurble.fieldarchery.domain.AgeGroup
 import uk.co.fnurble.fieldarchery.domain.ArcherClass
 import uk.co.fnurble.fieldarchery.domain.BowStyle
+import uk.co.fnurble.fieldarchery.domain.DeviceDataRules
 import uk.co.fnurble.fieldarchery.domain.Hit
 import uk.co.fnurble.fieldarchery.domain.RoundStatus
 import uk.co.fnurble.fieldarchery.domain.TargetType
@@ -66,6 +67,8 @@ class RoundSyncer(
             upload(account.token)
             uploadOffers(account.token)
             val skipped = download(account.token)
+            // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
+            if (stillSignedIn(account.token)) sendMissing(account.token)
             // Signed out while syncing (3.2.02): nothing more is kept for that account.
             if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
             // Remember friends for adding them to group rounds with no signal (not essential).
@@ -145,6 +148,22 @@ class RoundSyncer(
         }
     }
 
+    private suspend fun sendMissing(token: String) {
+        if (System.currentTimeMillis() - accounts.missingChecked < DAY_MS) return
+        val serverIds = try {
+            api.roundIds(token)
+        } catch (e: ApiException) {
+            if (e.status == 404) return   // a server older than 3.2.09
+            throw e
+        }
+        val missing = DeviceDataRules.missingOnServer(dao.backedUpIds(), serverIds)
+        if (missing.isNotEmpty()) {
+            dao.markPending(missing)
+            upload(token)
+        }
+        accounts.missingChecked = System.currentTimeMillis()
+    }
+
     /** False once this sign-in has ended (signed out, or another account) mid-sync: its rounds mustn't land on a cleared phone. */
     private fun stillSignedIn(token: String) = accounts.account.value?.token == token
 
@@ -189,6 +208,8 @@ class RoundSyncer(
         val id = json.getString("roundId")
         val remoteEditedAt = Instant.parse(json.getString("clientUpdatedUtc"))
         val local = dao.getRound(id)
+        // 3.2.09: the same round put away for another account here (e.g. one scored for a friend on this phone): left alone.
+        if (local?.hiddenOwner != null) return
         if (local != null && !local.updatedAt.isBefore(remoteEditedAt)) return
 
         if (json.getBoolean("isDeleted")) {
@@ -222,6 +243,7 @@ class RoundSyncer(
 
     private companion object {
         const val OVERLAP_SECONDS = 300L
+        const val DAY_MS = 24 * 60 * 60 * 1000L
     }
 }
 

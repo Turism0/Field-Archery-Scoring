@@ -18,6 +18,14 @@ class StatsFilterStore(context: Context) {
         prefs.edit().putString(KEY, text).apply()
     }
 
+    /** 3.2.09: the saved choice as text, to put away with an account's things at sign-out ([restore] brings it back). */
+    fun current(): String? = prefs.getString(KEY, null)
+
+    fun restore(text: String) {
+        _saved.value = StatsFilter.decode(text)
+        prefs.edit().putString(KEY, text).apply()
+    }
+
     /** Signing out clears the phone (3.2.02). */
     fun clear() {
         _saved.value = null

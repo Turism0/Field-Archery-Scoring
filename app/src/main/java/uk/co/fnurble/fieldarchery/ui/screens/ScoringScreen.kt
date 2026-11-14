@@ -213,13 +213,13 @@ fun ScoringScreen(
                     },
                     navigationIcon = {
                         if (editing) {
-                            TextButton(onClick = { vm.cancelEdits(onBack) }) { Text("Cancel") }
+                            TextButton(onClick = { vm.saveEdits(onBack) }) { Text("Save", fontWeight = FontWeight.SemiBold) }
                         } else {
                             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                         }
                     },
                     actions = {
-                        if (editing) TextButton(onClick = { vm.saveEdits(onBack) }) { Text("Save", fontWeight = FontWeight.SemiBold) }
+                        if (editing) TextButton(onClick = { vm.cancelEdits(onBack) }) { Text("Cancel") }
                         IconButton(onClick = { showCard = true }) {
                             Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Scorecard")
                         }

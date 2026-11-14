@@ -52,7 +52,7 @@ abstract class RoundDao {
             "(SELECT COUNT(*) FROM animal a WHERE a.round_id = r.id) AS animal_count, " +
             "(SELECT COUNT(*) FROM target t WHERE t.round_id = r.id AND t.type = 'PREDATOR_PREY') AS predator_prey_count, " +
             "(SELECT COUNT(*) FROM target t WHERE t.round_id = r.id AND t.type = 'FAN') AS fan_count " +
-            "FROM round r WHERE r.deleted = 0 AND (r.group_role IS NULL OR r.group_role = 'SCORER') " +
+            "FROM round r WHERE r.deleted = 0 AND r.hidden_owner IS NULL AND (r.group_role IS NULL OR r.group_role = 'SCORER') " +
             "ORDER BY r.shoot_date DESC, r.created_at DESC",
     )
     abstract fun observeRounds(): Flow<List<RoundWithGroupSize>>
@@ -84,10 +84,10 @@ abstract class RoundDao {
 
     // ---- Groups scored on this phone (database v4) ----
 
-    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
+    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 AND hidden_owner IS NULL ORDER BY group_order")
     abstract fun observeGroup(groupId: String): Flow<List<RoundEntity>>
 
-    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 ORDER BY group_order")
+    @Query("SELECT * FROM round WHERE group_id = :groupId AND deleted = 0 AND hidden_owner IS NULL ORDER BY group_order")
     abstract suspend fun getGroup(groupId: String): List<RoundEntity>
 
     /** Live groups: a member's role or place in the order changed (e.g. a friend joined on their own phone). */
@@ -96,7 +96,7 @@ abstract class RoundDao {
 
     /** Friends' rounds to send as requests (finished) or withdraw (deleted). */
     @Query(
-        "SELECT id FROM round WHERE group_role = 'FRIEND' AND sync_state = 'PENDING' " +
+        "SELECT id FROM round WHERE group_role = 'FRIEND' AND sync_state = 'PENDING' AND hidden_owner IS NULL " +
             "AND (deleted = 1 OR status = 'COMPLETED') ORDER BY updated_at",
     )
     abstract suspend fun pendingOfferIds(): List<String>
@@ -130,35 +130,53 @@ abstract class RoundDao {
         return RoundData(round, getTargets(id), getAnimals(id))
     }
 
-    // ---- Whose rounds are on this phone (3.2.02): signing out clears it, signing in may ask ----
+    // ---- Whose rounds are on this phone (3.2.02; 3.2.09: put away, not wiped) ----
 
-    /** Your own rounds here (not friends', guests' or copies of other phones' cards), in progress or finished. */
-    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND (group_role IS NULL OR group_role = 'SCORER')")
+    /** Your own rounds showing (not friends', guests' or copies of other phones' cards), in progress or finished. */
+    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND hidden_owner IS NULL AND (group_role IS NULL OR group_role = 'SCORER')")
     abstract suspend fun ownRoundCount(): Int
 
     /** Your own rounds still being scored (they're only sent to the server once finished). */
-    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND status = 'IN_PROGRESS' AND (group_role IS NULL OR group_role = 'SCORER')")
+    @Query("SELECT COUNT(*) FROM round WHERE deleted = 0 AND hidden_owner IS NULL AND status = 'IN_PROGRESS' AND (group_role IS NULL OR group_role = 'SCORER')")
     abstract suspend fun inProgressCount(): Int
 
-    /** Rounds kept when signing in go up to that account, even ones backed up before to an account since deleted. */
-    @Query("UPDATE round SET sync_state = 'PENDING' WHERE deleted = 0 AND (group_role IS NULL OR group_role = 'SCORER')")
+    /** Every showing round of your own goes up again (rounds added to an account at sign-in). */
+    @Query("UPDATE round SET sync_state = 'PENDING' WHERE deleted = 0 AND hidden_owner IS NULL AND (group_role IS NULL OR group_role = 'SCORER')")
     abstract suspend fun markOwnPending()
 
-    @Query("DELETE FROM animal") abstract suspend fun deleteEveryAnimal()
-    @Query("DELETE FROM target") abstract suspend fun deleteEveryTarget()
-    @Query("DELETE FROM round") abstract suspend fun deleteEveryRound()
+    /** Signing out: every showing round is put away for [owner]. */
+    @Query("UPDATE round SET hidden_owner = :owner WHERE hidden_owner IS NULL")
+    abstract suspend fun hideShowing(owner: String)
 
-    /** Every round on the phone, with its targets and animals. */
-    @Transaction
-    open suspend fun clearRounds() {
-        deleteEveryAnimal()
-        deleteEveryTarget()
-        deleteEveryRound()
-    }
+    /** Signing in: [owner]'s rounds come back. */
+    @Query("UPDATE round SET hidden_owner = NULL WHERE hidden_owner = :owner")
+    abstract suspend fun showHidden(owner: String)
+
+    /** The showing rounds go (their targets and animals with them). */
+    @Query("DELETE FROM round WHERE hidden_owner IS NULL")
+    abstract suspend fun deleteShowing()
+
+    /** [owners]' put-away rounds go. */
+    @Query("DELETE FROM round WHERE hidden_owner IN (:owners)")
+    abstract suspend fun deleteHidden(owners: List<String>)
+
+    /** How many of their own rounds each put-away account has here. */
+    @Query(
+        "SELECT hidden_owner AS owner, COUNT(*) AS rounds FROM round WHERE hidden_owner IS NOT NULL AND deleted = 0 " +
+            "AND (group_role IS NULL OR group_role = 'SCORER') GROUP BY hidden_owner",
+    )
+    abstract suspend fun hiddenCounts(): List<OwnerCount>
+
+    /** Your finished rounds marked as backed up (checked against the server's list once a day). */
+    @Query("SELECT id FROM round WHERE deleted = 0 AND hidden_owner IS NULL AND status = 'COMPLETED' AND sync_state = 'SYNCED' AND (group_role IS NULL OR group_role = 'SCORER')")
+    abstract suspend fun backedUpIds(): List<String>
+
+    @Query("UPDATE round SET sync_state = 'PENDING' WHERE id IN (:ids)")
+    abstract suspend fun markPending(ids: List<String>)
 
     /** Rounds waiting to go to the server: finished rounds and deletions (in-progress rounds stay on the phone). */
     @Query(
-        "SELECT id FROM round WHERE sync_state = 'PENDING' AND (deleted = 1 OR status = 'COMPLETED') " +
+        "SELECT id FROM round WHERE sync_state = 'PENDING' AND hidden_owner IS NULL AND (deleted = 1 OR status = 'COMPLETED') " +
             "AND (group_role IS NULL OR group_role = 'SCORER') ORDER BY updated_at",
     )
     abstract suspend fun pendingUploadIds(): List<String>
@@ -240,7 +258,7 @@ abstract class RoundDao {
     abstract suspend fun setFix(id: String, lat: Double, lon: Double)
 
     /** Rounds with a position still to look up. */
-    @Query("SELECT * FROM round WHERE location_state = 'PENDING_LOOKUP' AND deleted = 0 AND fix_lat IS NOT NULL")
+    @Query("SELECT * FROM round WHERE location_state = 'PENDING_LOOKUP' AND deleted = 0 AND hidden_owner IS NULL AND fix_lat IS NOT NULL")
     abstract suspend fun pendingLocationLookups(): List<RoundEntity>
 
     @Query("UPDATE round SET location_state = 'NEEDS_NAME' WHERE id = :id AND location_state = 'PENDING_LOOKUP'")
@@ -282,6 +300,9 @@ data class RoundWithGroupSize(
     @ColumnInfo(name = "fan_count") val fanCount: Int = 0,
 )
 
+/** An account with rounds put away on this phone, and how many of its own. */
+data class OwnerCount(val owner: String, val rounds: Int)
+
 data class RoundData(
     val round: RoundEntity,
     val targets: List<TargetEntity>,
@@ -290,7 +311,7 @@ data class RoundData(
 
 @Database(
     entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -301,8 +322,15 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): FieldArcheryDatabase =
             Room.databaseBuilder(context, FieldArcheryDatabase::class.java, "fieldarchery.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
+
+        /** v6: rounds put away for a signed-out account (app 3.2.09). Existing rounds are all showing. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN hidden_owner TEXT")
+            }
+        }
 
         /** v5: the target a round started on (app 2.7). Existing rounds have none. */
         val MIGRATION_4_5 = object : Migration(4, 5) {
@@ -345,5 +373,5 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
 }
 
 /** Your own finished rounds (not friends' or guests' in a group, nor copies of other phones' cards). */
-private const val OWN_FINISHED = "deleted = 0 AND status = 'COMPLETED' AND (group_role IS NULL OR group_role = 'SCORER')"
-private const val OWN_FINISHED_R = "r.deleted = 0 AND r.status = 'COMPLETED' AND (r.group_role IS NULL OR r.group_role = 'SCORER')"
+private const val OWN_FINISHED = "deleted = 0 AND hidden_owner IS NULL AND status = 'COMPLETED' AND (group_role IS NULL OR group_role = 'SCORER')"
+private const val OWN_FINISHED_R = "r.deleted = 0 AND r.hidden_owner IS NULL AND r.status = 'COMPLETED' AND (r.group_role IS NULL OR r.group_role = 'SCORER')"

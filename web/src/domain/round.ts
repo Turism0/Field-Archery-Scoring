@@ -58,6 +58,8 @@ export interface Round {
   /** Waiting to go to the server (or as a request to a friend). */
   pending: boolean
   failed?: boolean
+  /** 3.2.09: put away for this account (signed out); hidden until it signs in here again. Never sent to the server. */
+  hiddenOwner?: string | null
   deleted?: boolean
   locationId?: string | null
   locationName?: string | null

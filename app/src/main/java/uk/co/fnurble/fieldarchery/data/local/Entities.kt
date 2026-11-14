@@ -95,6 +95,11 @@ data class RoundEntity(
     @ColumnInfo(name = "group_order") val groupOrder: Int? = null,
     /** The target the round started on (database v5, app 2.7): a note for the scorecard; targets keep their numbers. */
     @ColumnInfo(name = "start_target") val startTarget: Int? = null,
+    /**
+     * Database v6 (3.2.09): put away for this account (signed out), hidden until it signs in here again. Null = showing.
+     * PHONE ONLY — never sent with the round.
+     */
+    @ColumnInfo(name = "hidden_owner") val hiddenOwner: String? = null,
 )
 
 @Entity(

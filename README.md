@@ -4,6 +4,19 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.09
+
+- **3.2.09 (app, web app and API): signing out puts your rounds away instead of wiping them, and phones can rebuild the server's rounds (Pete).**
+  - **Signing out** hides your rounds, profile (with real name and date of birth) and Stats choices on the device; nobody else signing in there sees them, and they're all back, with no signal needed, when you sign in there again. The sign-out box has **Also remove my rounds from this device** (with the warning about anything not yet backed up) to delete them instead. A sign-in the server ends (password reset elsewhere, expired) puts them away the same way. Live groups on the device are still ended at sign-out.
+  - **Signing in** asks about rounds that aren't on the account: ones scored while nobody was signed in (as before), and now ones from an **earlier account with the same username** (a different account id: it was deleted, or the server lost it), e.g. "There are 95 rounds on this phone from an earlier account called Turismo (the server no longer has it)". **Add to <username>** brings them (and that account's profile) in and sends them all to the server again; **Remove** deletes them; Cancel doesn't sign in. Before 3.2.09 a new account id on the phone meant the rounds there were removed without asking, which after a server loss would have deleted the only copies.
+  - **Rounds the server is missing go up again.** Once a day (and after each sign-in) the apps fetch the ids of the account's rounds on the server (new `GET /api/rounds/ids`) and re-send any finished round marked as backed up that isn't there (the database lost data, or was restored from an older backup). Older servers without the call are skipped quietly. Accounts, friends, shoot locations and the handicap data can't be rebuilt from phones: back up the database.
+  - Android database v6 (`hidden_owner` on rounds; existing rounds all showing). New test `server/tests/Test-RoundIds.ps1` (in Run-AllTests; also checks the 3.2.06 security headers and the 3.2.05 version header).
+  - Tests: Kotlin 88, web 82; the web app's sign-out / sign-in / server-loss / missing-round flows checked end to end against the mock server. App versionCode 71, versionName 3.2.09. Server: publish the API, run `Test-RoundIds.ps1`.
+
+## Version 3.2.08
+
+- **3.2.08 (app and web app; API version only): Save and Cancel swapped (Pete).** Editing a finished round: **Save** is now on the left of the top bar and **Cancel** on the right. App versionCode 70, versionName 3.2.08.
+
 ## Version 3.2.07
 
 - **3.2.07 (app and web app; API version only): Save and Cancel when editing a finished round (Pete, from testers).** Edit scores on a finished round's scorecard (or tap a target) opens scoring with **Cancel** on the left of the top bar (instead of the back arrow) and **Save** on the right, on every target; the last target's button says Save too. Both go back to the screen before.

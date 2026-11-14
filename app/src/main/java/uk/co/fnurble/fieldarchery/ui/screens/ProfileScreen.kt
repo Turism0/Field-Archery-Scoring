@@ -54,8 +54,10 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
     val profile by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
     var confirmSignOut by remember { mutableStateOf(false) }
-    /** What signing out would lose (3.2.02), worked out when Sign out is tapped. */
+    /** What removing your rounds at sign-out would lose, worked out when Sign out is tapped. */
     var signOutLoss by remember { mutableStateOf<String?>(null) }
+    /** 3.2.09: also delete my rounds from this phone (otherwise they're put away until I sign in again). */
+    var removeToo by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val recovery by vm.recovery.collectAsStateWithLifecycle()
     var askPassword by remember { mutableStateOf(false) }
@@ -98,7 +100,7 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(a.username, style = MaterialTheme.typography.titleLarge)
                         }
-                        OutlinedButton(onClick = { scope.launch { signOutLoss = vm.signOutWarning(); confirmSignOut = true } }) { Text("Sign out") }
+                        OutlinedButton(onClick = { scope.launch { signOutLoss = vm.signOutWarning(); removeToo = false; confirmSignOut = true } }) { Text("Sign out") }
                     }
                     // Password reset with no email (2.4): a recovery code to keep somewhere safe.
                     Text(
@@ -233,15 +235,26 @@ fun ProfileScreen(vm: ProfileViewModel, onBack: () -> Unit, onAccount: () -> Uni
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Signing out removes your rounds, profile and friends from this phone, ready for someone else. Your " +
-                            "rounds come back when you sign in again; your real name and date of birth don't (they never leave the phone).",
+                        "Your rounds, profile and Stats choices are put away on this phone: nobody else signing in here sees " +
+                            "them, and they're all back when you sign in again.",
                     )
-                    signOutLoss?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = removeToo, onCheckedChange = { removeToo = it })
+                        Text("Also remove my rounds from this phone")
+                    }
+                    if (removeToo) {
+                        Text(
+                            "They come back from the server when you sign in again; your real name and date of birth don't (they never leave the phone).",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        signOutLoss?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { confirmSignOut = false; vm.signOut(onDone = onBack) }) {
-                    Text(if (signOutLoss != null) "Sign out anyway" else "Sign out", color = if (signOutLoss != null) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified)
+                val warn = removeToo && signOutLoss != null
+                TextButton(onClick = { confirmSignOut = false; vm.signOut(remove = removeToo, onDone = onBack) }) {
+                    Text(if (warn) "Sign out anyway" else "Sign out", color = if (warn) MaterialTheme.colorScheme.error else androidx.compose.ui.graphics.Color.Unspecified)
                 }
             },
             dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } },

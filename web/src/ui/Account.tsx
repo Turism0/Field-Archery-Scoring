@@ -5,7 +5,7 @@ import {
   saveProfile, signOut, signOutCheck, type PendingSignIn, type Profile, type SignInStep,
 } from '../data/account'
 import { syncNow } from '../data/rounds'
-import { signOutWarning } from '../domain/deviceData'
+import { signInQuestion, signOutWarning } from '../domain/deviceData'
 import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, ageGroupFor, type AgeGroup, type ArcherClass } from '../domain/round'
 import { today } from './common'
 
@@ -42,7 +42,7 @@ export function AccountScreen() {
     try { await f() } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
   const done = () => { syncNow(); go('/') }
-  /** Signed in, or a question first about rounds scored here while nobody was signed in (3.2.02). */
+  /** Signed in, or a question first about rounds here that aren't on the account (3.2.02; 3.2.09). */
   const signedIn = (s: SignInStep) => { if (s.pending) setPending(s); else if (s.recoveryCode) setRecovery(s.recoveryCode); else done() }
   async function answer(keep: boolean | null) {
     const s = pending!, p = s.pending as PendingSignIn
@@ -50,7 +50,8 @@ export function AccountScreen() {
     if (keep === null) { await cancelSignIn(p); return }
     await run(async () => { await finishSignIn(p, keep); signedIn({ ...s, pending: null }) })
   }
-  const n = pending?.pending?.rounds ?? 0, them = n === 1 ? 'it' : 'them'
+  const plan = pending?.pending?.plan
+  const n = plan ? plan.signedOut + plan.earlierRounds : 0, them = n === 1 ? 'it' : 'them'
   const newPasswordProblem = () =>
     password.length < 8 ? 'Passwords are at least 8 characters.' : password !== confirm ? "The two passwords don't match." : null
 
@@ -104,8 +105,7 @@ export function AccountScreen() {
         actions={<><button onClick={() => answer(null)}>Cancel</button>
           <button class="danger" onClick={() => answer(false)}>Remove {them}</button>
           <button class="filled" onClick={() => answer(true)}>Add to {username}</button></>}>
-        {n === 1 ? 'There is 1 round' : `There are ${n} rounds`} on this device scored while nobody was signed in.
-        Add {them} to {username}'s account, or remove {them} from this device?
+        {plan && signInQuestion(plan, username)}
       </Dialog>
     </>
   )
@@ -121,6 +121,7 @@ export function ProfileScreen() {
   const [recovery, setRecovery] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [loss, setLoss] = useState<string | null>(null)
+  const [removeToo, setRemoveToo] = useState(false)
   const [deleted, setDeleted] = useState(false)
   if (!p) return null
   const update = (change: Partial<Profile>) => setP({ ...p, ...change })
@@ -142,7 +143,7 @@ export function ProfileScreen() {
         <Card title="Account" sub="Optional. Scoring works without it.">
           {account ? <>
             <div class="row between"><div><div class="sub">Signed in as</div><b style="font-size:20px">{account.username}</b></div>
-              <button class="outlined" onClick={async () => { setLoss(signOutWarning(await signOutCheck())); setSigningOut(true) }}>Sign out</button></div>
+              <button class="outlined" onClick={async () => { setLoss(signOutWarning(await signOutCheck())); setRemoveToo(false); setSigningOut(true) }}>Sign out</button></div>
             <div class="sub">Lost your recovery code, or made your account before there was one? Make a new one (the old one stops working).</div>
             <button class="outlined" onClick={() => setAsk('recovery')}>New recovery code</button>
             <button class="danger" onClick={() => setAsk('delete')}>Delete account</button>
@@ -168,10 +169,14 @@ export function ProfileScreen() {
       </main>
       <Dialog open={signingOut} title="Sign out?" onClose={() => setSigningOut(false)}
         actions={<><button onClick={() => setSigningOut(false)}>Cancel</button>
-          <button class={loss ? 'danger' : ''} onClick={async () => { setSigningOut(false); await signOut(); toast('Signed out.'); go('/') }}>{loss ? 'Sign out anyway' : 'Sign out'}</button></>}>
-        <p>Signing out removes your rounds, profile and friends from this device, ready for someone else. Your rounds come back
-          when you sign in again; your real name and date of birth don't (they're never sent anywhere).</p>
-        {loss && <div class="card err">{loss}</div>}
+          <button class={removeToo && loss ? 'danger' : ''} onClick={async () => { setSigningOut(false); await signOut(removeToo); toast('Signed out.'); go('/') }}>
+            {removeToo && loss ? 'Sign out anyway' : 'Sign out'}</button></>}>
+        <p>Your rounds, profile and Stats choices are put away on this device: nobody else signing in here sees them, and
+          they're all back when you sign in again.</p>
+        <label class="row" style="gap:8px"><input type="checkbox" style="width:auto" checked={removeToo}
+          onChange={e => setRemoveToo((e.target as HTMLInputElement).checked)} /> Also remove my rounds from this device</label>
+        {removeToo && <p class="sub">They come back from the server when you sign in again; your real name and date of birth don't (they're never sent anywhere).</p>}
+        {removeToo && loss && <div class="card err">{loss}</div>}
       </Dialog>
       <Dialog open={!!ask} title={ask === 'delete' ? 'Delete your account?' : 'New recovery code'} onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Cancel</button>

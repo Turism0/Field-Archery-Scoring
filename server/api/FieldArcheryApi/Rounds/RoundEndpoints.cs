@@ -22,6 +22,7 @@ public static class RoundEndpoints
     {
         var rounds = app.MapGroup("/api/rounds").RequireAuthorization();
         rounds.MapGet("/", ListChanged);
+        rounds.MapGet("/ids", Ids);
         rounds.MapPut("/{roundId:guid}", Upload);
         rounds.MapGet("/{roundId:guid}", Get);
         rounds.MapDelete("/{roundId:guid}", Delete);
@@ -97,6 +98,18 @@ public static class RoundEndpoints
             WHERE RoundId = @roundId AND ArcherId = @archerId AND IsDeleted = 0;
             """, new { roundId, archerId = user.ArcherId() }, cancellationToken: ct));
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// 3.2.09: the id of every round the server has for this archer, deleted ones too. The apps check their finished
+    /// rounds against it once a day and send any it's missing (the database lost data, or was restored from a backup).
+    /// </summary>
+    private static async Task<IResult> Ids(ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        await using var conn = await db.OpenAsync(ct);
+        var ids = await conn.QueryAsync<Guid>(new CommandDefinition(
+            "SELECT RoundId FROM dbo.Round WHERE ArcherId = @archerId;", new { archerId = user.ArcherId() }, cancellationToken: ct));
+        return Results.Ok(new { ids });
     }
 
     private static async Task<IResult> ListChanged(
