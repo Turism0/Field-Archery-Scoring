@@ -5,15 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "uk.co.fnurble.fieldarchery"
+    namespace = "uk.co.fieldarcheryscoring"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "uk.co.fnurble.fieldarchery"
+        applicationId = "uk.co.fieldarcheryscoring"
         minSdk = 26
         targetSdk = 36
-        versionCode = 71
-        versionName = "3.2.09"
+        versionCode = 72
+        versionName = "3.2.10"
     }
 
     buildTypes {

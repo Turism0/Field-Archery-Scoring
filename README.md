@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.10
+
+- **3.2.10 (app; API and web app version only): the app's package is renamed `uk.co.fieldarcheryscoring` (Pete)** (was uk.co.fnurble.fieldarchery): `applicationId`, `namespace`, the source folders (`app/src/main/java/uk/co/fieldarcheryscoring/`, same for `src/test`), every `package` / `import`, the live group notification's Stop action, and the Room schema folder (`app/schemas/uk.co.fieldarcheryscoring.data.local.FieldArcheryDatabase/`, versions 4 to 6 copied over). The phone database file (`fieldarchery.db`) and the class names are unchanged.
+  - **Delete the old folders** (Android Studio won't build with both): `app/src/main/java/uk/co/fnurble`, `app/src/test/java/uk/co/fnurble` and `app/schemas/uk.co.fnurble.fieldarchery.data.local.FieldArcheryDatabase`.
+  - **Android sees this as a new app** (as with 2.0.15): on the old app, pull to refresh so everything's backed up, install this one, sign in (your rounds download), re-enter your profile (real name and date of birth are only ever on the phone), then uninstall the old app.
+  - **Google Play:** an app's package name can't be changed once it has a bundle uploaded in Play Console. If you've uploaded one with the old name, make a new app in Play Console for this one.
+  - Tests: Kotlin 88 (under the new package). App versionCode 72, versionName 3.2.10.
+
 ## Version 3.2.09
 
 - **3.2.09 (app, web app and API): signing out puts your rounds away instead of wiping them, and phones can rebuild the server's rounds (Pete).**
@@ -353,7 +361,7 @@ Open the folder in Android Studio and run the `app` configuration. Unit tests fo
 ## Project layout
 
 ```
-app/src/main/java/uk/co/fnurble/fieldarchery/
+app/src/main/java/uk/co/fieldarcheryscoring/
   domain/        Pure Kotlin scoring engine, age groups, bow styles (unit tested)
   data/local/    Room entities, DAOs, database
   data/          Repositories (domain <-> database mapping)
