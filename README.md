@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.14
+
+- **3.2.14 (app, web app and API): shoot location fixes and extras (Pete).**
+  - **Fix: putting a location on the map didn't show.** After "Put it on the map", the screen you came back to (Admin → Shoot locations, the map's "No map pin" list, the location page) still showed it with no map pin and offered to put it on the map again. The app now reloads those screens whenever a location is added, put on the map, moved or made private / public (`LocationPageRepository.changes`). The web app already reloaded them.
+  - **Admins and the Owner can move a location on the map** (e.g. one pinned in the car park): "Move it on the map" in Admin → Shoot locations and on the location page, then tap where it really is. `PUT /api/locations/{id}/position { latitude, longitude, move: true }` (Admins only; without `move` a location already on the map is still refused with 409 already_placed). The location page says `canMove`. Rounds already there keep the location; phones scoring there from then on are matched to the new place.
+  - **Your position on the shoot locations map:** a blue dot (web) or osmdroid's person icon (app), with how accurate it is, and a "Me" button to go to it. The app asks for location the first time you tap "Me" if it isn't already allowed. The position is only drawn on the map; it isn't stored or sent.
+  - Web: the "Me" button, the dot and moving a location checked in a browser against the mock server (the move is sent with `move: true`). Android map, admin and page changes not compiled here; API not compiled here (no dotnet). App versionCode 76, versionName 3.2.14.
+
 ## Version 3.2.13
 
 - **3.2.13 (app; API and web app version only): Play Console's three warnings on the first closed test release (Pete).**

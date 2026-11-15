@@ -1,6 +1,14 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import android.view.MotionEvent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,6 +88,7 @@ import uk.co.fieldarcheryscoring.ui.LocationMapViewModel
  * Map of shoot locations (OpenStreetMap). Locations you've shot at are in the primary colour, others grey;
  * your private ones are included. Tap a pin for its name, tap the name for the location page.
  * Name-only locations (3.0, no map pin) are listed from the "No map pin" button. Place mode puts one on the map.
+ * 3.2.14: your own position shows on the map (once location is allowed), with a "Me" button to go to it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +108,8 @@ fun LocationMapScreen(
     placeName: String? = null,
     /** Place mode: called once it's on the map. */
     onPlaced: () -> Unit = {},
+    /** 3.2.14: place mode moves a location that's already on the map (Admins and the Owner). */
+    move: Boolean = false,
 ) {
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val locations by vm.locations.collectAsStateWithLifecycle()
@@ -123,7 +134,7 @@ fun LocationMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (placeId != null) "Put it on the map" else if (pickMode) "Choose the shoot location" else "Shoot locations") },
+                title = { Text(if (placeId != null) (if (move) "Move it on the map" else "Put it on the map") else if (pickMode) "Choose the shoot location" else "Shoot locations") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
@@ -173,7 +184,7 @@ fun LocationMapScreen(
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 shadowElevation = 2.dp,
                             ) {
-                                Text("Tap the map where ${placeName ?: "the shoot"} is.", style = MaterialTheme.typography.bodySmall,
+                                Text("Tap the map where ${placeName ?: "the shoot"} ${if (move) "really " else ""}is.", style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                             }
                         } else if (named.isNotEmpty() && !placing) {
@@ -247,14 +258,20 @@ fun LocationMapScreen(
     if (point != null && placeId != null) {
         AlertDialog(
             onDismissRequest = { newAt = null },
-            title = { Text("Put it on the map") },
+            title = { Text(if (move) "Move it here?" else "Put it on the map") },
             text = {
                 Text(
-                    "Put ${placeName ?: "this location"} at the point you tapped? From then on it's on the map and phones scoring " +
-                        "there are matched to it. It can't be moved afterwards (an Admin can merge it into another location).",
+                    if (move) "Move ${placeName ?: "this location"} to the point you tapped? Phones scoring there from now on are " +
+                        "matched to the new place; rounds already there keep it."
+                    else "Put ${placeName ?: "this location"} at the point you tapped? From then on it's on the map and phones scoring " +
+                        "there are matched to it. An Admin can move it later.",
                 )
             },
-            confirmButton = { TextButton(onClick = { vm.place(placeId, point.first, point.second) { newAt = null; onPlaced() } }) { Text("Put it here") } },
+            confirmButton = {
+                TextButton(onClick = { vm.place(placeId, point.first, point.second, move) { newAt = null; onPlaced() } }) {
+                    Text(if (move) "Move it here" else "Put it here")
+                }
+            },
             dismissButton = { TextButton(onClick = { newAt = null }) { Text("Cancel") } },
         )
     } else if (point != null && roundId != null) {
@@ -359,22 +376,56 @@ private fun LocationMap(
         }
     }
 
+    // 3.2.14 (Pete): where you are, as osmdroid's person icon with how accurate it is. Only drawn on this map; the
+    // position isn't stored or sent anywhere.
+    var canLocate by remember { mutableStateOf(locationAllowed(context)) }
+    var goToMe by remember { mutableStateOf(false) }
+    val me = remember { MyLocationNewOverlay(GpsMyLocationProvider(context), mapView).apply { isDrawAccuracyEnabled = true } }
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        canLocate = result.values.any { it }
+        if (canLocate) goToMe = true
+    }
+    LaunchedEffect(canLocate) {
+        if (canLocate) {
+            if (me !in mapView.overlays) mapView.overlays.add(me)
+            me.enableMyLocation()
+            mapView.invalidate()
+        }
+    }
+    LaunchedEffect(goToMe) {
+        if (!goToMe) return@LaunchedEffect
+        goToMe = false
+        val centre = {
+            me.myLocation?.let { at ->
+                if (mapView.zoomLevelDouble < 14.0) mapView.controller.setZoom(14.0)
+                mapView.controller.animateTo(at)
+            }
+        }
+        if (me.myLocation != null) centre() else me.runOnFirstFix { mapView.post { centre() } }
+    }
+
     // osmdroid needs its own resume / pause.
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_RESUME -> {
+                    mapView.onResume()
+                    canLocate = locationAllowed(context)
+                    if (canLocate) me.enableMyLocation()
+                }
+                Lifecycle.Event.ON_PAUSE -> { me.disableMyLocation(); mapView.onPause() }
                 else -> Unit
             }
         }
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
+            me.disableMyLocation()
             mapView.onDetach()
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     AndroidView(
         factory = { mapView },
         modifier = Modifier.fillMaxSize(),
@@ -431,7 +482,19 @@ private fun LocationMap(
             map.invalidate()
         },
     )
+        FilledTonalButton(
+            onClick = {
+                if (canLocate) goToMe = true
+                else askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            },
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).padding(top = 48.dp),
+        ) { Text("Me") }
+    }
 }
+
+private fun locationAllowed(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
 /** osmdroid's own pin, recoloured. */
 private fun tinted(pin: Drawable?, colour: Int): Drawable? =

@@ -212,6 +212,8 @@ public static class LocationPageEndpoints
                 loc.LocationId, loc.Name, latitude = (double?)loc.Latitude, longitude = (double?)loc.Longitude, loc.IsPrivate,
                 // API 3.0: a name-only location can be put on the map by its creator or an Admin.
                 canPlace = loc.Latitude is null && (mine || user.IsAdmin()),
+                // API 3.2.14: Admins and the Owner can move a location that's on the map.
+                canMove = loc.Latitude is not null && user.IsAdmin(),
                 canChangePrivacy = mine,
                 otherArchers,
                 otherRounds,

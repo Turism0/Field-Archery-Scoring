@@ -106,14 +106,17 @@ fun FieldArcheryNavHost() {
                 onOpenMyRound = { id -> nav.navigate(scorecardRoute(id)) },
                 onOpenFriendRound = { f, r -> nav.navigate("friendCard/${f.archerId}/${f.username}/${r.roundId}") },
                 onPlace = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}") },
+                onMove = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}&move=true") },
             )
         }
-        // 3.0: put a name-only location on the map (from its page, or Admin → Shoot locations).
+        // 3.0: put a name-only location on the map (from its page, or Admin → Shoot locations). 3.2.14: move=true moves
+        // one already on the map (Admins and the Owner).
         composable(
-            "placeLocation/{locationId}?name={name}",
+            "placeLocation/{locationId}?name={name}&move={move}",
             arguments = listOf(
                 navArgument("locationId") { type = NavType.StringType },
                 navArgument("name") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("move") { type = NavType.BoolType; defaultValue = false },
             ),
         ) { entry ->
             LocationMapScreen(
@@ -123,6 +126,7 @@ fun FieldArcheryNavHost() {
                 onOpenLocation = {},
                 placeId = entry.arguments?.getString("locationId"),
                 placeName = entry.arguments?.getString("name"),
+                move = entry.arguments?.getBoolean("move") ?: false,
                 onPlaced = { nav.popBackStack() },
             )
         }
@@ -158,9 +162,10 @@ fun FieldArcheryNavHost() {
         }
         composable("adminLocations") {
             AdminLocationsScreen(
-                vm = appViewModel { c, _ -> AdminLocationsViewModel(c.adminRepository, c.locationRepository, c.accountStore) },
+                vm = appViewModel { c, _ -> AdminLocationsViewModel(c.adminRepository, c.locationRepository, c.accountStore, c.locationPageRepository.changes) },
                 onBack = { nav.popBackStack() },
                 onPlace = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}") },
+                onMove = { id, name -> nav.navigate("placeLocation/$id?name=${Uri.encode(name)}&move=true") },
             )
         }
         // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -478,7 +479,13 @@ class AdminLocationsViewModel(
     private val admin: AdminRepository,
     private val locations: LocationRepository,
     accountStore: AccountStore,
+    /** 3.2.14: the map / location page repository's change count, so the list reloads after putting one on the map. */
+    locationChanges: StateFlow<Int>? = null,
 ) : ViewModel() {
+    init {
+        locationChanges?.let { changes -> viewModelScope.launch { changes.drop(1).collect { load() } } }
+    }
+
     val role: StateFlow<AccountRole> = accountStore.role
 
     private val _list = MutableStateFlow<Load<List<AdminLocation>>>(Load.Loading)
@@ -684,12 +691,17 @@ class LocationMapViewModel(
     /** Name-only locations (3.0): not on the map, listed beside it. */
     val named: StateFlow<List<MapLocation>> = _named.asStateFlow()
 
-    /** Place mode (3.0): puts a name-only location on the map at the point tapped, then [onDone]. */
-    fun place(locationId: String, lat: Double, lon: Double, onDone: () -> Unit) {
+    init {
+        // 3.2.14: reload when a location changes elsewhere (put on the map from its page, moved by an Admin …).
+        viewModelScope.launch { repo.changes.drop(1).collect { if (signedIn.value) load() } }
+    }
+
+    /** Place mode (3.0): puts a name-only location on the map at the point tapped, then [onDone]. [move] (3.2.14): Admins. */
+    fun place(locationId: String, lat: Double, lon: Double, move: Boolean = false, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                repo.place(locationId, lat, lon)
-                _message.value = "It's on the map."
+                repo.place(locationId, lat, lon, move)
+                _message.value = if (move) "It's moved." else "It's on the map."
                 onDone()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -721,6 +733,11 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
 
     private val _page = MutableStateFlow<Load<LocationPage>>(Load.Loading)
     val page: StateFlow<Load<LocationPage>> = _page.asStateFlow()
+
+    init {
+        // 3.2.14: reload after it's put on the map or moved (from this page's map screen) or changed elsewhere.
+        viewModelScope.launch { repo.changes.drop(1).collect { load() } }
+    }
 
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()

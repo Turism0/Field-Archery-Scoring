@@ -139,9 +139,9 @@ export async function nameOnly(roundId: string, name: string, isPrivate: boolean
   await setLocation(roundId, l.id, l.name)
 }
 
-/** Puts a name-only location on the map (its creator or an Admin). */
-export async function placeLocation(id: string, lat: number, lon: number) {
-  await authed(t => request('PUT', `/api/locations/${id}/position`, { latitude: lat, longitude: lon }, t))
+/** Puts a name-only location on the map (its creator or an Admin); [move] (3.2.14): moves one already on it (Admins). */
+export async function placeLocation(id: string, lat: number, lon: number, move = false) {
+  await authed(t => request('PUT', `/api/locations/${id}/position`, { latitude: lat, longitude: lon, ...(move ? { move: true } : {}) }, t))
 }
 
 /**
@@ -197,7 +197,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation & { canPlace: boolean; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -212,7 +212,7 @@ const bowStats = (b: any, withClass: boolean): BowStyleStats => ({
 export async function locationPage(id: string): Promise<LocationPage> {
   const j = await authed(t => request('GET', `/api/locations/${id}/page`, undefined, t))
   return {
-    location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canChangePrivacy: !!j.location.canChangePrivacy,
+    location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canMove: !!j.location.canMove, canChangePrivacy: !!j.location.canChangePrivacy,
       otherArchers: j.location.otherArchers ?? 0, otherRounds: j.location.otherRounds ?? 0 },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({

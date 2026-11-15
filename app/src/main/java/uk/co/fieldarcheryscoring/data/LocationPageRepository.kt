@@ -8,6 +8,9 @@ import uk.co.fieldarcheryscoring.domain.AgeGroup
 import uk.co.fieldarcheryscoring.domain.ArcherClass
 import uk.co.fieldarcheryscoring.domain.BowStyle
 import java.time.LocalDate
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * A shoot location. [myRounds] = your finished rounds there; [rounds] = everyone's.
@@ -23,6 +26,8 @@ data class MapLocation(
     val rounds: Int,
     /** On a location page (3.0): you (its creator or an Admin) can put this name-only location on the map. */
     val canPlace: Boolean = false,
+    /** On a location page (3.2.14): you're an Admin or the Owner, so you can move it on the map. */
+    val canMove: Boolean = false,
     /** On a location page (3.2.12): you named it, so you can make it private or public. */
     val canChangePrivacy: Boolean = false,
     /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
@@ -79,12 +84,21 @@ data class LocationPage(
 /** Map and location pages, straight from the server (nothing stored on the phone). Needs signal. */
 class LocationPageRepository(private val api: FieldArcheryApi, private val accounts: AccountStore) {
 
+    private val _changes = MutableStateFlow(0)
+    /**
+     * Goes up whenever a location is added, put on the map, moved or made private / public (3.2.14), so screens still
+     * open behind (the map, Admin → Shoot locations, a location page) reload instead of showing it as it was.
+     */
+    val changes: StateFlow<Int> = _changes.asStateFlow()
+    private fun changed() { _changes.value++ }
+
     /**
      * A new location at a point picked on the map (not tied to a round). If the name is already used,
      * the [ApiException] (409 name_taken) says so.
      */
     suspend fun create(name: String, lat: Double, lon: Double, isPrivate: Boolean) {
         call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
+        changed()
     }
 
     /** The locations on the map (with a pin). */
@@ -108,11 +122,12 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
     suspend fun createNamed(name: String, isPrivate: Boolean): Pair<String, String> = call { token ->
         val j = api.createNamedLocation(token, name.trim(), isPrivate)
         j.getString("locationId") to j.getString("name")
-    }
+    }.also { changed() }
 
-    /** Puts a name-only location on the map (its creator or an Admin). */
-    suspend fun place(locationId: String, lat: Double, lon: Double) {
-        call { token -> api.placeLocation(token, locationId, lat, lon) }
+    /** Puts a name-only location on the map (its creator or an Admin); [move] (3.2.14): moves one already on it (Admins). */
+    suspend fun place(locationId: String, lat: Double, lon: Double, move: Boolean = false) {
+        call { token -> api.placeLocation(token, locationId, lat, lon, move) }
+        changed()
     }
 
     /**
@@ -121,6 +136,7 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
      */
     suspend fun setPrivate(locationId: String, isPrivate: Boolean, confirm: Boolean = false) {
         call { token -> api.setLocationPrivate(token, locationId, isPrivate, confirm) }
+        changed()
     }
 
     suspend fun page(locationId: String): LocationPage = call { token ->
@@ -136,6 +152,7 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
                 myRounds = 0,
                 rounds = 0,
                 canPlace = location.optBoolean("canPlace"),
+                canMove = location.optBoolean("canMove"),
                 canChangePrivacy = location.optBoolean("canChangePrivacy"),
                 otherArchers = location.optInt("otherArchers"),
                 otherRounds = location.optInt("otherRounds"),

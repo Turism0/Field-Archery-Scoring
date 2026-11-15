@@ -188,8 +188,9 @@ class FieldArcheryApi(
     suspend fun namedLocations(token: String): JSONObject = request("GET", "/api/locations/named", body = null, token = token)
 
     /** 3.0: puts a name-only location on the map (its creator or an Admin). 409 already_placed; 403 not_creator. */
-    suspend fun placeLocation(token: String, locationId: String, lat: Double, lon: Double): JSONObject =
-        request("PUT", "/api/locations/$locationId/position", JSONObject().put("latitude", lat).put("longitude", lon), token)
+    suspend fun placeLocation(token: String, locationId: String, lat: Double, lon: Double, move: Boolean = false): JSONObject =
+        request("PUT", "/api/locations/$locationId/position",
+            JSONObject().put("latitude", lat).put("longitude", lon).apply { if (move) put("move", true) }, token)
 
     /**
      * 3.2.12: makes a location you named private or public. Private when others have shot there needs [confirm]

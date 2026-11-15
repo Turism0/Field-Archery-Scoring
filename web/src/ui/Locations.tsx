@@ -131,15 +131,18 @@ function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: bool
 
 /**
  * Map of shoot locations (OpenStreetMap). Pick mode: choosing a location for a round. Place mode (3.0): putting a
- * name-only location on the map. Name-only locations are listed under the map.
+ * name-only location on the map; with [move] (3.2.14, Admins) moving one that's already on it. Name-only locations are
+ * listed under the map. 3.2.14: your own position shows as a blue dot (when the browser allows it), with a button to go to it.
  */
-export function LocationMap({ pick, place }: { pick?: string; place?: string }) {
+export function LocationMap({ pick, place, move = false }: { pick?: string; place?: string; move?: boolean }) {
   // null when signed out, undefined while it's still being read (2.7.05: getAccount gives undefined when signed out,
   // so the "Sign in" card never showed and a signed-out browser got an empty map box).
   const account = useData(async () => (await getAccount()) ?? null)
   const [data, retry] = useLoad(async () => (account ? loc.mapLocations() : null), [account?.token])
   const named = useData(async () => (account ? loc.namedLocations().catch(() => []) : []), [account?.token])
-  const placing1 = place ? named?.find(l => l.id === place) : undefined
+  const placing1 = place ? (move ? (data.state === 'ready' ? data.value?.find(l => l.id === place) : undefined) : named?.find(l => l.id === place)) : undefined
+  const meRef = useRef<{ go: () => void } | null>(null)
+  const [haveMe, setHaveMe] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [newAt, setNewAt] = useState<{ lat: number; lon: number } | null>(null)
   const [name, setName] = useState('')
@@ -175,14 +178,27 @@ export function LocationMap({ pick, place }: { pick?: string; place?: string }) 
     if (list.length) map.fitBounds(L.latLngBounds(list.map(l => [l.latitude, l.longitude] as [number, number])).pad(0.2), { maxZoom: 13 })
     else map.setView([52.8, -1.5], 6)
     map.on('click', (e: L.LeafletMouseEvent) => tapRef.current?.(e.latlng.lat, e.latlng.lng))
-    return () => { map.remove() }
+    // 3.2.14 (Pete): where you are, as a blue dot with how accurate it is. Only shown on this page; never sent anywhere.
+    let me: L.CircleMarker | null = null, ring: L.Circle | null = null, watch: number | null = null
+    if ('geolocation' in navigator) {
+      watch = navigator.geolocation.watchPosition(p => {
+        const at: [number, number] = [p.coords.latitude, p.coords.longitude]
+        if (!me) {
+          ring = L.circle(at, { radius: p.coords.accuracy, color: '#1a73e8', weight: 1, fillOpacity: 0.12, interactive: false }).addTo(map)
+          me = L.circleMarker(at, { radius: 7, color: '#fff', weight: 2, fillColor: '#1a73e8', fillOpacity: 1, interactive: false }).addTo(map)
+          setHaveMe(true)
+        } else { me.setLatLng(at); ring!.setLatLng(at).setRadius(p.coords.accuracy) }
+      }, () => { /* not allowed or no fix: no dot */ }, { enableHighAccuracy: true, maximumAge: 30_000 })
+    }
+    meRef.current = { go: () => { if (me) map.setView(me.getLatLng(), Math.max(map.getZoom(), 14)) } }
+    return () => { if (watch != null) navigator.geolocation.clearWatch(watch); meRef.current = null; setHaveMe(false); map.remove() }
   }, [data.state === 'ready' ? data.value : null])
 
   async function save() {
     if (!newAt) return
     setBusy(true)
     try {
-      if (place) { await loc.placeLocation(place, newAt.lat, newAt.lon); setNewAt(null); toast(`${placing1?.name ?? 'The location'} is on the map.`); back() }
+      if (place) { await loc.placeLocation(place, newAt.lat, newAt.lon, move); setNewAt(null); toast(`${placing1?.name ?? 'The location'} ${move ? 'has moved' : 'is on the map'}.`); back() }
       else if (pick) { await loc.nameAt(pick, name, newAt.lat, newAt.lon, priv); setNewAt(null); back() }
       else { await loc.createLocation(name, newAt.lat, newAt.lon, priv); setNewAt(null); setPlacing(false); toast('Location added.'); retry() }
     } catch (e) {
@@ -195,15 +211,16 @@ export function LocationMap({ pick, place }: { pick?: string; place?: string }) 
   const list = data.state === 'ready' ? data.value ?? [] : []
   return (
     <>
-      <Bar title={place ? 'Put it on the map' : pick ? 'Choose the shoot location' : 'Shoot locations'}>
+      <Bar title={place ? (move ? 'Move it on the map' : 'Put it on the map') : pick ? 'Choose the shoot location' : 'Shoot locations'}>
         {!pick && !place && !placing && data.state === 'ready' && <button class="tonal" onClick={() => setPlacing(true)}>＋ New</button>}
       </Bar>
       <main>
-        {place && <div class="banner">Tap the map where {placing1?.name ?? 'the shoot'} is.</div>}
+        {place && <div class="banner">Tap the map where {placing1?.name ?? 'the shoot'} {move ? 'really ' : ''}is.</div>}
         {pick && <div class="banner">Tap a pin, then "Use this location". Or tap the map where the shoot is to name a new location.</div>}
         {placing && <div class="banner row between" style="flex-direction:row">Tap the map where the new location is.<button onClick={() => setPlacing(false)}>Cancel</button></div>}
         <Loading load={data} retry={retry}>{() => <>
-          <div ref={box} class="map" />
+          <div style="position:relative"><div ref={box} class="map" />
+            {haveMe && <button class="tonal" style="position:absolute;right:10px;top:10px;z-index:500" onClick={() => meRef.current?.go()}>◎ Me</button>}</div>
           <div class="row sub"><span class="legend" style="background:var(--primary)" /> Shot here ({list.filter(l => l.myRounds > 0).length})
             <span class="legend" style="background:#8a8a8a" /> Not yet ({list.filter(l => !l.myRounds).length})</div>
           {!place && !!named?.length && <>
@@ -216,9 +233,11 @@ export function LocationMap({ pick, place }: { pick?: string; place?: string }) 
           </>}
         </>}</Loading>
       </main>
-      <Dialog open={!!newAt && !!place} title="Put it on the map" onClose={() => setNewAt(null)}
-        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy} onClick={save}>Put it here</button></>}>
-        <div>Put <b>{placing1?.name ?? 'this location'}</b> at the point you tapped? From then on it's on the map and phones scoring there are matched to it. It can't be moved afterwards (an Admin can merge it into another location).</div>
+      <Dialog open={!!newAt && !!place} title={move ? 'Move it here?' : 'Put it on the map'} onClose={() => setNewAt(null)}
+        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy} onClick={save}>{move ? 'Move it here' : 'Put it here'}</button></>}>
+        <div>{move
+          ? <>Move <b>{placing1?.name ?? 'this location'}</b> to the point you tapped? Phones scoring there from now on are matched to the new place; rounds already there keep it.</>
+          : <>Put <b>{placing1?.name ?? 'this location'}</b> at the point you tapped? From then on it's on the map and phones scoring there are matched to it. An Admin can move it later.</>}</div>
       </Dialog>
       <Dialog open={!!newAt && !place} title="New shoot location" onClose={() => setNewAt(null)}
         actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy || name.trim().length < 2} onClick={save}>Save</button></>}>
@@ -260,6 +279,7 @@ export function LocationPageScreen({ id }: { id: string }) {
           {!loc.hasPin(p.location) && <Card title="No map pin" sub="This shoot is known by its name only, so it isn't on the map.">
             {p.location.canPlace && <button class="tonal" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}`)}>📍 Put it on the map</button>}
           </Card>}
+          {p.location.canMove && <button class="outlined" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}&move=1`)}>📍 Move it on the map (Admin)</button>}
           <h3 class="section">Your scorecards here</h3>
           {!p.myRounds.length ? <div class="sub">You haven't finished a round here yet.</div> : <>
             <div class="sub">{p.myRounds.length} round{p.myRounds.length === 1 ? '' : 's'}{best != null ? ` · best ${best}` : ''}</div>

@@ -175,6 +175,7 @@ export function AdminLocations() {
           <label class="row" style="flex-wrap:nowrap"><span class="grow"><b>Private</b><div class="sub">Only the archer who named it sees it</div></span>
             <input type="checkbox" style="width:auto" checked={priv} onChange={e => setPriv((e.target as HTMLInputElement).checked)} /></label>
           {sel.latitude == null && <button class="outlined" onClick={() => { setSel(null); go(`/map?place=${sel.id}`) }}>📍 Put it on the map</button>}
+          {sel.latitude != null && <button class="outlined" onClick={() => { setSel(null); go(`/map?place=${sel.id}&move=1`) }}>📍 Move it on the map</button>}
           <button class="outlined" onClick={() => setMerging(true)}>Merge into another location…</button>
         </div>}
         {sel && merging && <div class="col">

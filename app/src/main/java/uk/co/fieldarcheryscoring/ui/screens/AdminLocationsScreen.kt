@@ -73,6 +73,8 @@ fun AdminLocationsScreen(
     onBack: () -> Unit,
     /** 3.0: put a name-only location on the map. */
     onPlace: (id: String, name: String) -> Unit = { _, _ -> },
+    /** 3.2.14: move a location that's already on the map. */
+    onMove: (id: String, name: String) -> Unit = { _, _ -> },
 ) {
     val role by vm.role.collectAsStateWithLifecycle()
     val list by vm.list.collectAsStateWithLifecycle()
@@ -167,6 +169,7 @@ fun AdminLocationsScreen(
             onMerge = { keep -> vm.merge(loc, keep) { selected = null } },
             onDismiss = { selected = null },
             onPlace = { selected = null; onPlace(loc.id, loc.name) },
+            onMove = { selected = null; onMove(loc.id, loc.name) },
         )
     }
 }
@@ -212,6 +215,7 @@ private fun LocationActions(
     onMerge: (AdminLocation) -> Unit,
     onDismiss: () -> Unit,
     onPlace: () -> Unit = {},
+    onMove: () -> Unit = {},
 ) {
     var name by remember(location.id) { mutableStateOf(location.name) }
     var private by remember(location.id) { mutableStateOf(location.isPrivate) }
@@ -260,6 +264,8 @@ private fun LocationActions(
                 ) { Text("Save") }
                 if (location.latitude == null) {
                     OutlinedButton(onClick = onPlace, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Put it on the map") }
+                } else {
+                    OutlinedButton(onClick = onMove, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Move it on the map") }
                 }
                 OutlinedButton(
                     onClick = { picking = true },

@@ -19,6 +19,8 @@ namespace FieldArcheryApi.Locations;
 ///                                you can see (public, and your own private ones), by name: for choosing one for a round
 ///   PUT  /api/locations/{id}/position { latitude, longitude } (API 3.0) → { locationId, name, latitude, longitude }: puts a
 ///                                name-only location on the map; its creator or an Admin; 409 already_placed if it has a pin
+///                                (API 3.2.14: { latitude, longitude, move: true } moves a location already on the map; Admins
+///                                and the Owner only)
 ///   PUT  /api/locations/{id}/private { isPrivate, confirm? } (API 3.2.12) → { locationId, name, isPrivate, roundsCleared }:
 ///                                the archer who named it makes it private or public. Making it private when other archers
 ///                                have rounds there → 409 others_shot_here { archers, rounds } unless confirm: true; then it's
@@ -42,7 +44,7 @@ public static class LocationEndpoints
     private const int MaxRadius = 10_000;
 
     public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null, bool? NoPin = null);
-    public sealed record PositionRequest(double? Latitude, double? Longitude);
+    public sealed record PositionRequest(double? Latitude, double? Longitude, bool? Move = null);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
     public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
     public sealed record PrivacyRequest(bool? IsPrivate, bool? Confirm = null);
@@ -211,14 +213,17 @@ public static class LocationEndpoints
         var mine = loc is not null && loc.CreatedById == user.ArcherId();
         if (loc is null || (loc.IsPrivate && !mine))
             return Error(404, "no_such_location", "There's no location with that id (or it was merged into another).");
+        // 3.2.14 (Pete): Admins and the Owner can move a location that's already on the map (e.g. pinned in the car park).
+        var move = req.Move == true;
+        if (move && !user.IsAdmin()) return Error(403, "not_admin", "Only an Admin can move a location on the map.");
         if (!mine && !user.IsAdmin())
             return Error(403, "not_creator", "Only the archer who named a location, or an Admin, can put it on the map.");
-        if (loc.Latitude is not null) return Error(409, "already_placed", "That location is already on the map.");
+        if (loc.Latitude is not null && !move) return Error(409, "already_placed", "That location is already on the map.");
         var lat = Round5(req.Latitude!.Value);
         var lon = Round5(req.Longitude!.Value);
         await conn.ExecuteAsync(new CommandDefinition(
-            "UPDATE dbo.ShootLocation SET Latitude = @lat, Longitude = @lon WHERE LocationId = @locationId AND Latitude IS NULL;",
-            new { locationId, lat, lon }, cancellationToken: ct));
+            "UPDATE dbo.ShootLocation SET Latitude = @lat, Longitude = @lon WHERE LocationId = @locationId AND (Latitude IS NULL OR @move = 1);",
+            new { locationId, lat, lon, move }, cancellationToken: ct));
         return Results.Ok(new { locationId, name = loc.Name, latitude = (double)lat, longitude = (double)lon });
     }
 

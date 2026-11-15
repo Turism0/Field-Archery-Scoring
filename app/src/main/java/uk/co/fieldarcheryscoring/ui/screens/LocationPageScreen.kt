@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
@@ -81,6 +82,8 @@ fun LocationPageScreen(
     onOpenFriendRound: (friend: LocationFriend, round: FriendRoundSummary) -> Unit,
     /** 3.0: put this name-only location on the map (its creator or an Admin). */
     onPlace: (id: String, name: String) -> Unit = { _, _ -> },
+    /** 3.2.14: move it on the map (Admins and the Owner). */
+    onMove: (id: String, name: String) -> Unit = { _, _ -> },
 ) {
     val page by vm.page.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
@@ -189,6 +192,15 @@ fun LocationPageScreen(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+
+                        if (data.location.canMove) {
+                            item(key = "move") {
+                                OutlinedButton(onClick = { onMove(data.location.id, data.location.name) }) {
+                                    Icon(Icons.Filled.LocationOn, contentDescription = null)
+                                    Text("Move it on the map (Admin)", Modifier.padding(start = 8.dp))
                                 }
                             }
                         }
