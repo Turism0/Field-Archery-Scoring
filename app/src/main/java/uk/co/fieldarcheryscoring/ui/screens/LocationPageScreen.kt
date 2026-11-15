@@ -89,10 +89,26 @@ fun LocationPageScreen(
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val askPrivate by vm.askPrivate.collectAsStateWithLifecycle()
+    val askDelete by vm.askDelete.collectAsStateWithLifecycle()
     val privacyBusy by vm.privacyBusy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.messageShown() } }
+
+    // 3.2.16: deleting it (the archer who named it, or the Owner).
+    askDelete?.let { warning ->
+        AlertDialog(
+            onDismissRequest = { if (!privacyBusy) vm.cancelDelete() },
+            title = { Text("Delete this location?") },
+            text = { Text(warning) },
+            confirmButton = {
+                TextButton(onClick = { vm.delete(onDeleted = onBack) }, enabled = !privacyBusy) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { vm.cancelDelete() }, enabled = !privacyBusy) { Text("Cancel") } },
+        )
+    }
 
     // 3.2.12: making it private when other archers have shot here.
     askPrivate?.let { warning ->
@@ -201,6 +217,14 @@ fun LocationPageScreen(
                                 OutlinedButton(onClick = { onMove(data.location.id, data.location.name) }) {
                                     Icon(Icons.Filled.LocationOn, contentDescription = null)
                                     Text("Move it on the map (Admin)", Modifier.padding(start = 8.dp))
+                                }
+                            }
+                        }
+
+                        if (data.location.canDelete) {
+                            item(key = "delete") {
+                                TextButton(onClick = { vm.startDelete() }, enabled = !privacyBusy) {
+                                    Text("Delete location", color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }

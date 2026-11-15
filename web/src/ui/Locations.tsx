@@ -9,7 +9,7 @@ import * as loc from '../data/locations'
 import { ApiError } from '../data/api'
 import { BOW_STYLES, ROUND_TYPE_NAMES, locationStatus, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { multiplier, type HandicapModel } from '../domain/handicap'
-import { makePrivateWarning } from '../domain/locationPrivacy'
+import { deleteLocationWarning, makePrivateWarning } from '../domain/locationPrivacy'
 
 /** One line showing where the round is; tap for the location sheet. */
 export function LocationChip({ round, signedIn, onClick }: { round: Round; signedIn: boolean; onClick: () => void }) {
@@ -280,6 +280,7 @@ export function LocationPageScreen({ id }: { id: string }) {
             {p.location.canPlace && <button class="tonal" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}`)}>📍 Put it on the map</button>}
           </Card>}
           {p.location.canMove && <button class="outlined" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}&move=1`)}>📍 Move it on the map (Admin)</button>}
+          {p.location.canDelete && <DeleteLocation page={p} />}
           <h3 class="section">Your scorecards here</h3>
           {!p.myRounds.length ? <div class="sub">You haven't finished a round here yet.</div> : <>
             <div class="sub">{p.myRounds.length} round{p.myRounds.length === 1 ? '' : 's'}{best != null ? ` · best ${best}` : ''}</div>
@@ -366,6 +367,24 @@ function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: stri
       </Dialog>
     </div>
   )
+}
+
+/** Delete this location (3.2.16): the archer who named it, or the Owner. Asks first, then goes back. */
+function DeleteLocation({ page }: { page: loc.LocationPage }) {
+  const [ask, setAsk] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const del = async () => {
+    setBusy(true)
+    try { await loc.deleteLocation(page.location.id); setAsk(false); toast(`${page.location.name} deleted.`); back() }
+    catch (e) { toast(errorText(e)) } finally { setBusy(false) }
+  }
+  return <>
+    <button class="danger" style="align-self:flex-start" onClick={() => setAsk(true)}>🗑 Delete location</button>
+    <Dialog open={ask} title="Delete this location?" onClose={() => setAsk(false)}
+      actions={<><button disabled={busy} onClick={() => setAsk(false)}>Cancel</button><button class="danger" disabled={busy} onClick={del}>Delete</button></>}>
+      <p>{deleteLocationWarning(page.location.name, page.location.roundsHere)}</p>
+    </Dialog>
+  </>
 }
 
 function SummaryRow({ r, onClick }: { r: { shootDate: string; classLine: string; targetsLine: string; totalPoints: number }; onClick: () => void }) {

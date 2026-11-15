@@ -26,6 +26,9 @@ namespace FieldArcheryApi.Locations;
 ///                                have rounds there → 409 others_shot_here { archers, rounds } unless confirm: true; then it's
 ///                                taken off their rounds (and groups / requests). Making it public → 409 name_taken if a public
 ///                                location already has the name.
+///   DELETE /api/locations/{id}   (API 3.2.16) → { locationId, name, roundsCleared }: the archer who named it, or the
+///                                Owner (any location). Every round there (anyone's) loses its location, as do groups and
+///                                requests; duplicates merged into it go too.
 ///   POST /api/locations/resolve  { ids: [...] }   → { locations: [{ requestedId, locationId, name }] } current id and name
 ///                                                    for ids a phone holds (follows merges; unknown ids left out)
 ///  Admins and Owner:
@@ -78,6 +81,7 @@ public static class LocationEndpoints
         locations.MapGet("/named", Named);
         locations.MapPut("/{locationId:guid}/position", Place);
         locations.MapPut("/{locationId:guid}/private", SetPrivate);
+        locations.MapDelete("/{locationId:guid}", Delete);
 
         var admin = app.MapGroup("/api/admin/locations").RequireAuthorization();
         admin.MapGet("/", AdminList);
@@ -375,6 +379,53 @@ public static class LocationEndpoints
         }
         await tx.CommitAsync(ct);
         return Results.Ok(new { locationId, name = loc.Name, isPrivate = makePrivate, roundsCleared = cleared });
+    }
+
+    /// <summary>
+    /// Deletes a location (3.2.16, Pete): the archer who named it, or the Owner (any location; Admins only their own).
+    /// Rounds there keep everything but the location, so the archer can give them a new one. Their rounds are marked as
+    /// changed a millisecond later so phones download them without it at the next sync. Duplicates that were merged
+    /// into it are deleted with it (otherwise they'd come back as locations of their own).
+    /// </summary>
+    private static async Task<IResult> Delete(Guid locationId, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var loc = await conn.QuerySingleOrDefaultAsync<(string Name, bool IsPrivate, Guid? CreatedById)>(new CommandDefinition("""
+            SELECT Name, IsPrivate, CreatedById FROM dbo.ShootLocation WITH (UPDLOCK, HOLDLOCK)
+            WHERE LocationId = @locationId AND MergedIntoId IS NULL;
+            """, new { locationId }, tx, cancellationToken: ct));
+        var mine = loc.Name is not null && loc.CreatedById == me;
+        if (loc.Name is null || (loc.IsPrivate && !mine && !user.IsOwner()))
+            return Error(404, "no_such_location", "There's no location with that id (or it was merged into another).");
+        if (!mine && !user.IsOwner())
+            return Error(403, "not_creator", "Only the archer who named a location, or the Owner, can delete it.");
+
+        var cleared = await conn.ExecuteScalarAsync<int>(new CommandDefinition("""
+            DECLARE @gone TABLE (LocationId UNIQUEIDENTIFIER PRIMARY KEY);
+            WITH chain AS (
+                SELECT LocationId FROM dbo.ShootLocation WHERE LocationId = @locationId
+                UNION ALL
+                SELECT l.LocationId FROM dbo.ShootLocation l JOIN chain c ON l.MergedIntoId = c.LocationId)
+            INSERT @gone SELECT LocationId FROM chain OPTION (MAXRECURSION 100);
+
+            UPDATE dbo.ScoreGroup SET LocationId = NULL, UpdatedUtc = SYSUTCDATETIME() WHERE LocationId IN (SELECT LocationId FROM @gone);
+            UPDATE dbo.RoundOffer SET LocationId = NULL, UpdatedUtc = SYSUTCDATETIME() WHERE LocationId IN (SELECT LocationId FROM @gone);
+            DELETE dbo.LocationPairApproval
+            WHERE LocationLowId IN (SELECT LocationId FROM @gone) OR LocationHighId IN (SELECT LocationId FROM @gone);
+            UPDATE dbo.ShootLocation SET MergedIntoId = NULL WHERE LocationId IN (SELECT LocationId FROM @gone);
+
+            UPDATE dbo.Round
+            SET LocationId = NULL, ClientUpdatedUtc = DATEADD(millisecond, 1, ClientUpdatedUtc), ServerUpdatedUtc = SYSUTCDATETIME()
+            WHERE LocationId IN (SELECT LocationId FROM @gone);
+            DECLARE @rounds INT = @@ROWCOUNT;
+
+            DELETE dbo.ShootLocation WHERE LocationId IN (SELECT LocationId FROM @gone);
+            SELECT @rounds;
+            """, new { locationId }, tx, cancellationToken: ct));
+        await tx.CommitAsync(ct);
+        return Results.Ok(new { locationId, name = loc.Name, roundsCleared = cleared });
     }
 
     private static string Plural(int n, string what) => n == 1 ? $"1 {what}" : $"{n} {what}s";

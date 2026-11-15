@@ -4,6 +4,24 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.16
+
+- **3.2.16 (app, web app and API): deleting a shoot location (Pete).**
+  - **Who:** the archer who named a location can delete it (from its page); the Owner can delete any location (its page, or Admin → Shoot locations → Delete location…). Admins can only delete their own. `DELETE /api/locations/{id}`; the location page says `canDelete` and `roundsHere`.
+  - **Asks first:** "Delete Sherwood? The 5 rounds there (anyone's) lose their location; each archer can give theirs a new one. This can't be undone."
+  - **Scorecards keep everything but the location:** every round there loses it (and groups and round requests); duplicates that were merged into it go too. Rounds are marked as changed a millisecond later, so phones download them without it and show "No location" with Add. A phone that hadn't synced yet and sends a round with the deleted location has it dropped the same way.
+  - Compatible with older apps (no MinVersions change).
+  - Tests: Kotlin 92, web 86 (`deleteLocationWarning`); the web delete checked in a browser against the mock server. Android screens and the API not compiled here. App versionCode 78, versionName 3.2.16.
+
+## Version 3.2.15
+
+- **3.2.15 (app, web app and API): older apps keep working, and the app says when there's an update (Pete).**
+  - **Rules for changing the API** in `docs/API_COMPATIBILITY.md`: keeping older apps working is **preferred, not required** (Pete). Changes old apps can live with when it costs nothing (add rather than remove, new request fields optional); but functionality and efficiency come first, and a change that breaks old apps is made anyway, with `MinVersions` raised in the same deploy so those apps get 426 and show "Update required for online features" instead of going wrong. **Run `server/tests/Test-OldApps.ps1` after every API deploy** (also in Run-AllTests): it acts as the oldest app (`android/66`, `web/3.2.05`; a round without roundType, startTarget, locationId or groupId) and checks sign up / in, round upload, download, read, delete and friends, and every field old apps read; a version below a raised MinVersions must get the clean 426 instead.
+  - **When an old app can't be kept working:** raise `MinVersions` in appsettings.json (as since 3.2.05). Older apps then show **"Update required for online features"** on Home (wording changed in both apps): backup, friends, groups and shoot locations stop; scoring carries on and rounds back up after updating.
+  - **"Update available" on Home (app):** the app asks Google Play (in-app updates, `com.google.android.play:app-update-ktx` 2.1.0) whether a newer version is there for you, at most once an hour. Update opens the Play page; Later hides it until the app next opens. Only shows once Play really has it, so deploying the API first is fine. Builds run from Android Studio never show it.
+  - **App version at the bottom of Home** in small text ("Version 3.2.15"). The web app already showed "Web app 3.2.15".
+  - App versionCode 77, versionName 3.2.15.
+
 ## Version 3.2.14
 
 - **3.2.14 (app, web app and API): shoot location fixes and extras (Pete).**

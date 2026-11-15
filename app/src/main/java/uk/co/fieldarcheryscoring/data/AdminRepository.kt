@@ -108,6 +108,9 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
     suspend fun renameLocation(id: String, name: String, isPrivate: Boolean? = null) =
         call { token -> api.renameLocation(token, id, name.trim(), isPrivate) }
 
+    /** 3.2.16: the Owner deletes a location; rounds there lose it. */
+    suspend fun deleteLocation(id: String) = call { token -> api.deleteLocation(token, id) }
+
     /** Returns how many rounds moved. */
     suspend fun mergeLocation(id: String, intoId: String): Int = call { token ->
         api.mergeLocation(token, id, intoId).optInt("roundsMoved")

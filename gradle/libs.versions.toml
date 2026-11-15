@@ -16,8 +16,11 @@ nearby = "19.3.0"
 junit = "4.13.2"
 # 3.2.13: Google Play services bring in fragment 1.1.0, which Play Console reports as outdated; this lifts it.
 fragment = "1.8.6"
+# 3.2.15: Google Play in-app updates, to say when a newer version is on Play.
+appUpdate = "2.1.0"
 
 [libraries]
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "appUpdate" }
 androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }

@@ -28,6 +28,9 @@ data class MapLocation(
     val canPlace: Boolean = false,
     /** On a location page (3.2.14): you're an Admin or the Owner, so you can move it on the map. */
     val canMove: Boolean = false,
+    /** On a location page (3.2.16): you named it, or you're the Owner, so you can delete it; [roundsHere] for the warning. */
+    val canDelete: Boolean = false,
+    val roundsHere: Int = 0,
     /** On a location page (3.2.12): you named it, so you can make it private or public. */
     val canChangePrivacy: Boolean = false,
     /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
@@ -139,6 +142,12 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
         changed()
     }
 
+    /** Deletes a location (3.2.16): the archer who named it, or the Owner. Rounds there (anyone's) lose it. */
+    suspend fun delete(locationId: String) {
+        call { token -> api.deleteLocation(token, locationId) }
+        changed()
+    }
+
     suspend fun page(locationId: String): LocationPage = call { token ->
         val json = api.locationPage(token, locationId)
         val location = json.getJSONObject("location")
@@ -153,6 +162,8 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
                 rounds = 0,
                 canPlace = location.optBoolean("canPlace"),
                 canMove = location.optBoolean("canMove"),
+                canDelete = location.optBoolean("canDelete"),
+                roundsHere = location.optInt("roundsHere"),
                 canChangePrivacy = location.optBoolean("canChangePrivacy"),
                 otherArchers = location.optInt("otherArchers"),
                 otherRounds = location.optInt("otherRounds"),

@@ -14,3 +14,16 @@ fun makePrivateWarning(name: String, otherArchers: Int, otherRounds: Int): Strin
         "Making it private takes it off their ${if (otherRounds == 1) "scorecard" else "scorecards"}, " +
         "and it won't go back on if you make it public again."
 }
+
+/**
+ * The warning before deleting a location (3.2.16, Pete: the archer who named it, or the Owner). Rounds there keep
+ * everything but the location, so archers can give them a new one. Same text as the web app's deleteLocationWarning.
+ */
+fun deleteLocationWarning(name: String, roundsHere: Int): String {
+    val what = when {
+        roundsHere <= 0 -> ""
+        roundsHere == 1 -> " The 1 round there loses its location; its archer can give it a new one."
+        else -> " The $roundsHere rounds there (anyone's) lose their location; each archer can give theirs a new one."
+    }
+    return "Delete $name?$what This can't be undone."
+}

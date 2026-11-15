@@ -199,6 +199,10 @@ class FieldArcheryApi(
     suspend fun setLocationPrivate(token: String, locationId: String, isPrivate: Boolean, confirm: Boolean): JSONObject =
         request("PUT", "/api/locations/$locationId/private", JSONObject().put("isPrivate", isPrivate).put("confirm", confirm), token)
 
+    /** 3.2.16: deletes a location (the archer who named it, or the Owner). Rounds there lose it. */
+    suspend fun deleteLocation(token: String, locationId: String): JSONObject =
+        request("DELETE", "/api/locations/$locationId", body = null, token = token)
+
     /** { locations: [ { requestedId, locationId, name } ] }: current id and name for ids this phone holds. */
     suspend fun resolveLocations(token: String, ids: List<String>): JSONObject =
         request("POST", "/api/locations/resolve", JSONObject().put("ids", org.json.JSONArray(ids)), token)

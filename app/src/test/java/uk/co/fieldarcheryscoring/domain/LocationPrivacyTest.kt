@@ -24,4 +24,12 @@ class LocationPrivacyTest {
             "1 other archer has 4 rounds at Home. Making it private takes it off their scorecards, and it won't go back on if you make it public again.",
             makePrivateWarning("Home", 1, 4))
     }
+
+    @Test fun `warns before deleting a location`() {
+        assertEquals("Delete Home? This can't be undone.", deleteLocationWarning("Home", 0))
+        assertEquals("Delete Home? The 1 round there loses its location; its archer can give it a new one. This can't be undone.",
+            deleteLocationWarning("Home", 1))
+        assertEquals("Delete Sherwood? The 5 rounds there (anyone's) lose their location; each archer can give theirs a new one. This can't be undone.",
+            deleteLocationWarning("Sherwood", 5))
+    }
 }

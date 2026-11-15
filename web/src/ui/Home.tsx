@@ -81,8 +81,8 @@ export function Home() {
               : 'Use your browser\'s menu → "Install app" or "Add to Home screen" so it works with no signal.'}</span>
           </div>
         )}
-        {server === 'UPDATE_REQUIRED' ? <div class="banner bad"><b>Please update the app</b><span>This version is too old for the server.
-          Scoring works as normal; rounds back up once it's updated.</span><button class="filled" onClick={updateApp}>Update now</button></div>
+        {server === 'UPDATE_REQUIRED' ? <div class="banner bad"><b>Update required for online features</b><span>This version is too old for the server, so backup, friends,
+          groups and shoot locations are off until you update. Scoring works as normal, and your rounds back up once it's updated.</span><button class="filled" onClick={updateApp}>Update now</button></div>
           : !online ? <div class="banner"><b>Device offline</b><span>Scoring works as normal. Rounds back up when you're online again.</span></div>
           : server === 'UNAVAILABLE' && <div class="banner bad"><b>Server unavailable</b><span>Scoring works as normal. Rounds back up when the server is back.</span></div>}
         <div class="card low row between">

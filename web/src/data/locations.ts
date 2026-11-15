@@ -152,6 +152,11 @@ export async function setPrivate(id: string, isPrivate: boolean, confirm = false
   await authed(t => request('PUT', `/api/locations/${id}/private`, { isPrivate, confirm }, t))
 }
 
+/** Deletes a location (3.2.16): the archer who named it, or the Owner. Rounds there lose it (anyone's). */
+export async function deleteLocation(id: string) {
+  await authed(t => request('DELETE', `/api/locations/${id}`, undefined, t))
+}
+
 /** Names a new location at a point and gives it to the round. */
 export async function nameAt(roundId: string, name: string, lat: number, lon: number, isPrivate: boolean) {
   const l = await createLocation(name, lat, lon, isPrivate)
@@ -197,7 +202,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canDelete: boolean; roundsHere: number; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -212,7 +217,7 @@ const bowStats = (b: any, withClass: boolean): BowStyleStats => ({
 export async function locationPage(id: string): Promise<LocationPage> {
   const j = await authed(t => request('GET', `/api/locations/${id}/page`, undefined, t))
   return {
-    location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canMove: !!j.location.canMove, canChangePrivacy: !!j.location.canChangePrivacy,
+    location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canMove: !!j.location.canMove, canDelete: !!j.location.canDelete, roundsHere: j.location.roundsHere ?? 0, canChangePrivacy: !!j.location.canChangePrivacy,
       otherArchers: j.location.otherArchers ?? 0, otherRounds: j.location.otherRounds ?? 0 },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({

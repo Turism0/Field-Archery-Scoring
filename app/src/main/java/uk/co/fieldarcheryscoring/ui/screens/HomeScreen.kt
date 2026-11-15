@@ -104,6 +104,8 @@ fun HomeScreen(
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
     val updateRequired by vm.updateRequired.collectAsStateWithLifecycle()
+    val updateAvailable by vm.updateAvailable.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.checkForUpdate() }
     val layout by vm.layout.collectAsStateWithLifecycle()
     val editing by vm.editing.collectAsStateWithLifecycle()
 
@@ -149,6 +151,7 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 ConnectionNotice(online, server, updateRequired)
+                if (updateAvailable && !updateRequired) UpdateAvailableNotice(onLater = vm::dismissUpdate)
                 AccountStrip(signedIn, username, role, syncStatusText(lastSync), onProfile)
 
                 val s = summary
@@ -242,6 +245,15 @@ fun HomeScreen(
                 TextButton(onClick = vm::startArranging, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                     Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text("  Arrange tiles")
+                }
+                // 3.2.15: the app's version, small, at the very bottom.
+                if (vm.versionName.isNotEmpty()) {
+                    Text(
+                        "Version ${vm.versionName}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
                 }
             }
         }
@@ -375,6 +387,42 @@ private fun ConnectionNotice(online: Boolean, server: ServerState, updateRequire
     }
 }
 
+/** 3.2.15: Google Play has a newer version. "Update" opens the app's Play page; "Later" hides it until next time. */
+@Composable
+private fun UpdateAvailableNotice(onLater: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Update available", style = MaterialTheme.typography.titleSmall)
+                Text("A newer version of the app is on Google Play.", style = MaterialTheme.typography.bodySmall)
+            }
+            TextButton(onClick = onLater) { Text("Later") }
+            TextButton(onClick = { openPlayPage(context) }) { Text("Update") }
+        }
+    }
+}
+
+/** The app's Google Play page (the Play Store app, or the website if that's missing). */
+private fun openPlayPage(context: android.content.Context) {
+    val id = context.packageName
+    val market = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$id"))
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(market) }.onFailure {
+        runCatching {
+            context.startActivity(
+                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$id"))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
+}
+
 /** 3.2.05: the server needs a newer app. Scores stay on the phone and go up once it's updated. */
 @Composable
 private fun UpdateNotice() {
@@ -388,9 +436,10 @@ private fun UpdateNotice() {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Warning, contentDescription = null, Modifier.size(20.dp))
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                Text("Please update the app", style = MaterialTheme.typography.titleSmall)
+                Text("Update required for online features", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "This version is too old for the server. Scoring works as normal; rounds back up once it's updated.",
+                    "This version is too old for the server, so backup, friends, groups and shoot locations are off until " +
+                        "you update. Scoring works as normal, and your rounds back up once it's updated.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

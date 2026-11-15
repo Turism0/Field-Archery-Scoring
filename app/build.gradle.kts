@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fieldarcheryscoring"
         minSdk = 26
         targetSdk = 36
-        versionCode = 76
-        versionName = "3.2.14"
+        versionCode = 78
+        versionName = "3.2.16"
     }
 
     buildTypes {
@@ -69,6 +69,8 @@ dependencies {
     implementation(libs.play.services.nearby)
     // 3.2.13: a current fragment library in place of the old 1.1.0 that Google Play services bring in.
     implementation(libs.androidx.fragment)
+    // 3.2.15: asks Google Play whether a newer version is available (the "Update available" notice on Home).
+    implementation(libs.play.app.update.ktx)
 
     debugImplementation(libs.androidx.ui.tooling)
 

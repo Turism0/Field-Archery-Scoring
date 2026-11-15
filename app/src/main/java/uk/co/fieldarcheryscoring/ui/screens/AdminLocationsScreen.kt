@@ -57,6 +57,8 @@ import uk.co.fieldarcheryscoring.data.AdminLocation
 import uk.co.fieldarcheryscoring.domain.metresBetween
 import uk.co.fieldarcheryscoring.ui.AdminLocationsViewModel
 import uk.co.fieldarcheryscoring.ui.Load
+import uk.co.fieldarcheryscoring.domain.deleteLocationWarning
+import uk.co.fieldarcheryscoring.domain.AccountRole
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
 import uk.co.fieldarcheryscoring.ui.components.UkDate
 import java.time.ZoneId
@@ -170,6 +172,7 @@ fun AdminLocationsScreen(
             onDismiss = { selected = null },
             onPlace = { selected = null; onPlace(loc.id, loc.name) },
             onMove = { selected = null; onMove(loc.id, loc.name) },
+            onDelete = if (role == AccountRole.OWNER) ({ vm.delete(loc) { selected = null } }) else null,
         )
     }
 }
@@ -216,7 +219,10 @@ private fun LocationActions(
     onDismiss: () -> Unit,
     onPlace: () -> Unit = {},
     onMove: () -> Unit = {},
+    /** 3.2.16: the Owner only; null hides the button. */
+    onDelete: (() -> Unit)? = null,
 ) {
+    var confirmDelete by remember(location.id) { mutableStateOf(false) }
     var name by remember(location.id) { mutableStateOf(location.name) }
     var private by remember(location.id) { mutableStateOf(location.isPrivate) }
     var picking by remember(location.id) { mutableStateOf(false) }
@@ -272,6 +278,11 @@ private fun LocationActions(
                     enabled = !busy && others.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Merge into another location…") }
+                if (onDelete != null) {
+                    TextButton(onClick = { confirmDelete = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("Delete location…", color = MaterialTheme.colorScheme.error)
+                    }
+                }
             } else {
                 Text("Merge into which location? Nearest first." + if (location.latitude == null) " (This one has no map pin.)" else "", style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary)
@@ -292,6 +303,20 @@ private fun LocationActions(
                 TextButton(onClick = { picking = false }) { Text("Back") }
             }
         }
+    }
+
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete this location?") },
+            text = { Text(deleteLocationWarning(location.name, location.rounds)) },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }, enabled = !busy) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+        )
     }
 
     confirmInto?.let { keep ->

@@ -201,6 +201,10 @@ public static class LocationPageEndpoints
 
         // 3.2.12: the archer who named it can make it private or public from here; other archers' rounds here are counted
         // so the app can warn that making it private takes it off their scorecards.
+        var roundsHere = mine || user.IsOwner()
+            ? await conn.ExecuteScalarAsync<int>(new CommandDefinition(
+                "SELECT COUNT(*) FROM dbo.Round WHERE LocationId = @id AND IsDeleted = 0;", new { id = loc.LocationId }, cancellationToken: ct))
+            : 0;
         var (otherArchers, otherRounds) = mine && !loc.IsPrivate
             ? await LocationEndpoints.OthersHereAsync(conn, loc.LocationId, me, null, ct)
             : (0, 0);
@@ -215,6 +219,10 @@ public static class LocationPageEndpoints
                 // API 3.2.14: Admins and the Owner can move a location that's on the map.
                 canMove = loc.Latitude is not null && user.IsAdmin(),
                 canChangePrivacy = mine,
+                // API 3.2.16: the archer who named it, or the Owner, can delete it; roundsHere (everyone's, not deleted)
+                // is for the warning.
+                canDelete = mine || user.IsOwner(),
+                roundsHere,
                 otherArchers,
                 otherRounds,
             },

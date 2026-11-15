@@ -38,6 +38,7 @@ import uk.co.fieldarcheryscoring.data.HandicapRepository
 import uk.co.fieldarcheryscoring.data.HomeLayoutStore
 import uk.co.fieldarcheryscoring.domain.HomeLayout
 import uk.co.fieldarcheryscoring.domain.makePrivateWarning
+import uk.co.fieldarcheryscoring.domain.deleteLocationWarning
 import uk.co.fieldarcheryscoring.domain.HomeTileId
 import uk.co.fieldarcheryscoring.data.ResetCode
 import uk.co.fieldarcheryscoring.data.GroupMember
@@ -63,6 +64,7 @@ import uk.co.fieldarcheryscoring.data.StatsFilterStore
 import uk.co.fieldarcheryscoring.data.RoundRepository
 import uk.co.fieldarcheryscoring.data.RoundSummary
 import uk.co.fieldarcheryscoring.data.remote.ApiException
+import uk.co.fieldarcheryscoring.data.AppUpdates
 import uk.co.fieldarcheryscoring.data.sync.RoundSyncer
 import uk.co.fieldarcheryscoring.domain.AccountRole
 import uk.co.fieldarcheryscoring.domain.AccountRules
@@ -174,7 +176,20 @@ class HomeViewModel(
     private val serverCheck: suspend () -> Unit,
     handicap: HandicapRepository? = null,
     private val layoutStore: HomeLayoutStore? = null,
+    private val appUpdates: AppUpdates? = null,
+    /** 3.2.15: shown small at the bottom of Home. */
+    val versionName: String = "",
 ) : SyncingViewModel(syncer, accountStore, accounts) {
+    // ---- Update available (3.2.15): Google Play has a newer version ----
+
+    private val _updateDismissed = MutableStateFlow(false)
+    /** True when Play has a newer version and it hasn't been put off ("Later") since the app opened. */
+    val updateAvailable: StateFlow<Boolean> = (appUpdates?.available ?: MutableStateFlow(false))
+        .combine(_updateDismissed) { available, dismissed -> available && !dismissed }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    fun dismissUpdate() { _updateDismissed.value = true }
+    fun checkForUpdate() { appUpdates?.let { u -> viewModelScope.launch { u.check() } } }
+
     // ---- Arranging the tiles (2.4.01) ----
 
     /** The order and hidden tiles as saved. */
@@ -525,6 +540,13 @@ class AdminLocationsViewModel(
         onDone()
     }
 
+    /** 3.2.16: the Owner deletes a location; rounds there lose it. */
+    fun delete(location: AdminLocation, onDone: () -> Unit) = act {
+        admin.deleteLocation(location.id)
+        _message.value = "${location.name} deleted."
+        onDone()
+    }
+
     fun merge(duplicate: AdminLocation, keep: AdminLocation, onDone: () -> Unit) = act {
         val moved = admin.mergeLocation(duplicate.id, keep.id)
         _message.value = "${duplicate.name} merged into ${keep.name} ($moved round${if (moved == 1) "" else "s"} moved)."
@@ -778,6 +800,37 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
     }
 
     fun cancelPrivate() { _askPrivate.value = null }
+
+    // ---- Delete (3.2.16): the archer who named it, or the Owner ----
+
+    private val _askDelete = MutableStateFlow<String?>(null)
+    /** The warning before deleting it, while asking; null otherwise. */
+    val askDelete: StateFlow<String?> = _askDelete.asStateFlow()
+
+    fun startDelete() {
+        val loc = (_page.value as? Load.Ready)?.value?.location ?: return
+        _askDelete.value = deleteLocationWarning(loc.name, loc.roundsHere)
+    }
+
+    fun cancelDelete() { _askDelete.value = null }
+
+    /** Deletes it, then [onDeleted] (go back: the page has gone). */
+    fun delete(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            _privacyBusy.value = true
+            try {
+                repo.delete(locationId)
+                _askDelete.value = null
+                onDeleted()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _askDelete.value = null
+                _message.value = e.friendlyMessage()
+            } finally {
+                _privacyBusy.value = false
+            }
+        }
+    }
 
     fun changePrivate(makePrivate: Boolean, confirm: Boolean) {
         val loc = (_page.value as? Load.Ready)?.value?.location ?: return

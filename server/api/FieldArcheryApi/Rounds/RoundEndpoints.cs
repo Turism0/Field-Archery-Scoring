@@ -157,9 +157,11 @@ public static class RoundWriter
         // location → none (3.2.12), stored as changed a millisecond later so the phone downloads it without the location.
         Guid? locationId = null;
         var dropped = false;
-        if (round.LocationId is { } lid && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc)
+        if (round.LocationId is { } lid)
         {
-            if (await LocationEndpoints.UsableByAsync(conn, loc.LocationId, archerId, tx, ct)) locationId = loc.LocationId;
+            // 3.2.16: a deleted location (unknown id) is dropped the same way, so the phone shows "No location".
+            if (await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc
+                && await LocationEndpoints.UsableByAsync(conn, loc.LocationId, archerId, tx, ct)) locationId = loc.LocationId;
             else dropped = true;
         }
 

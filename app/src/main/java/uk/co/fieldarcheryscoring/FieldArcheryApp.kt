@@ -15,6 +15,7 @@ import uk.co.fieldarcheryscoring.data.RoundRepository
 import uk.co.fieldarcheryscoring.data.local.FieldArcheryDatabase
 import uk.co.fieldarcheryscoring.data.remote.FieldArcheryApi
 import uk.co.fieldarcheryscoring.data.sync.RoundSyncer
+import uk.co.fieldarcheryscoring.data.AppUpdates
 import uk.co.fieldarcheryscoring.data.sync.SyncScheduler
 
 /** Simple manual dependency container. */
@@ -22,6 +23,10 @@ class AppContainer(app: Application) {
     private val db = FieldArcheryDatabase.create(app)
     /** Device online / server available, for the home screen notices. */
     val networkStatus = NetworkStatus(app)
+    /** 3.2.15: whether Google Play has a newer version of the app. */
+    val appUpdates = AppUpdates(app)
+    /** 3.2.15: shown small at the bottom of Home, e.g. "Version 3.2.15". */
+    val versionName: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull() ?: ""
     /** 3.2.05: this app's versionCode, sent with every call ("android/66") so the server can ask for an update. */
     private val versionCode: Long = runCatching {
         androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(app.packageManager.getPackageInfo(app.packageName, 0))

@@ -49,7 +49,7 @@ export function Shell({ section, children }: { section: string; children: Compon
           )
         })}
         <div class="grow" />
-        {server === 'UPDATE_REQUIRED' ? <div class="sidenote bad">Please update: this version is too old for the server.
+        {server === 'UPDATE_REQUIRED' ? <div class="sidenote bad">Update required for online features: this version is too old for the server.
           <button class="outlined" onClick={updateApp}>Update now</button></div>
           : !online ? <div class="sidenote">Device offline: you can still add rounds; they back up when you're online.</div>
           : server === 'UNAVAILABLE' && <div class="sidenote bad">Server unavailable: rounds back up when it's back.</div>}

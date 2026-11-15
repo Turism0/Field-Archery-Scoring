@@ -4,7 +4,8 @@ import { getAccount, isAdmin } from '../data/account'
 import { getKv } from '../data/db'
 import * as admin from '../data/admin'
 import { activateHandicapModel, adminHandicap, requestHandicapFetch, setHandicapTargets } from '../data/handicap'
-import { distanceText } from '../data/locations'
+import { deleteLocation, distanceText } from '../data/locations'
+import { deleteLocationWarning } from '../domain/locationPrivacy'
 
 const ROLE_NAMES: Record<string, string> = { OWNER: 'Owner', ADMIN: 'Admin', USER: 'User' }
 const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '')
@@ -136,7 +137,9 @@ function metres(a: admin.AdminLocation, b: admin.AdminLocation): number | null {
 }
 
 export function AdminLocations() {
-  useAdminGuard()
+  const account = useAdminGuard()
+  // 3.2.16: the Owner can delete any location (rounds there lose it).
+  const [deleting, setDeleting] = useState<admin.AdminLocation | null>(null)
   const [data, retry] = useLoad(() => admin.locations(), [])
   const [sel, setSel] = useState<admin.AdminLocation | null>(null)
   const [name, setName] = useState('')
@@ -176,6 +179,7 @@ export function AdminLocations() {
             <input type="checkbox" style="width:auto" checked={priv} onChange={e => setPriv((e.target as HTMLInputElement).checked)} /></label>
           {sel.latitude == null && <button class="outlined" onClick={() => { setSel(null); go(`/map?place=${sel.id}`) }}>📍 Put it on the map</button>}
           {sel.latitude != null && <button class="outlined" onClick={() => { setSel(null); go(`/map?place=${sel.id}&move=1`) }}>📍 Move it on the map</button>}
+          {account?.role === 'OWNER' && <button class="danger" onClick={() => setDeleting(sel)}>🗑 Delete location…</button>}
           <button class="outlined" onClick={() => setMerging(true)}>Merge into another location…</button>
         </div>}
         {sel && merging && <div class="col">
@@ -188,6 +192,11 @@ export function AdminLocations() {
         </div>}
       </Dialog>
       <MergeDialog pair={merge} onClose={() => setMerge(null)} onMerge={(dup, keep) => act(async () => toast(`Merged: ${await admin.merge(dup.id, keep.id)} rounds moved.`))} />
+      <Dialog open={!!deleting} title="Delete this location?" onClose={() => setDeleting(null)}
+        actions={<><button disabled={busy} onClick={() => setDeleting(null)}>Cancel</button>
+          <button class="danger" disabled={busy} onClick={() => { const d = deleting!; setDeleting(null); act(() => deleteLocation(d.id), `${d.name} deleted.`) }}>Delete</button></>}>
+        <p>{deleting && deleteLocationWarning(deleting.name, deleting.rounds)}</p>
+      </Dialog>
     </>
   )
 }

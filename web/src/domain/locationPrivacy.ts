@@ -12,3 +12,14 @@ export function makePrivateWarning(name: string, otherArchers: number, otherRoun
     `Making it private takes it off their ${otherRounds === 1 ? 'scorecard' : 'scorecards'}, ` +
     "and it won't go back on if you make it public again."
 }
+
+/**
+ * The warning before deleting a location (3.2.16, Pete: the archer who named it, or the Owner). Rounds there keep
+ * everything but the location, so archers can give them a new one.
+ */
+export function deleteLocationWarning(name: string, roundsHere: number): string {
+  const what = roundsHere <= 0 ? ''
+    : roundsHere === 1 ? ' The 1 round there loses its location; its archer can give it a new one.'
+    : ` The ${roundsHere} rounds there (anyone's) lose their location; each archer can give theirs a new one.`
+  return `Delete ${name}?${what} This can't be undone.`
+}

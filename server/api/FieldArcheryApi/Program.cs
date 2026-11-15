@@ -186,7 +186,8 @@ app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");   // the web ap
 
 app.Run();
 
+// 3.2.15: every API change must keep older apps working; see docs/API_COMPATIBILITY.md and run server/tests/Test-OldApps.ps1.
 static class ApiInfo
 {
-    public const string Version = "3.2.14";
+    public const string Version = "3.2.16";
 }
