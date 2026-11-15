@@ -23,6 +23,11 @@ data class MapLocation(
     val rounds: Int,
     /** On a location page (3.0): you (its creator or an Admin) can put this name-only location on the map. */
     val canPlace: Boolean = false,
+    /** On a location page (3.2.12): you named it, so you can make it private or public. */
+    val canChangePrivacy: Boolean = false,
+    /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
+    val otherArchers: Int = 0,
+    val otherRounds: Int = 0,
 ) {
     val hasPin: Boolean get() = latitude != null && longitude != null
 
@@ -110,6 +115,14 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
         call { token -> api.placeLocation(token, locationId, lat, lon) }
     }
 
+    /**
+     * Makes a location you named private or public (3.2.12). Private when others have shot there needs [confirm]: the
+     * [ApiException] (409 others_shot_here) says so otherwise. Public can be 409 name_taken.
+     */
+    suspend fun setPrivate(locationId: String, isPrivate: Boolean, confirm: Boolean = false) {
+        call { token -> api.setLocationPrivate(token, locationId, isPrivate, confirm) }
+    }
+
     suspend fun page(locationId: String): LocationPage = call { token ->
         val json = api.locationPage(token, locationId)
         val location = json.getJSONObject("location")
@@ -123,6 +136,9 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
                 myRounds = 0,
                 rounds = 0,
                 canPlace = location.optBoolean("canPlace"),
+                canChangePrivacy = location.optBoolean("canChangePrivacy"),
+                otherArchers = location.optInt("otherArchers"),
+                otherRounds = location.optInt("otherRounds"),
             ),
             myRounds = json.getJSONArray("myRounds").objects().map { it.toRoundSummary() },
             friends = json.getJSONArray("friends").objects().map { f ->

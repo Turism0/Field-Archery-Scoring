@@ -36,6 +36,7 @@ import uk.co.fieldarcheryscoring.data.FriendsRepository
 import uk.co.fieldarcheryscoring.data.HandicapRepository
 import uk.co.fieldarcheryscoring.data.HomeLayoutStore
 import uk.co.fieldarcheryscoring.domain.HomeLayout
+import uk.co.fieldarcheryscoring.domain.makePrivateWarning
 import uk.co.fieldarcheryscoring.domain.HomeTileId
 import uk.co.fieldarcheryscoring.data.ResetCode
 import uk.co.fieldarcheryscoring.data.GroupMember
@@ -736,6 +737,50 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
                 Load.Failed(e.friendlyMessage())
             } finally {
                 _refreshing.value = false
+            }
+        }
+    }
+
+    /** The warning before making it private (3.2.12), while it's showing; null when not asking. */
+    private val _askPrivate = MutableStateFlow<String?>(null)
+    val askPrivate: StateFlow<String?> = _askPrivate.asStateFlow()
+
+    private val _privacyBusy = MutableStateFlow(false)
+    val privacyBusy: StateFlow<Boolean> = _privacyBusy.asStateFlow()
+
+    /** One-off messages ("It's private now.", errors) for a snackbar. */
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun messageShown() { _message.value = null }
+
+    /** The Private switch (3.2.12): asks first when other archers have shot here. */
+    fun togglePrivate(makePrivate: Boolean) {
+        val loc = (_page.value as? Load.Ready)?.value?.location ?: return
+        val warning = if (makePrivate) makePrivateWarning(loc.name, loc.otherArchers, loc.otherRounds) else null
+        if (warning != null) _askPrivate.value = warning else changePrivate(makePrivate, confirm = false)
+    }
+
+    fun cancelPrivate() { _askPrivate.value = null }
+
+    fun changePrivate(makePrivate: Boolean, confirm: Boolean) {
+        val loc = (_page.value as? Load.Ready)?.value?.location ?: return
+        viewModelScope.launch {
+            _privacyBusy.value = true
+            try {
+                repo.setPrivate(locationId, makePrivate, confirm)
+                _askPrivate.value = null
+                _message.value = if (makePrivate) "It's private now." else "It's public now."
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                // Someone shot there since the page loaded: ask with the server's numbers.
+                if (e is ApiException && e.code == "others_shot_here") {
+                    _askPrivate.value = makePrivateWarning(loc.name, e.body?.optInt("archers", 1) ?: 1, e.body?.optInt("rounds", 1) ?: 1)
+                } else {
+                    _message.value = e.friendlyMessage()
+                }
+            } finally {
+                _privacyBusy.value = false
             }
         }
     }

@@ -22,7 +22,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,6 +85,26 @@ fun LocationPageScreen(
     val page by vm.page.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
+    val askPrivate by vm.askPrivate.collectAsStateWithLifecycle()
+    val privacyBusy by vm.privacyBusy.collectAsStateWithLifecycle()
+    val message by vm.message.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) { message?.let { snackbar.showSnackbar(it); vm.messageShown() } }
+
+    // 3.2.12: making it private when other archers have shot here.
+    askPrivate?.let { warning ->
+        AlertDialog(
+            onDismissRequest = { if (!privacyBusy) vm.cancelPrivate() },
+            title = { Text("Make it private?") },
+            text = { Text(warning) },
+            confirmButton = {
+                TextButton(onClick = { vm.changePrivate(makePrivate = true, confirm = true) }, enabled = !privacyBusy) {
+                    Text("Make private", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { vm.cancelPrivate() }, enabled = !privacyBusy) { Text("Cancel") } },
+        )
+    }
     // Class filter for the all-archer table (2.4): "G-ADULT", "L-JUNIOR" … or "" for all classes.
     var classKey by rememberSaveable { mutableStateOf("") }
     val title = (page as? Load.Ready)?.value?.location?.name ?: "Shoot location"
@@ -94,6 +120,7 @@ fun LocationPageScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(title, maxLines = 1) },
@@ -121,7 +148,24 @@ fun LocationPageScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (data.location.isPrivate) {
+                        if (data.location.canChangePrivacy) {
+                            // 3.2.12: you named it, so you can make it private or public.
+                            item(key = "privacy") {
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("Private", style = MaterialTheme.typography.titleMedium)
+                                            Text(
+                                                if (data.location.isPrivate) "Only you see it. Turn off to share it: it goes on the map and other archers can be matched to it."
+                                                else "You named this location, so you can make it private: only you see it, e.g. your garden.",
+                                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Switch(checked = data.location.isPrivate, onCheckedChange = { vm.togglePrivate(it) }, enabled = !privacyBusy)
+                                    }
+                                }
+                            }
+                        } else if (data.location.isPrivate) {
                             item(key = "private") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     PrivateBadge()

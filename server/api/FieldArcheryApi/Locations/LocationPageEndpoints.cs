@@ -18,6 +18,8 @@ namespace FieldArcheryApi.Locations;
 ///                                    bestTotal, averageTotal, averagePerAnimal }] }  (one row per round type)
 ///   (API 2.4: bowClasses: the same per bow style, class (G / L) and age group, for the app's class filter.)
 ///   (API 3.0: location.latitude / longitude null for a name-only location; location.canPlace: you can put it on the map.)
+///   (API 3.2.12: location.canChangePrivacy: you named it, so you can make it private or public with
+///    PUT /api/locations/{id}/private; location.otherArchers / otherRounds: other archers' rounds here.)
 /// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it and
 /// Admins, and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
 /// </summary>
@@ -197,6 +199,12 @@ public static class LocationPageEndpoints
             }).ToList();
         }
 
+        // 3.2.12: the archer who named it can make it private or public from here; other archers' rounds here are counted
+        // so the app can warn that making it private takes it off their scorecards.
+        var (otherArchers, otherRounds) = mine && !loc.IsPrivate
+            ? await LocationEndpoints.OthersHereAsync(conn, loc.LocationId, me, null, ct)
+            : (0, 0);
+
         return Results.Ok(new
         {
             location = new
@@ -204,6 +212,9 @@ public static class LocationPageEndpoints
                 loc.LocationId, loc.Name, latitude = (double?)loc.Latitude, longitude = (double?)loc.Longitude, loc.IsPrivate,
                 // API 3.0: a name-only location can be put on the map by its creator or an Admin.
                 canPlace = loc.Latitude is null && (mine || user.IsAdmin()),
+                canChangePrivacy = mine,
+                otherArchers,
+                otherRounds,
             },
             myRounds = myRounds.Select(Summary),
             friends,

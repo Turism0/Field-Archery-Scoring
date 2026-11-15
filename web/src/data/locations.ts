@@ -144,6 +144,14 @@ export async function placeLocation(id: string, lat: number, lon: number) {
   await authed(t => request('PUT', `/api/locations/${id}/position`, { latitude: lat, longitude: lon }, t))
 }
 
+/**
+ * Makes a location you named private or public (3.2.12). Private when others have shot there needs confirm (the page warns
+ * first; 409 others_shot_here otherwise); public can be 409 name_taken. Your own rounds keep it either way.
+ */
+export async function setPrivate(id: string, isPrivate: boolean, confirm = false) {
+  await authed(t => request('PUT', `/api/locations/${id}/private`, { isPrivate, confirm }, t))
+}
+
 /** Names a new location at a point and gives it to the round. */
 export async function nameAt(roundId: string, name: string, lat: number, lon: number, isPrivate: boolean) {
   const l = await createLocation(name, lat, lon, isPrivate)
@@ -189,7 +197,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation & { canPlace: boolean }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -204,7 +212,8 @@ const bowStats = (b: any, withClass: boolean): BowStyleStats => ({
 export async function locationPage(id: string): Promise<LocationPage> {
   const j = await authed(t => request('GET', `/api/locations/${id}/page`, undefined, t))
   return {
-    location: { ...toMap(j.location), canPlace: !!j.location.canPlace },
+    location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canChangePrivacy: !!j.location.canChangePrivacy,
+      otherArchers: j.location.otherArchers ?? 0, otherRounds: j.location.otherRounds ?? 0 },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({
       archerId: f.archerId, username: f.username, roundType: f.roundType ?? 'BIG_GAME', rounds: f.rounds, bestTotal: f.bestTotal ?? null,

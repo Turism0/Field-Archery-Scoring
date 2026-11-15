@@ -19,6 +19,11 @@ namespace FieldArcheryApi.Locations;
 ///                                you can see (public, and your own private ones), by name: for choosing one for a round
 ///   PUT  /api/locations/{id}/position { latitude, longitude } (API 3.0) → { locationId, name, latitude, longitude }: puts a
 ///                                name-only location on the map; its creator or an Admin; 409 already_placed if it has a pin
+///   PUT  /api/locations/{id}/private { isPrivate, confirm? } (API 3.2.12) → { locationId, name, isPrivate, roundsCleared }:
+///                                the archer who named it makes it private or public. Making it private when other archers
+///                                have rounds there → 409 others_shot_here { archers, rounds } unless confirm: true; then it's
+///                                taken off their rounds (and groups / requests). Making it public → 409 name_taken if a public
+///                                location already has the name.
 ///   POST /api/locations/resolve  { ids: [...] }   → { locations: [{ requestedId, locationId, name }] } current id and name
 ///                                                    for ids a phone holds (follows merges; unknown ids left out)
 ///  Admins and Owner:
@@ -40,6 +45,7 @@ public static class LocationEndpoints
     public sealed record PositionRequest(double? Latitude, double? Longitude);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
     public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
+    public sealed record PrivacyRequest(bool? IsPrivate, bool? Confirm = null);
     public sealed record ApproveRequest(Guid? AId, Guid? BId);
     public sealed record MergeRequest(Guid? IntoId);
 
@@ -69,6 +75,7 @@ public static class LocationEndpoints
         locations.MapPost("/resolve", Resolve);
         locations.MapGet("/named", Named);
         locations.MapPut("/{locationId:guid}/position", Place);
+        locations.MapPut("/{locationId:guid}/private", SetPrivate);
 
         var admin = app.MapGroup("/api/admin/locations").RequireAuthorization();
         admin.MapGet("/", AdminList);
@@ -270,6 +277,14 @@ public static class LocationEndpoints
                 new { locationId }, cancellationToken: ct));
             if (creator != user.ArcherId())
                 return Error(403, "not_creator", "Only the archer who named a location can make it private.");
+            // 3.2.12: that takes it off other archers' rounds, so it's done from the location's page, which asks first.
+            var (archers, rounds) = await OthersHereAsync(conn, locationId, user.ArcherId(), null, ct);
+            if (rounds > 0)
+                return Results.Json(new
+                {
+                    error = "others_shot_here", archers, rounds,
+                    message = "Other archers have shot here. Make it private from the location's own page, which asks first.",
+                }, statusCode: StatusCodes.Status409Conflict);
         }
         try
         {
@@ -291,6 +306,92 @@ public static class LocationEndpoints
             return await NameTaken(conn, name, ct);
         }
     }
+
+    /// <summary>
+    /// Private or public (3.2.12, Pete): the archer who named a location changes it from its page. Making it private when
+    /// other archers have rounds there needs confirm: true (the app warns and asks first); it's then taken off their rounds,
+    /// so their scorecards no longer show it, and off groups and round requests from them. Their rounds are marked as
+    /// changed (a millisecond later) so their phones download the round without the location.
+    /// </summary>
+    private static async Task<IResult> SetPrivate(Guid locationId, PrivacyRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        if (req.IsPrivate is not { } makePrivate) return Error(400, "invalid_request", "Say whether it's private (isPrivate).");
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var loc = await conn.QuerySingleOrDefaultAsync<(string Name, bool IsPrivate, Guid? CreatedById)>(new CommandDefinition("""
+            SELECT Name, IsPrivate, CreatedById FROM dbo.ShootLocation WITH (UPDLOCK, HOLDLOCK)
+            WHERE LocationId = @locationId AND MergedIntoId IS NULL;
+            """, new { locationId }, tx, cancellationToken: ct));
+        if (loc.Name is null || (loc.IsPrivate && loc.CreatedById != me))
+            return Error(404, "no_such_location", "There's no location with that id (or it was merged into another).");
+        if (loc.CreatedById != me)
+            return Error(403, "not_creator", "Only the archer who named a location can make it private or public.");
+        if (loc.IsPrivate == makePrivate)
+            return Results.Ok(new { locationId, name = loc.Name, isPrivate = makePrivate, roundsCleared = 0 });
+
+        var cleared = 0;
+        if (makePrivate)
+        {
+            var (archers, rounds) = await OthersHereAsync(conn, locationId, me, tx, ct);
+            if (rounds > 0 && req.Confirm != true)
+            {
+                return Results.Json(new
+                {
+                    error = "others_shot_here", archers, rounds,
+                    message = $"{Plural(archers, "other archer")} {(archers == 1 ? "has" : "have")} {Plural(rounds, "round")} here. " +
+                              "Making it private takes it off their scorecards.",
+                }, statusCode: StatusCodes.Status409Conflict);
+            }
+            await conn.ExecuteAsync(new CommandDefinition(
+                "UPDATE dbo.ShootLocation SET IsPrivate = 1 WHERE LocationId = @locationId;", new { locationId }, tx, cancellationToken: ct));
+            cleared = await conn.ExecuteAsync(new CommandDefinition("""
+                UPDATE dbo.Round
+                SET LocationId = NULL, ClientUpdatedUtc = DATEADD(millisecond, 1, ClientUpdatedUtc), ServerUpdatedUtc = SYSUTCDATETIME()
+                WHERE LocationId = @locationId AND ArcherId <> @me;
+                """, new { locationId, me }, tx, cancellationToken: ct));
+            await conn.ExecuteAsync(new CommandDefinition("""
+                UPDATE dbo.ScoreGroup SET LocationId = NULL, UpdatedUtc = SYSUTCDATETIME() WHERE LocationId = @locationId AND HostId <> @me;
+                UPDATE dbo.RoundOffer SET LocationId = NULL, UpdatedUtc = SYSUTCDATETIME() WHERE LocationId = @locationId AND FromArcherId <> @me;
+                """, new { locationId, me }, tx, cancellationToken: ct));
+        }
+        else
+        {
+            try
+            {
+                await conn.ExecuteAsync(new CommandDefinition(
+                    "UPDATE dbo.ShootLocation SET IsPrivate = 0 WHERE LocationId = @locationId;", new { locationId }, tx, cancellationToken: ct));
+            }
+            catch (SqlException ex) when (Db.IsDuplicateKey(ex))
+            {
+                await tx.RollbackAsync(ct);
+                return await NameTaken(conn, loc.Name, ct);
+            }
+        }
+        await tx.CommitAsync(ct);
+        return Results.Ok(new { locationId, name = loc.Name, isPrivate = makePrivate, roundsCleared = cleared });
+    }
+
+    private static string Plural(int n, string what) => n == 1 ? $"1 {what}" : $"{n} {what}s";
+
+    /// <summary>Other archers' rounds at a location (not deleted): how many archers, how many rounds.</summary>
+    public static async Task<(int Archers, int Rounds)> OthersHereAsync(
+        SqlConnection conn, Guid locationId, Guid me, System.Data.IDbTransaction? tx, CancellationToken ct) =>
+        await conn.QuerySingleAsync<(int, int)>(new CommandDefinition("""
+            SELECT COUNT(DISTINCT ArcherId), COUNT(*) FROM dbo.Round
+            WHERE LocationId = @locationId AND ArcherId <> @me AND IsDeleted = 0;
+            """, new { locationId, me }, tx, cancellationToken: ct));
+
+    /// <summary>
+    /// Whether an archer's round can be at a location (3.2.12): not when it's someone else's private location (e.g. a
+    /// phone that hadn't heard yet uploads a round still showing it).
+    /// </summary>
+    public static async Task<bool> UsableByAsync(
+        SqlConnection conn, Guid locationId, Guid archerId, System.Data.IDbTransaction? tx, CancellationToken ct) =>
+        await conn.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT COUNT(*) FROM dbo.ShootLocation
+            WHERE LocationId = @locationId AND (IsPrivate = 0 OR CreatedById = @archerId);
+            """, new { locationId, archerId }, tx, cancellationToken: ct)) > 0;
 
     /// <summary>
     /// Merge a duplicate into the location kept. Someone else's private location can only be merged when it's flagged

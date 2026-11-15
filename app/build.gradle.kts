@@ -12,8 +12,8 @@ android {
         applicationId = "uk.co.fieldarcheryscoring"
         minSdk = 26
         targetSdk = 36
-        versionCode = 73
-        versionName = "3.2.11"
+        versionCode = 74
+        versionName = "3.2.12"
     }
 
     buildTypes {

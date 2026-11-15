@@ -4,6 +4,16 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.12
+
+- **3.2.12 (app, web app and API): the archer who named a location can make it private or public from its page (Pete).** Before, the Private choice was only offered when naming a location; afterwards only the Admin screen had it, and the server only let the creator use it, so a normal archer couldn't change it at all.
+  - **Location page:** a Private switch, shown only to the archer who named the location (both apps). `PUT /api/locations/{id}/private { isPrivate, confirm }`; the page (`GET /api/locations/{id}/page`) now says `canChangePrivacy`, `otherArchers` and `otherRounds`.
+  - **Making it private when others have shot there** shows a warning first ("2 other archers have 5 rounds at …. Making it private takes it off their scorecards, and it won't go back on if you make it public again.") with Cancel / Make private. Without `confirm` the server answers 409 `others_shot_here` with the counts, so a round shot since the page loaded still gets asked about.
+  - **Taken off other archers' scorecards:** their rounds there lose the location (and their groups and round requests). Their rounds are marked as changed a millisecond later, so their phones download them without it at the next sync and show "No location". A phone that hadn't synced yet and uploads a round still showing the location has it dropped by the server the same way (someone else's private location can't be put on a round).
+  - **Making it public** fails with "There's already a location called …" if a public location has the same name.
+  - The Admin screen's Private switch is unchanged, but refuses (409 `others_shot_here`) when other archers have shot there and points to the location page, which asks first.
+  - Tests: Kotlin 91 (new `LocationPrivacyTest`), web 85 (new `locationPrivacy.test.ts`); the web switch, warning, Cancel, Make private and back to public checked in a browser against the mock server. API not compiled here (no dotnet). App versionCode 74, versionName 3.2.12.
+
 ## Version 3.2.11
 
 - **3.2.11 (app; API and web app version only): native debug symbols in the release bundle (Pete, Play Console warning).** `ndk { debugSymbolLevel = "FULL" }` on the release build, so the native code in the libraries (Google Play services) comes with whatever debug symbols they ship, for readable crash reports. Libraries that ship stripped code have none, so Play Console may still show the warning; it doesn't block releasing. The "no deobfuscation file" warning doesn't apply: code shrinking (R8) is off, so crash reports already show real names. App versionCode 73, versionName 3.2.11.

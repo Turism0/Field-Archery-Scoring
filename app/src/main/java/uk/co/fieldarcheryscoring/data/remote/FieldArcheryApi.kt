@@ -191,6 +191,13 @@ class FieldArcheryApi(
     suspend fun placeLocation(token: String, locationId: String, lat: Double, lon: Double): JSONObject =
         request("PUT", "/api/locations/$locationId/position", JSONObject().put("latitude", lat).put("longitude", lon), token)
 
+    /**
+     * 3.2.12: makes a location you named private or public. Private when others have shot there needs [confirm]
+     * (409 others_shot_here { archers, rounds } otherwise); public can be 409 name_taken.
+     */
+    suspend fun setLocationPrivate(token: String, locationId: String, isPrivate: Boolean, confirm: Boolean): JSONObject =
+        request("PUT", "/api/locations/$locationId/private", JSONObject().put("isPrivate", isPrivate).put("confirm", confirm), token)
+
     /** { locations: [ { requestedId, locationId, name } ] }: current id and name for ids this phone holds. */
     suspend fun resolveLocations(token: String, ids: List<String>): JSONObject =
         request("POST", "/api/locations/resolve", JSONObject().put("ids", org.json.JSONArray(ids)), token)

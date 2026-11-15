@@ -153,11 +153,15 @@ public static class RoundWriter
         Microsoft.Data.SqlClient.SqlConnection conn, System.Data.Common.DbTransaction tx, Guid roundId, RoundDto round,
         Guid archerId, bool exists, Guid? groupId, Guid? scoredById, CancellationToken ct)
     {
-        // Store the location the id stands for now (it may have been merged); unknown → none.
-        Guid? locationId = round.LocationId is { } lid
-            && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc
-            ? loc.LocationId
-            : null;
+        // Store the location the id stands for now (it may have been merged); unknown → none. Someone else's private
+        // location → none (3.2.12), stored as changed a millisecond later so the phone downloads it without the location.
+        Guid? locationId = null;
+        var dropped = false;
+        if (round.LocationId is { } lid && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc)
+        {
+            if (await LocationEndpoints.UsableByAsync(conn, loc.LocationId, archerId, tx, ct)) locationId = loc.LocationId;
+            else dropped = true;
+        }
 
         var p = new
         {
@@ -172,7 +176,7 @@ public static class RoundWriter
             round.Status,
             round.TotalPoints,
             clientCreatedUtc = RoundEndpoints.TrimUtc(round.ClientCreatedUtc),
-            clientUpdatedUtc = RoundEndpoints.TrimUtc(round.ClientUpdatedUtc),
+            clientUpdatedUtc = RoundEndpoints.TrimUtc(round.ClientUpdatedUtc).AddMilliseconds(dropped ? 1 : 0),
             roundType = RoundValidator.TypeOf(round),
             groupId,
             scoredById,

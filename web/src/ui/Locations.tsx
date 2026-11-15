@@ -6,8 +6,10 @@ import { getAccount } from '../data/account'
 import { getModel } from '../data/handicap'
 import { getRound } from '../data/db'
 import * as loc from '../data/locations'
+import { ApiError } from '../data/api'
 import { BOW_STYLES, ROUND_TYPE_NAMES, locationStatus, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { multiplier, type HandicapModel } from '../domain/handicap'
+import { makePrivateWarning } from '../domain/locationPrivacy'
 
 /** One line showing where the round is; tap for the location sheet. */
 export function LocationChip({ round, signedIn, onClick }: { round: Round; signedIn: boolean; onClick: () => void }) {
@@ -253,7 +255,8 @@ export function LocationPageScreen({ id }: { id: string }) {
         const shown = chosen ? p.bowClasses.filter(b => b.archerClass === chosen.archerClass && b.ageGroup === chosen.ageGroup) : p.bowStyles
         const types = [...new Set(shown.map(b => b.roundType))]
         return <div class="split"><div>
-          {p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 Private: only you see it</span>}
+          {p.location.canChangePrivacy ? <PrivacyCard page={p} id={id} onChanged={retry} />
+            : p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 Private: only you see it</span>}
           {!loc.hasPin(p.location) && <Card title="No map pin" sub="This shoot is known by its name only, so it isn't on the map.">
             {p.location.canPlace && <button class="tonal" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}`)}>📍 Put it on the map</button>}
           </Card>}
@@ -301,6 +304,47 @@ export function LocationPageScreen({ id }: { id: string }) {
         </div></div>
       }}</Loading></main>
     </>
+  )
+}
+
+/** Private or public, for the archer who named the location (3.2.12): warns first when others have shot there. */
+function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: string; onChanged: () => void }) {
+  const l = page.location
+  const [busy, setBusy] = useState(false)
+  const [ask, setAsk] = useState<string | null>(null)
+  const change = async (isPrivate: boolean, confirm = false) => {
+    setBusy(true)
+    try {
+      await loc.setPrivate(id, isPrivate, confirm)
+      setAsk(null)
+      toast(isPrivate ? 'It\'s private now.' : 'It\'s public now.')
+      onChanged()
+    } catch (e) {
+      // Someone shot there since the page loaded: ask with the server's numbers.
+      if (e instanceof ApiError && e.code === 'others_shot_here') setAsk(makePrivateWarning(l.name, e.body?.archers ?? 1, e.body?.rounds ?? 1))
+      else toast(errorText(e))
+    } finally { setBusy(false) }
+  }
+  const toggle = (v: boolean) => {
+    const warning = v ? makePrivateWarning(l.name, l.otherArchers, l.otherRounds) : null
+    if (warning) setAsk(warning)
+    else change(v)
+  }
+  return (
+    <div class="card low">
+      <label class="row" style="flex-wrap:nowrap;align-items:flex-start">
+        <span class="grow"><b>🔒 Private</b><div class="sub">{l.isPrivate
+          ? 'Only you see it. Turn off to share it: it goes on the map and other archers can be matched to it.'
+          : 'You named this location, so you can make it private: only you see it, e.g. your garden.'}</div></span>
+        <input type="checkbox" style="width:auto;margin-top:4px" checked={l.isPrivate} disabled={busy}
+          onChange={e => { const v = (e.target as HTMLInputElement).checked; (e.target as HTMLInputElement).checked = l.isPrivate; toggle(v) }} />
+      </label>
+      <Dialog open={!!ask} title="Make it private?" onClose={() => setAsk(null)}
+        actions={<><button disabled={busy} onClick={() => setAsk(null)}>Cancel</button>
+          <button class="danger" disabled={busy} onClick={() => change(true, true)}>Make private</button></>}>
+        <p>{ask}</p>
+      </Dialog>
+    </div>
   )
 }
 
