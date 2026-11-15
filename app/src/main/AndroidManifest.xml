@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Talks to the API (https only). -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -59,6 +60,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 3.2.13 (Play Console: large screens): Google's QR scanner (live groups) declares its hand-over screen as
+             portrait only. It's an invisible step before Google Play services' own scanner, so let it follow the device:
+             Android 16 ignores orientation locks on tablets and foldables anyway. -->
+        <activity
+            android:name="com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity"
+            android:screenOrientation="unspecified"
+            tools:replace="android:screenOrientation" />
     </application>
 
 </manifest>

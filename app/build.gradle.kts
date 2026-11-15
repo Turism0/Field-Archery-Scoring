@@ -12,13 +12,17 @@ android {
         applicationId = "uk.co.fieldarcheryscoring"
         minSdk = 26
         targetSdk = 36
-        versionCode = 74
-        versionName = "3.2.12"
+        versionCode = 75
+        versionName = "3.2.13"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 3.2.13 (Play Console: DEX code optimisation): R8 shrinks, optimises and obfuscates the release build. Crash
+            // reports stay readable: the bundle carries the mapping file, which Play Console uses to translate them.
+            // Rules for this app's own code are in proguard-rules.pro; the libraries bring their own.
+            isMinifyEnabled = true
+            isShrinkResources = true
             // 3.2.11: the libraries' native debug symbols go in the bundle, for readable crash reports in Play Console.
             ndk { debugSymbolLevel = "FULL" }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -63,6 +67,8 @@ dependencies {
     implementation(libs.play.services.code.scanner)
     // Live groups with no signal: phone to phone over Bluetooth / Wi-Fi (2.3).
     implementation(libs.play.services.nearby)
+    // 3.2.13: a current fragment library in place of the old 1.1.0 that Google Play services bring in.
+    implementation(libs.androidx.fragment)
 
     debugImplementation(libs.androidx.ui.tooling)
 

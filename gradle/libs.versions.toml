@@ -14,8 +14,11 @@ zxing = "3.5.3"
 codeScanner = "16.1.0"
 nearby = "19.3.0"
 junit = "4.13.2"
+# 3.2.13: Google Play services bring in fragment 1.1.0, which Play Console reports as outdated; this lifts it.
+fragment = "1.8.6"
 
 [libraries]
+androidx-fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }

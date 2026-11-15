@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.13
+
+- **3.2.13 (app; API and web app version only): Play Console's three warnings on the first closed test release (Pete).**
+  - **DEX code optimisation / obfuscation 0%:** the release build now runs R8 (`isMinifyEnabled = true`, `isShrinkResources = true`), which shrinks, optimises and obfuscates the code. The bundle carries the mapping file, so Play Console still shows crash reports with real names. `proguard-rules.pro` keeps line numbers and keeps osmdroid (the map) as it is, since it ships no rules of its own; the other libraries bring theirs. **Test the release build before uploading**: scoring, sync, the map, live groups (QR and nearby) and the live group notification.
+  - **Outdated androidx.fragment 1.1.0:** it comes in with Google Play services; the app now asks for `androidx.fragment:fragment` 1.8.6 directly, which replaces it.
+  - **Large screens (resizability and orientation):** the app's own screen has no restrictions; the portrait lock came from Google's QR scanner (`GmsBarcodeScanningDelegateActivity`, an invisible hand-over step). The app's manifest now overrides it to follow the device.
+  - App versionCode 75, versionName 3.2.13.
+
 ## Version 3.2.12
 
 - **3.2.12 (app, web app and API): the archer who named a location can make it private or public from its page (Pete).** Before, the Private choice was only offered when naming a location; afterwards only the Admin screen had it, and the server only let the creator use it, so a normal archer couldn't change it at all.
