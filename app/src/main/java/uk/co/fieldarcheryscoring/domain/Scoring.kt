@@ -173,6 +173,22 @@ data class TargetScore(
     val isOverridden: Boolean get() = overridePoints != null
     val maxPoints: Int get() = if (isWoodsman) WoodsmanScoring.MAX_PER_TARGET else animals.size * BigGameScoring.MAX_PER_ANIMAL   // fun shot: 0
 
+    /**
+     * The most this target can still add (3.2.18, a tester via Pete): 0 once it's scored or overridden. Big Game: 24 for
+     * each animal still to score (a prey only while the predator is unscored or left it arrows; the prey's arrows count
+     * from 1). Woodsman: a kill on the next arrow (30 / 20 / 10). A fun shot can't be known, so 0. Same as the web's.
+     */
+    val remainingPoints: Int
+        get() = when {
+            isOverridden || isFun -> 0
+            isWoodsman -> if (WoodsmanScoring.isFinished(arrows)) 0 else WoodsmanScoring.killPoints(arrows.size + 1)
+            else -> animals.indices.sumOf { i ->
+                val preyWithNoArrows = type == TargetType.PREDATOR_PREY && i > 0 &&
+                    animals[0] !is AnimalResult.Pending && arrowsAvailable(i) == 0
+                if (animals[i] is AnimalResult.Pending && !preyWithNoArrows) BigGameScoring.MAX_PER_ANIMAL else 0
+            }
+        }
+
     /** How many arrows can be shot at the given animal, given the other results. */
     fun arrowsAvailable(animalIndex: Int): Int = arrowsAvailable(type, animals, animalIndex)
 

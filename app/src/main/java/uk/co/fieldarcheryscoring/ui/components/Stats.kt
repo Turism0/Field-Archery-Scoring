@@ -33,9 +33,13 @@ import java.util.Locale
  * [compact] drops the per-arrow row to save space on the scoring screen.
  * [showTotal] false on scorecards (2.7.06), whose header already shows the total in large type.
  * [oneLine] (2.9.03): short screens while scoring – just "Total · avg · scored" on one line.
+ * [remaining] (3.2.18): while scoring, if switched on in the menu: the points still available and the max possible.
  */
 @Composable
-fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true, oneLine: Boolean = false) {
+fun RunningStats(
+    stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true, oneLine: Boolean = false,
+    remaining: Pair<Int, Int>? = null,
+) {
     if (oneLine) {
         val avg = stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–"
         Card(
@@ -50,6 +54,7 @@ fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Bool
                 Text("Avg $avg", style = MaterialTheme.typography.titleMedium)
                 Text("${stats.targetsScored + stats.funShots}/${stats.targetCount} scored", style = MaterialTheme.typography.titleMedium)
             }
+            remaining?.let { RemainingLine(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
         }
         return
     }
@@ -66,6 +71,7 @@ fun RunningStats(stats: RoundStats, modifier: Modifier = Modifier, compact: Bool
                 BigStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "Avg per animal" else "Avg per target", stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–")
                 BigStat("Scored", "${stats.targetsScored + stats.funShots}/${stats.targetCount}")
             }
+            remaining?.let { RemainingLine(it) }
             if (stats.funShots > 0) {
                 Text(
                     "Total includes ${if (stats.funShots == 1) "a fun shot" else "${stats.funShots} fun shots"} (${stats.funPoints} points), left out of the stats",
@@ -166,5 +172,14 @@ fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, 
                 }
             }
         }
+    }
+}
+
+/** "Remaining 288   Max possible 600" (3.2.18). */
+@Composable
+private fun RemainingLine(remaining: Pair<Int, Int>, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
+        Text("Remaining ${remaining.first}", style = MaterialTheme.typography.titleSmall)
+        Text("Max possible ${remaining.second}", style = MaterialTheme.typography.titleSmall)
     }
 }

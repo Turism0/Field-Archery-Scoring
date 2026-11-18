@@ -51,6 +51,13 @@ data class Round(
     fun target(targetNo: Int): TargetScore =
         targets.firstOrNull { it.targetNo == targetNo } ?: newTarget(type, targetNo)
 
+    /**
+     * While scoring (3.2.18): the points still available on targets not yet scored (an untouched Big Game target counts
+     * as one animal, 24; Woodsman 30), and the most the round can now reach.
+     */
+    val remainingPoints: Int get() = (1..targetCount).sumOf { target(it).remainingPoints }
+    val maxPossiblePoints: Int get() = totalPoints + remainingPoints
+
     /** The next target that still needs a score, or null when every target is scored. */
     val firstUnscoredTargetNo: Int? get() = (1..targetCount).firstOrNull { !target(it).isComplete }
 

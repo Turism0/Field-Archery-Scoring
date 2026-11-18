@@ -121,6 +121,7 @@ fun ScoringScreen(
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
     val currentId by vm.roundId.collectAsStateWithLifecycle()
+    val showRemaining by vm.showRemaining.collectAsStateWithLifecycle()
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == currentId }
     var showCard by rememberSaveable { mutableStateOf(false) }
@@ -244,6 +245,11 @@ fun ScoringScreen(
                                     DropdownMenuItem(text = { Text("Show my check QR") }, onClick = { menuOpen = false; checkQr = vm.checkQrText() })
                                     DropdownMenuItem(text = { Text("Scan their check QR") }, onClick = { menuOpen = false; scanCheckQr() })
                                 }
+                                // 3.2.18 (a tester via Pete): remaining and max possible under the total.
+                                DropdownMenuItem(
+                                    text = { Text(if (showRemaining) "Hide remaining and max possible" else "Show remaining and max possible") },
+                                    onClick = { menuOpen = false; vm.setShowRemaining(!showRemaining) },
+                                )
                                 DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }
@@ -303,7 +309,10 @@ fun ScoringScreen(
                 .padding(horizontal = 16.dp, vertical = sizes.gap),
             verticalArrangement = Arrangement.spacedBy(sizes.gap),
         ) {
-            RunningStats(r.stats, compact = true, oneLine = sizes.oneLineStats)
+            RunningStats(
+                r.stats, compact = true, oneLine = sizes.oneLineStats,
+                remaining = if (showRemaining) r.remainingPoints to r.maxPossiblePoints else null,
+            )
             if (target.isWoodsman) WoodsmanEditor(
                 target = target,
                 onArrow = { vm.addArrow(it) },

@@ -312,7 +312,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScoringScreen(
-                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved, c.liveGroupRepository) },
+                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved, c.liveGroupRepository, c.scoringOptionsStore) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.

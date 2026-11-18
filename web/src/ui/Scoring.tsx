@@ -5,7 +5,7 @@ import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
 import { changedSince, deleteRound, groupOf, restore, saveTarget, setStatus, setTypeForGroup, snapshot, syncNow } from '../data/rounds'
 import * as live from '../data/live'
-import { canGoTo, firstUnscored, locationStatus, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
+import { canGoTo, firstUnscored, locationStatus, roundRemaining, roundStats, roundTotal, target, targetsComplete, type Round } from '../domain/round'
 import {
   FUN_MAX, HIT_NAMES, MAX_FAN, MIN_FAN, TARGET_TYPE_NAMES, WOODSMAN_MAX, animalLabel, animalPoints, arrowsAvailable, bigGamePoints, calculatedPoints,
   cleared, isComplete, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
@@ -25,6 +25,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const [n, setN] = useState(startTarget ?? 0)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [overrideText, setOverrideText] = useState('')
+  // 3.2.18 (a tester via Pete): remaining and max possible under the total, off unless switched on (kept on this device).
+  const [showRemaining, setShowRemaining] = useState(readShowRemaining)
   const [ask, setAsk] = useState<'finish' | 'delete' | 'takeover' | 'card' | null>(null)
   const account = useData(getAccount)
   const [locOpen, setLocOpen] = useState(false)
@@ -192,6 +194,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           { text: inGroup ? `Round details – ${name}` : 'Round details', onClick: () => go(`/edit/${current}`) },
           !!s && live.canTakeOver(s) && { text: 'Take over as host', onClick: () => setAsk('takeover') },
           ...liveCheck.menu,
+          { text: showRemaining ? 'Hide remaining and max possible' : 'Show remaining and max possible', onClick: () => { const on = !showRemaining; setShowRemaining(on); try { localStorage.setItem(SHOW_REMAINING, on ? '1' : '0') } catch { /* this session only */ } } },
           { text: `Delete ${what}`, onClick: () => setAsk('delete'), danger: true },
         ]} />
       </Bar>
@@ -218,7 +221,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
         </div>
       )}
       <main class="form">
-        <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact />
+        <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact remaining={showRemaining ? roundRemaining(shown) : null} />
         <div class={`col score-area ${t.animals.length > 1 ? 'multi' : ''}`} style={canScore ? '' : 'opacity:.55'}>
           {round.type === 'WOODSMAN'
             ? <WoodsmanEditor t={t} onArrow={a => edit(x => withArrow(x, a))} onUndo={() => edit(withoutLastArrow)}
@@ -418,4 +421,9 @@ function WoodsmanEditor({ t, onArrow, onUndo, onOverride, onRemoveOverride, onCl
       </>}
     </>
   )
+}
+
+const SHOW_REMAINING = 'showRemaining'
+function readShowRemaining(): boolean {
+  try { return localStorage.getItem(SHOW_REMAINING) === '1' } catch { return false }
 }

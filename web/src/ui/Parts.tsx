@@ -19,7 +19,8 @@ export const typeAndClass = (r: Round) => (r.type === 'WOODSMAN' ? 'Woodsman · 
 
 /** Total, average, progress, hit counts and which arrow scored. [compact] drops the arrow row (scoring screen). */
 /** [noTotal] (2.7.06): on scorecards, whose header already shows the total in large type. */
-export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundStats; targetCount: number; compact?: boolean; noTotal?: boolean }) {
+/** [remaining] (3.2.18): while scoring, if switched on in the menu: points still available and the most the round can reach. */
+export function RunningStats({ s, targetCount, compact, noTotal, remaining }: { s: RoundStats; targetCount: number; compact?: boolean; noTotal?: boolean; remaining?: { remaining: number; maxPossible: number } | null }) {
   const big = s.maxPerAnimal === 24
   return (
     <div class="card hi runstats">
@@ -28,6 +29,8 @@ export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundSta
         <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>Avg<span class="long">{big ? ' per animal' : ' per target'}</span></span></div>
         <div><b class="lg">{s.targetsScored + s.funShots}/{targetCount}</b><span>Scored</span></div>
       </div>
+      {remaining && <div class="row" style="justify-content:center;gap:16px;flex-wrap:wrap">
+        <span>Remaining <b>{remaining.remaining}</b></span><span>Max possible <b>{remaining.maxPossible}</b></span></div>}
       {s.funShots > 0 && <div class="sub" style="text-align:center;color:inherit">
         Total includes {s.funShots === 1 ? 'a fun shot' : `${s.funShots} fun shots`} ({s.funPoints} points), left out of the stats</div>}
       <hr />

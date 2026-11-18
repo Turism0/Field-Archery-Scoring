@@ -1882,7 +1882,12 @@ class ScoringViewModel(
     private val rounds: RoundRepository,
     private val saved: SavedStateHandle,
     private val liveRepo: LiveGroupRepository? = null,
+    private val options: uk.co.fieldarcheryscoring.data.ScoringOptionsStore? = null,
 ) : ViewModel() {
+    /** 3.2.18: show the remaining points and max possible under the total (switched in the menu, kept on the phone). */
+    val showRemaining: StateFlow<Boolean> = options?.showRemaining ?: MutableStateFlow(false)
+    fun setShowRemaining(on: Boolean) { options?.setShowRemaining(on) }
+
     /** The round opened from the nav route (in a group, whoever was tapped; usually the scorer's own round). */
     val startRoundId: String = checkNotNull(saved["roundId"])
 

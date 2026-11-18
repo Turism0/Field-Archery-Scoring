@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.18
+
+- **3.2.18 (app and web app; API version number only): remaining and max possible while scoring (a tester, via Pete).**
+  - The scoring screen's ⋮ menu has **Show remaining and max possible** (off until switched on; kept on the phone / browser). When it's on, under the running total: **Remaining** (the most still available) and **Max possible** (the total plus that), updating with every score.
+  - Remaining: 24 for each Big Game animal still to score (a prey only while the predator is unscored or left it arrows); a target not reached yet counts as one animal (24), so it goes up if a target turns out to be a fan or predator/prey. Woodsman: a kill on the next arrow (30 / 20 / 10). Scored and overridden targets add nothing; a fun shot can't be known, so it adds nothing.
+  - `TargetScore.remainingPoints`, `Round.remainingPoints` / `maxPossiblePoints` (app); `remainingPoints`, `roundRemaining` (web). New `ScoringOptionsStore` (app), localStorage `showRemaining` (web).
+  - Tests: Kotlin 104 (new `RemainingTest`), web 98 (new `remaining.test.ts`). App versionCode 80, versionName 3.2.18.
+
 ## Version 3.2.17
 
 - **3.2.17 (app, web app and API; run `server/sql/016_round_weather.sql` first): round weather and a new Stats → Analysis tab (Pete).**

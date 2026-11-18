@@ -52,6 +52,8 @@ class AppContainer(app: Application) {
     /** How Home's tiles are arranged (2.4.01). */
     val homeLayoutStore = uk.co.fieldarcheryscoring.data.HomeLayoutStore(app)
     val statsFilterStore = uk.co.fieldarcheryscoring.data.StatsFilterStore(app)
+    /** 3.2.18: scoring screen options (remaining and max possible). */
+    val scoringOptionsStore = uk.co.fieldarcheryscoring.data.ScoringOptionsStore(app)
     /** Asks the server if it's up (the answer, or failure, updates [networkStatus]). */
     suspend fun checkServer() {
         runCatching { api.health() }

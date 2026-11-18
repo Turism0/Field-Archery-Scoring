@@ -1,7 +1,7 @@
 // Rounds, archers and round JSON (the API's shape, as the Android app sends it).
 import {
   type RoundType, type TargetScore, type TargetType, type AnimalResult, type Hit,
-  newTarget, isComplete, isFun, totalPoints, maxPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
+  newTarget, isComplete, isFun, totalPoints, maxPoints, remainingPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
 } from './scoring'
 
 export type ArcherClass = 'GENTS' | 'LADIES'
@@ -82,6 +82,15 @@ export function target(r: Round, n: number): TargetScore {
 }
 
 export const roundTotal = (r: Round) => r.targets.reduce((s, t) => s + totalPoints(t), 0)
+/**
+ * While scoring (3.2.18): the points still available on targets not yet scored (an untouched Big Game target counts as
+ * one animal, 24; Woodsman 30) and the most the round can now reach (the total plus that).
+ */
+export function roundRemaining(r: Round): { remaining: number; maxPossible: number } {
+  let remaining = 0
+  for (let n = 1; n <= r.targetCount; n++) remaining += remainingPoints(target(r, n))
+  return { remaining, maxPossible: roundTotal(r) + remaining }
+}
 /** Fun shots (3.1): in the round total, left out of every stat. */
 export const funShots = (r: Round) => r.targets.filter(isFun)
 export const funPoints = (r: Round) => funShots(r).reduce((s, t) => s + totalPoints(t), 0)

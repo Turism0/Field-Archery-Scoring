@@ -104,6 +104,21 @@ export function maxPoints(t: TargetScore): number {
   return t.type === 'WOODSMAN' ? WOODSMAN_MAX : t.type === 'FUN' ? 0 : t.animals.length * MAX_PER_ANIMAL
 }
 
+/**
+ * The most this target can still add (3.2.18, a tester via Pete): 0 once it's scored or overridden. Big Game: 24 for each
+ * animal still to score (a prey only while the predator is unscored or left it arrows; the prey's arrows count from 1).
+ * Woodsman: a kill on the next arrow (30 / 20 / 10). A fun shot can't be known, so 0. Same as the app's remainingPoints.
+ */
+export function remainingPoints(t: TargetScore): number {
+  if (t.overridePoints != null || t.type === 'FUN') return 0
+  if (t.type === 'WOODSMAN') return woodsmanFinished(t.arrows) ? 0 : WOODSMAN_MAX - t.arrows.length * 10
+  return t.animals.reduce((s, a, i) => {
+    if (a.state !== 'PENDING') return s
+    const preyWithNoArrows = t.type === 'PREDATOR_PREY' && i > 0 && t.animals[0].state !== 'PENDING' && arrowsAvailable(t.type, t.animals, i) === 0
+    return preyWithNoArrows ? s : s + MAX_PER_ANIMAL
+  }, 0)
+}
+
 /** Fully scored: overridden, or every animal resolved (a prey with no arrows left counts as resolved). */
 export function isComplete(t: TargetScore): boolean {
   if (t.overridePoints != null) return true
