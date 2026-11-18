@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * "Update available" (3.2.15, Pete): asks Google Play whether a newer version of the app is there for this person
  * (closed testers included), so Home can say so. Only works for an app installed from Play; a build run from Android
- * Studio just never shows it. Checked at most once an hour.
+ * Studio just never shows it. Checked each time Home comes back on screen (3.2.19), at most every 2 minutes.
  */
 class AppUpdates(context: Context) {
     private val manager = AppUpdateManagerFactory.create(context.applicationContext)
@@ -24,7 +24,7 @@ class AppUpdates(context: Context) {
 
     suspend fun check() {
         val now = System.currentTimeMillis()
-        if (now - checkedAt < HOUR_MS) return
+        if (now - checkedAt < MIN_GAP_MS) return
         checkedAt = now
         try {
             val info = manager.requestAppUpdateInfo()
@@ -36,6 +36,6 @@ class AppUpdates(context: Context) {
     }
 
     private companion object {
-        const val HOUR_MS = 60 * 60 * 1000L
+        const val MIN_GAP_MS = 2 * 60 * 1000L
     }
 }

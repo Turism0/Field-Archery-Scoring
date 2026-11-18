@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.19
+
+- **3.2.19 (app and web app; API version number only): group scoring moves target by target (Pete).**
+  - Group and live scoring: the bottom button only goes to the next target (no more "Next: Dave" stepping through archers). It's greyed out ("Score all archers to continue") until every archer in the group is scored on this target; switch archers with the names strip at the top. Each target starts on the first archer in the group order that this phone scores. Prev goes back a target the same way; Finish round on the last target also waits for everyone.
+  - Update available (app): Home asks Google Play again each time it comes back on screen (from the background or another screen), at most every 2 minutes, instead of once an hour, so testers see an update without fully closing the app.
+  - Tests: Kotlin 104, web 98 (unchanged); the web group buttons checked in a browser with a 3-archer group. App versionCode 81, versionName 3.2.19.
+
 ## Version 3.2.18
 
 - **3.2.18 (app and web app; API version number only): remaining and max possible while scoring (a tester, via Pete).**

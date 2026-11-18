@@ -142,32 +142,23 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
 
   const toggle = (i: number, a: AnimalResult) => edit(x => withAnimalResult(x, i, sameResult(x.animals[i], a) ? { state: 'PENDING' } : a))
 
-  /** Group: the next archer on this target, then the first archer on the next target (and back the other way). */
-  function neighbour(by: 1 | -1): [Round, number] | null {
-    const i = group.findIndex(m => m.id === current)
-    let j = i + by, nn = n
-    if (j >= group.length) { j = 0; nn = n + 1 } else if (j < 0) { j = group.length - 1; nn = n - 1 }
-    return group[j] ? [group[j], nn] : null
-  }
-  const next = inGroup ? neighbour(1) : null
-  const prev = inGroup ? neighbour(-1) : null
-  const scored = isComplete(t)
-  const last = inGroup ? !next || next[1] > round.targetCount : n >= round.targetCount
-  const prevOk = inGroup ? !!prev && prev[1] >= 1 : n > 1
+  // Group (3.2.19, Pete): Prev / Next only move between targets; Next waits until every archer on this target is
+  // scored. Switch archers with the names strip. Each target starts on the first archer this phone scores.
+  const scored = inGroup ? group.every(m => isComplete(target(m.id === current ? shown : m, n))) : isComplete(t)
+  const last = n >= round.targetCount
+  const prevOk = n > 1
   const finished = round.status === 'COMPLETED'
   function step(by: 1 | -1) {
+    const nn = n + by
+    if (nn < 1 || nn > round!.targetCount) return
     if (inGroup) {
-      const to = by === 1 ? next : prev
-      if (!to || to[1] < 1 || to[1] > round!.targetCount) return
-      setCurrent(to[0].id); setN(to[1])
-    } else {
-      const nn = n + by
-      if (canGoTo(shown!, nn)) setN(nn)
-    }
+      const first = group.find(m => !isLive || (!!s && live.canScore(s, m.id))) ?? group[0]
+      setCurrent(first.id); setN(nn)
+    } else if (canGoTo(shown!, nn)) setN(nn)
   }
-  const nextLabel = !scored ? `Score target ${n} to continue`
+  const nextLabel = !scored ? (inGroup ? 'Score all archers to continue' : `Score target ${n} to continue`)
     : last ? (finished ? (editing ? 'Save' : 'Done') : 'Finish round')
-    : next ? (next[1] === n ? `Next: ${memberName(next[0])}` : `Target ${next[1]}: ${memberName(next[0])}`) : 'Next target'
+    : 'Next target'
 
   async function finish() {
     setAsk(null)

@@ -2167,38 +2167,30 @@ class ScoringViewModel(
         setTarget(if (m.round.canGoTo(n)) n else m.round.firstUnscoredTargetNo ?: n)
     }
 
-    /** Where Next goes in a group: the next archer on this target, or the first archer on the next target. */
-    fun nextInGroup(): Pair<GroupMember, Int>? {
-        val g = group.value.takeIf { it.size > 1 } ?: return null
-        val i = g.indexOfFirst { it.roundId == _roundId.value }.takeIf { it >= 0 } ?: return null
+    /**
+     * Group (3.2.19, Pete): Prev / Next only move between targets, and Next waits until every archer is scored on this
+     * target (switch archers with the names strip). True outside a group when this round's target is scored.
+     */
+    fun allScoredHere(): Boolean {
         val n = _targetNo.value
-        return if (i < g.lastIndex) g[i + 1] to n else g.first() to n + 1
+        val g = group.value.takeIf { it.size > 1 } ?: return round.value?.target(n)?.isComplete == true
+        return g.all { it.round.target(n).isComplete }
     }
 
-    /** Where Prev goes in a group: the archer before on this target, or the last archer on the target before. */
-    fun prevInGroup(): Pair<GroupMember, Int>? {
-        val g = group.value.takeIf { it.size > 1 } ?: return null
-        val i = g.indexOfFirst { it.roundId == _roundId.value }.takeIf { it >= 0 } ?: return null
-        val n = _targetNo.value
-        return if (i > 0) g[i - 1] to n else g.last() to n - 1
-    }
+    fun next() = moveTo(_targetNo.value + 1)
 
-    fun next() {
+    fun prev() = moveTo(_targetNo.value - 1)
+
+    /** Another target: a group starts it on the first archer this phone scores (any archer if it scores none). */
+    private fun moveTo(n: Int) {
         val r = round.value ?: return
-        val step = nextInGroup()
-        if (step == null) { goTo(_targetNo.value + 1); return }
-        val (m, n) = step
-        if (n > r.targetCount) return
-        setRound(m.roundId)
-        setTarget(n)
-    }
-
-    fun prev() {
-        val step = prevInGroup()
-        if (step == null) { goTo(_targetNo.value - 1); return }
-        val (m, n) = step
-        if (n < 1) return
-        setRound(m.roundId)
+        if (n < 1 || n > r.targetCount) return
+        val g = group.value.takeIf { it.size > 1 }
+        if (g == null) { goTo(n); return }
+        if (n > _targetNo.value && !allScoredHere()) return
+        val live = _live.value?.state
+        val first = g.firstOrNull { liveGroupId == null || live?.canScore(it.roundId) == true } ?: g.first()
+        setRound(first.roundId)
         setTarget(n)
     }
 

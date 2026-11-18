@@ -272,16 +272,12 @@ fun ScoringScreen(
         bottomBar = {
             if (r != null && targetNo > 0) {
                 val target = r.target(targetNo)
-                val next = if (inGroup) vm.nextInGroup() else null
-                val prev = if (inGroup) vm.prevInGroup() else null
+                // Group (3.2.19, Pete): Next only goes to the next target, once every archer is scored on this one.
                 TargetNavBar(
                     targetNo = targetNo,
                     targetCount = r.targetCount,
-                    scored = target.isComplete,
-                    // Group: the last archer on the last target finishes; otherwise on to the next archer.
-                    last = if (inGroup) next == null || next.second > r.targetCount else targetNo >= r.targetCount,
-                    prevEnabled = if (inGroup) prev != null && prev.second >= 1 else targetNo > 1,
-                    nextLabel = next?.let { (m, n) -> if (n == targetNo) "Next: ${m.name}" else "Target $n: ${m.name}" },
+                    scored = if (inGroup) group.all { it.round.target(targetNo).isComplete } else target.isComplete,
+                    waitingLabel = if (inGroup) "Score all archers to continue" else null,
                     onPrev = { vm.prev() },
                     onNext = { vm.next() },
                     onFinish = { confirmFinish = true },
@@ -522,8 +518,8 @@ private fun TargetNavBar(
     finished: Boolean,
     last: Boolean = targetNo >= targetCount,
     prevEnabled: Boolean = targetNo > 1,
-    /** Group: "Next: Dave" instead of "Next target". */
-    nextLabel: String? = null,
+    /** Group: "Score all archers to continue" instead of "Score target n to continue". */
+    waitingLabel: String? = null,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onFinish: () -> Unit,
@@ -553,9 +549,9 @@ private fun TargetNavBar(
                 ) {
                     Text(
                         when {
-                            !scored -> "Score target $targetNo to continue"
+                            !scored -> waitingLabel ?: "Score target $targetNo to continue"
                             last -> if (finished) doneLabel else "Finish round"
-                            else -> nextLabel ?: "Next target"
+                            else -> "Next target"
                         },
                         style = MaterialTheme.typography.titleSmall,
                     )

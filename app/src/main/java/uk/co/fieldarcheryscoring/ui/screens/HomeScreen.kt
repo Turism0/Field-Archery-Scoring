@@ -105,7 +105,9 @@ fun HomeScreen(
     val server by vm.server.collectAsStateWithLifecycle()
     val updateRequired by vm.updateRequired.collectAsStateWithLifecycle()
     val updateAvailable by vm.updateAvailable.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { vm.checkForUpdate() }
+    // 3.2.19 (Pete): ask Google Play again whenever Home comes back on screen (the app reopened from the background, or
+    // back from another screen), not just the first time, so an update shows without fully closing the app.
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { vm.checkForUpdate() }
     val layout by vm.layout.collectAsStateWithLifecycle()
     val editing by vm.editing.collectAsStateWithLifecycle()
 
