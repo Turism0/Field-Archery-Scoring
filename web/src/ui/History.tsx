@@ -5,6 +5,7 @@ import { useState } from 'preact/hooks'
 import { Bar, Dialog, Field, go, today, ukDate, useData, useDesktop } from './common'
 import { ExportDialog } from './Export'
 import { finished } from '../data/rounds'
+import { weatherMap } from '../data/weather'
 import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { HISTORY_SORTS, bowOrder, inPeriod, periodLabel, personalBestIds, sortHistory, years, type HistorySort, type Period } from '../domain/stats'
 import { type RoundType } from '../domain/scoring'
@@ -15,6 +16,7 @@ const NONE: Filter = { period: { kind: 'all' } }
 /** Finished rounds with filters, a sort order (3.2.01) and PB marks; tap for the scorecard. */
 export function History() {
   const rounds = useData(finished)
+  const weather = useData(weatherMap)
   const account = useData(getAccount)
   const lastSync = useData(() => getKv<string>('lastSync'))
   const sizes = useData(async () => {
@@ -73,7 +75,7 @@ export function History() {
             <button onClick={() => setF(NONE)}>Clear filters</button></div>}
           {!list.length && <p class="sub" style="text-align:center">No rounds match these filters.</p>}
           <div class="grid2">{list.map(r => (
-            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} onClick={() => go(`/card/${r.id}`)} />
+            <RoundCard r={r} showSync={!!account} pb={pbs.has(r.id)} weather={weather?.[r.id]} groupSize={r.groupId ? sizes[r.groupId] ?? 1 : 1} onClick={() => go(`/card/${r.id}`)} />
           ))}</div>
         </>}
       </main>

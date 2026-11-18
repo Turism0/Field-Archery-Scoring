@@ -99,6 +99,7 @@ class DeviceData(
         profile.clear()
         statsFilter.clear()
         liveGroups.clearAll()
+        rounds.clearWeather()   // 3.2.17: downloaded again for the account that signs in
     }
 
     // ---- Profile (with real name and date of birth, which never leave the phone) kept in the prefs while put away ----

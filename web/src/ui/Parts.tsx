@@ -1,5 +1,6 @@
 // Pieces shared by several screens, laid out as the Android app's (2.7.01): running stats, round cards in lists,
 // the scorecard header and target rows, and the group card.
+import { weatherIcon, type Weather } from '../domain/weather'
 import { useState } from 'preact/hooks'
 import { go } from './common'
 import { classLine, roundStats, roundTotal, targetsComplete, targetsLine, type Round, type RoundStats } from '../domain/round'
@@ -46,7 +47,7 @@ export function RunningStats({ s, targetCount, compact, noTotal }: { s: RoundSta
 
 /** A round in a list: date, class line, total; IN PROGRESS badge, PB, or whether it's backed up. */
 /** [net] (2.9): the net score with the personal handicap before this round, and that handicap. */
-export function RoundCard({ r, showSync, pb, groupSize = 1, net, onClick }: { r: Round; showSync?: boolean; pb?: boolean; groupSize?: number; net?: { net: number; handicap: number } | null; onClick: () => void }) {
+export function RoundCard({ r, showSync, pb, groupSize = 1, net, weather, onClick }: { r: Round; showSync?: boolean; pb?: boolean; groupSize?: number; net?: { net: number; handicap: number } | null; weather?: Weather | null; onClick: () => void }) {
   const going = r.status === 'IN_PROGRESS'
   return (
     <button class={`tile roundcard ${going ? 'going' : ''}`} onClick={onClick}>
@@ -54,7 +55,7 @@ export function RoundCard({ r, showSync, pb, groupSize = 1, net, onClick }: { r:
         {going && <span class="badge-going">IN PROGRESS</span>}
         <span class="row" style="gap:8px"><b>{longDate(r.shootDate)}</b>{pb && <span class="pb">PB</span>}</span>
         <span class="sub">{typeAndClass(r)} · {targetsLine(r)}{groupSize > 1 ? ` · group of ${groupSize}` : ''}</span>
-        {r.locationName && <span class="sub">{r.locationName}</span>}
+        {r.locationName && <span class="sub">{r.locationName}{weather ? ` ${weatherIcon(weather.code)}${weather.tempC != null ? ` ${Math.round(weather.tempC)}°C` : ''}` : ''}</span>}
         {showSync && !going && <SyncLabel r={r} />}
       </span>
       <span style="text-align:right"><span class="num-big">{roundTotal(r)}</span><span class="sub" style="display:block">points</span>

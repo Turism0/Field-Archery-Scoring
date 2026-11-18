@@ -112,6 +112,11 @@ class AccountStore(context: Context) {
         ended?.let { onCleared?.invoke(it) }
     }
 
+    /** 3.2.17: where the round weather download got to: "updatedUtc|roundId" (cleared with the sign-in). */
+    var weatherCursor: String?
+        get() = prefs.getString(K_WEATHER_CURSOR, null)
+        set(value) { prefs.edit().putString(K_WEATHER_CURSOR, value).apply() }
+
     /** 3.2.09: when this sign-in last checked the server has all its finished rounds (cleared with the sign-in). */
     var missingChecked: Long
         get() = prefs.getLong(K_MISSING_CHECKED, 0L)
@@ -172,6 +177,7 @@ class AccountStore(context: Context) {
         const val K_EXPIRES = "expires_utc"
         const val K_PULL_CURSOR = "pull_cursor"
         const val K_MISSING_CHECKED = "missing_checked"
+        const val K_WEATHER_CURSOR = "weather_cursor"
         const val K_LAST_SYNC = "last_sync"
         const val K_ROLE = "role"
         const val K_FRIENDS = "friends_cache"

@@ -43,6 +43,8 @@ fun RoundCard(
     net: Pair<Int, Int>? = null,
     /** Average per animal (Woodsman: per target), shown under the points (3.1.08). */
     average: Double? = null,
+    /** 3.2.17: the round's weather, shown as a symbol and temperature after the location. */
+    weather: uk.co.fieldarcheryscoring.domain.Weather? = null,
     onClick: () -> Unit,
 ) {
     val inProgress = r.status == RoundStatus.IN_PROGRESS
@@ -76,7 +78,11 @@ fun RoundCard(
                     color = scheme.onSurfaceVariant,
                 )
                 r.locationName?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+                    val w = weather?.let { w ->
+                        " " + uk.co.fieldarcheryscoring.domain.WeatherRules.icon(w.code) +
+                            (w.tempC?.let { t -> " ${kotlin.math.round(t).toInt()}°C" } ?: "")
+                    } ?: ""
+                    Text(it + w, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
                 // Finished rounds upload when signed in; in-progress ones stay on the phone until finished.
                 if (showSync && !inProgress) SyncLabel(r.syncState)

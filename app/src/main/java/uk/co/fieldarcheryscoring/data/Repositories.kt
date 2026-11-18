@@ -1,5 +1,6 @@
 package uk.co.fieldarcheryscoring.data
 
+import uk.co.fieldarcheryscoring.domain.Weather
 import uk.co.fieldarcheryscoring.domain.RoundType
 import uk.co.fieldarcheryscoring.domain.TargetType
 import uk.co.fieldarcheryscoring.domain.WoodsmanScoring
@@ -122,6 +123,11 @@ class RoundRepository(
     /** Called after any change that may need uploading (asks the background sync to run). */
     private val onChanged: () -> Unit = {},
 ) {
+    /** 3.2.17: weather for rounds (looked up by the server and downloaded), by round id. */
+    val weather: Flow<Map<String, Weather>> = dao.observeWeather().map { list -> list.associate { it.roundId to it.toWeather() } }
+
+    fun weatherFor(roundId: String): Flow<Weather?> = dao.observeWeatherFor(roundId).map { it?.toWeather() }
+
     val rounds: Flow<List<RoundSummary>> = dao.observeRounds().map { list ->
         list.map { row ->
             val it = row.round
@@ -562,3 +568,7 @@ private fun TargetScore.toAnimalEntities(roundId: String) = animals.mapIndexed {
         points = a.points,
     )
 }
+
+
+/** 3.2.17: a downloaded weather row → the domain model. */
+fun uk.co.fieldarcheryscoring.data.local.RoundWeatherEntity.toWeather(): Weather = Weather(tempC, windKph, gustKph, rainMm, code)

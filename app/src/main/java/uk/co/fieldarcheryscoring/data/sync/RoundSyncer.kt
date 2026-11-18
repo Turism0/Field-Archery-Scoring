@@ -11,6 +11,7 @@ import uk.co.fieldarcheryscoring.data.local.AnimalState
 import uk.co.fieldarcheryscoring.data.local.RoundDao
 import uk.co.fieldarcheryscoring.data.local.RoundData
 import uk.co.fieldarcheryscoring.data.local.RoundEntity
+import uk.co.fieldarcheryscoring.data.local.RoundWeatherEntity
 import uk.co.fieldarcheryscoring.data.local.SyncState
 import uk.co.fieldarcheryscoring.data.local.TargetEntity
 import uk.co.fieldarcheryscoring.data.remote.ApiException
@@ -69,6 +70,9 @@ class RoundSyncer(
             val skipped = download(account.token)
             // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
             if (stillSignedIn(account.token)) sendMissing(account.token)
+            // 3.2.17: round weather, looked up by the server (best effort).
+            if (stillSignedIn(account.token)) runCatching { downloadWeather(account.token) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             // Signed out while syncing (3.2.02): nothing more is kept for that account.
             if (!stillSignedIn(account.token)) return Report(Outcome.NOT_SIGNED_IN)
             // Remember friends for adding them to group rounds with no signal (not essential).
@@ -145,6 +149,40 @@ class RoundSyncer(
                     else -> throw e
                 }
             }
+        }
+    }
+
+    /** 3.2.17: weather that's changed since last time, into the round_weather table (null weather = none: removed). */
+    private suspend fun downloadWeather(token: String) {
+        var cursor = accounts.weatherCursor
+        repeat(50) {
+            val since = cursor?.substringBefore('|')
+            val afterId = cursor?.substringAfter('|', "")?.takeIf { it.isNotEmpty() }
+            val page = try {
+                api.roundWeather(token, since, afterId)
+            } catch (e: ApiException) {
+                if (e.status == 404) return   // an older server without weather
+                throw e
+            }
+            val items = page.optJSONArray("weather") ?: JSONArray()
+            val upserts = mutableListOf<RoundWeatherEntity>()
+            val gone = mutableListOf<String>()
+            for (i in 0 until items.length()) {
+                val x = items.getJSONObject(i)
+                val id = x.getString("roundId")
+                val w = x.optJSONObject("weather")
+                fun d(name: String) = if (w == null || w.isNull(name)) null else w.optDouble(name)
+                val row = RoundWeatherEntity(id, d("tempC"), d("windKph"), d("gustKph"), d("rainMm"),
+                    if (w == null || w.isNull("code")) null else w.optInt("code"))
+                if (w == null || (row.tempC == null && row.windKph == null && row.gustKph == null && row.rainMm == null && row.code == null)) gone += id
+                else upserts += row
+                cursor = x.getString("updatedUtc") + "|" + id
+            }
+            if (!stillSignedIn(token)) return
+            if (upserts.isNotEmpty()) dao.upsertWeather(upserts)
+            if (gone.isNotEmpty()) dao.deleteWeather(gone)
+            if (items.length() > 0) accounts.weatherCursor = cursor
+            if (!page.optBoolean("more")) return
         }
     }
 

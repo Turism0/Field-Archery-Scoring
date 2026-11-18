@@ -81,6 +81,7 @@ fun ScorecardScreen(
     val personalBest by vm.personalBest.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
     val ownHandicap by vm.handicapBefore.collectAsStateWithLifecycle()
+    val weather by vm.weather.collectAsStateWithLifecycle()
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == vm.roundId }
     val signedIn by locationVm.signedIn.collectAsStateWithLifecycle()
@@ -149,6 +150,19 @@ fun ScorecardScreen(
                     RoundHeader(r)
                     personalBest?.let { (me, beat) -> PersonalBestCard(me, beat) }
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
+                    // 3.2.17: weather at the shoot location while the round was shot (looked up by the server).
+                    weather?.let { w ->
+                        Text(
+                            "${uk.co.fieldarcheryscoring.domain.WeatherRules.icon(w.code)} ${uk.co.fieldarcheryscoring.domain.WeatherRules.line(w)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "Weather data by Open-Meteo.com",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
                     RunningStats(r.stats, showTotal = false)
                     HandicapCard(r, handicap, ownHandicap)

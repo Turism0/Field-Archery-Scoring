@@ -150,3 +150,18 @@ data class AnimalEntity(
     val hit: Hit?,
     val points: Int,
 )
+
+/**
+ * Weather for a round (database v7, app 3.2.17): looked up by the server (Open-Meteo, from the shoot location's map pin)
+ * and downloaded. Its own table, so editing or downloading a round never loses it. Removed when the device's session is
+ * cleared (another account signs in) and downloaded again.
+ */
+@Entity(tableName = "round_weather")
+data class RoundWeatherEntity(
+    @PrimaryKey @ColumnInfo(name = "round_id") val roundId: String,
+    @ColumnInfo(name = "temp_c") val tempC: Double? = null,
+    @ColumnInfo(name = "wind_kph") val windKph: Double? = null,
+    @ColumnInfo(name = "gust_kph") val gustKph: Double? = null,
+    @ColumnInfo(name = "rain_mm") val rainMm: Double? = null,
+    val code: Int? = null,
+)

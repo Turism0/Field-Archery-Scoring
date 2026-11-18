@@ -107,6 +107,19 @@ class FieldArcheryApi(
      * { rounds: [ { roundId, ..., isDeleted, serverUpdatedUtc, targets: [...] } ], more: true|false }.
      */
     /** 3.2.09: the ids of every round the server has for this account (deleted ones too). */
+    /** 3.2.17: { weather: [{ roundId, updatedUtc, weather|null }], more } changed after the cursor. */
+    suspend fun roundWeather(token: String, since: String?, afterId: String?): JSONObject {
+        val q = listOfNotNull(
+            since?.let { "since=" + java.net.URLEncoder.encode(it, "UTF-8") },
+            afterId?.let { "afterId=$it" },
+        ).joinToString("&")
+        return request("GET", "/api/rounds/weather" + if (q.isEmpty()) "" else "?$q", body = null, token = token)
+    }
+
+    /** 3.2.17: compared with others. [groups] = { roundType, bowStyle, archerClass (G/L), ageGroup, average }. */
+    suspend fun compareStats(token: String, groups: org.json.JSONArray): JSONObject =
+        request("POST", "/api/stats/compare", JSONObject().put("groups", groups), token)
+
     suspend fun roundIds(token: String): Set<String> {
         val ids = request("GET", "/api/rounds/ids", body = null, token = token).getJSONArray("ids")
         return (0 until ids.length()).map { ids.getString(it) }.toSet()

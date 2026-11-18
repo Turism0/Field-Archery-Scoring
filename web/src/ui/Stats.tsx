@@ -9,6 +9,7 @@ import {
 import { ROUND_TYPE_NAMES, bowName, statsTotal, type Round, type RoundStats } from '../domain/round'
 import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, seasons, trend, type TrendPoint } from '../domain/stats'
 import { handicapEntry, personalHandicaps } from '../domain/handicap'
+import { Analysis } from './Analysis'
 import type { RoundType } from '../domain/scoring'
 
 const perWhat = (t: RoundType) => (t === 'WOODSMAN' ? 'per target' : 'per animal')
@@ -40,11 +41,12 @@ export function Stats() {
   return (
     <>
       <Bar title="Stats" />
-      <Tabs tabs={['Bests', 'Trends', 'Seasons']} value={tab} onChange={setTab} />
+      <Tabs tabs={['Bests', 'Trends', 'Seasons', 'Analysis']} value={tab} onChange={setTab} />
       <main>
         {!rounds.length ? <p class="sub" style="text-align:center">Finish a round to see your stats.</p> : <>
           <FilterBar rounds={rounds} filter={filter} onChange={change} />
-          {tab === 0 ? <Bests rounds={shown} all={rounds} /> : tab === 1 ? <Trends rounds={shown} types={filter.types} /> : <Seasons rounds={shown} />}
+          {tab === 0 ? <Bests rounds={shown} all={rounds} /> : tab === 1 ? <Trends rounds={shown} types={filter.types} /> : tab === 2 ? <Seasons rounds={shown} />
+            : <Analysis rounds={shown} types={filter.types} />}
         </>}
       </main>
     </>

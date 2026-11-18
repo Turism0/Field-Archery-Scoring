@@ -4,6 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.17
+
+- **3.2.17 (app, web app and API; run `server/sql/016_round_weather.sql` first): round weather and a new Stats → Analysis tab (Pete).**
+  - **Weather per round:** the API looks up the weather for each finished round from Open-Meteo (free, no key; "Weather data by Open-Meteo.com") using the shoot location's map pin, the date and the hours it was shot: from starting on the phone to its last change if both were that day (up to 6 hours), otherwise 10:00 UK time for about 5 minutes a target. Only the pin, date and hours are sent, never anything about the archer or the phone's position. A background job in the API (`Weather/WeatherService.cs`, appsettings `"Weather": { "Enabled", "IntervalMinutes": 10 }`, also straight after an upload) fills `dbo.RoundWeather` (schema 12), back-filling past rounds; it looks again if a round's location, pin or date changes. Rounds with no location or a name-only one get none. Odin needs to reach api.open-meteo.com and archive-api.open-meteo.com. Phones download it with `GET /api/rounds/weather` (cursor; Android table `round_weather`, database v7; web kv `weather`).
+  - **Shown:** a weather line on the scorecard ("🌧️ 6°C · Rain, 3.1 mm · wind 19 mph, gusts 31 mph") and a symbol and temperature next to the location in Score history.
+  - **Stats → Analysis tab** (both apps, with the usual filters): form and consistency (average, usual spread, last 5 against before, runs at or above average); which arrow scored (bars); hits (inner kill / kill / wound / miss; last 10 against all, and a chart over time by year or month); by target type (standard, predator/prey, fan); start, middle and finish (thirds in shooting order from the starting target); compared with others (`POST /api/stats/compare`: "better than 70% of Gents Adult Longbow rounds", anonymous, only with 20+ rounds from 5+ archers); by location (average and best); weather (wet / dry, windy 15+ mph / calmer, cold under 8°C / milder). Woodsman gets the same per target. Fun shots left out of everything.
+  - Privacy policy updated (weather and comparisons).
+  - Tests: Kotlin 101 (new `AnalysisTest`), web 95 (new `analysis.test.ts`); the web Analysis tab, scorecard weather and history checked in a browser against the mock server. New `server/tests/Test-StatsWeather.ps1` (in Run-AllTests). Android screens and the API not compiled here. App versionCode 79, versionName 3.2.17.
+
 ## Version 3.2.16
 
 - **3.2.16 (app, web app and API): deleting a shoot location (Pete).**

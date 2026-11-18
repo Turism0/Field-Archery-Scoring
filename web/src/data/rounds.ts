@@ -9,6 +9,7 @@ import {
 } from '../domain/round'
 import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
 import { missingOnServer } from '../domain/deviceData'
+import { downloadWeather } from './weather'
 
 // ---- on this device ----
 
@@ -157,6 +158,8 @@ async function doSync(): Promise<SyncReport> {
     await download(token)
     // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
     if (await stillSignedIn(token)) await sendMissing(token)
+    // 3.2.17: round weather (looked up by the server).
+    if (await stillSignedIn(token)) await downloadWeather(token, () => stillSignedIn(token))
     // Signed out while syncing (3.2.02): nothing more is kept for that account.
     if (!(await stillSignedIn(token))) return { ok: false, message: 'Signed out.' }
     try {

@@ -8,6 +8,8 @@ import { deleteRound, groupOf, setStatus } from '../data/rounds'
 import { ROUND_TYPE_NAMES, canGoTo, classLine, funPoints, roundStats, roundTotal, statsTargetCount, statsTotal, target, targetsLine } from '../domain/round'
 import { TARGET_TYPE_NAMES, describeAnimal, describeArrows, isComplete, totalPoints } from '../domain/scoring'
 import { finished } from '../data/rounds'
+import { weatherMap } from '../data/weather'
+import { weatherIcon, weatherLine } from '../domain/weather'
 import { getModel } from '../data/handicap'
 import { pbAverage, personalBestIds, previousBest } from '../domain/stats'
 import { applyMultiplier, handicapEntry, multiplier, net, parFor, personalHandicap } from '../domain/handicap'
@@ -23,6 +25,7 @@ export function Scorecard({ id }: { id: string }) {
   const mine = useData(finished) ?? []
   const model = useData(getModel)
   const account = useData(getAccount)
+  const weather = useData(async () => (await weatherMap())[id] ?? null, [id])
   const desktop = useDesktop()
   const [locOpen, setLocOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -52,6 +55,7 @@ export function Scorecard({ id }: { id: string }) {
           <div>Your best average for {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}: {pbAverage(round).toFixed(1)} per {round.type === 'WOODSMAN' ? 'target' : 'animal'}{funPoints(round) ? ' (fun shots left out)' : ''}. It beat {pbAverage(beat).toFixed(1)} ({ukDate(beat.shootDate)}).</div>
         </Card>}
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
+        {weather && <div class="sub" style="padding:0 4px">{weatherIcon(weather.code)} {weatherLine(weather)}<span style="opacity:.7"> · Weather data by Open-Meteo.com</span></div>}
         {inGroup && <GroupCard group={group} currentId={round.id} />}
         <RunningStats s={s} targetCount={round.targetCount} noTotal />
         {/* Your own rounds get the net score with your personal handicap; others just the multiplier (2.9). */}

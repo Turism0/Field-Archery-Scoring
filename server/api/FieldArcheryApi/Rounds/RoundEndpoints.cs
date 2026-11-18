@@ -72,6 +72,7 @@ public static class RoundEndpoints
 
         var serverUpdated = await RoundWriter.SaveAsync(conn, tx, roundId, round, archerId, existing is not null, groupId, null, ct);
         await tx.CommitAsync(ct);
+        FieldArcheryApi.Weather.WeatherService.Kick();   // 3.2.17: look up its weather soon
         return Results.Ok(new { roundId, result = "saved", serverUpdatedUtc = serverUpdated });
     }
 

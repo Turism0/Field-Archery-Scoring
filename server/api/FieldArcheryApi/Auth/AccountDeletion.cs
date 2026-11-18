@@ -143,7 +143,7 @@ public static class AccountDeletion
 
     private const string PrivacyHtml = $"""
         <h1>Field Archery Scoring – privacy policy</h1>
-        <p>Last updated 9 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
+        <p>Last updated 18 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
         individual, not a company, and is not connected with the National Field Archery Society (NFAS).
         Contact: <a href="mailto:{ContactEmail}">{ContactEmail}</a>.</p>
 
@@ -156,7 +156,8 @@ public static class AccountDeletion
         <ul>
           <li>your username and a one-way hash of your password and recovery code (never the password or code itself);
               no email address, phone number or real name;</li>
-          <li>your rounds: date, class (Gents / Ladies), age group, bow style, scores and which shoot location they were at;</li>
+          <li>your rounds: date, class (Gents / Ladies), age group, bow style, scores, which shoot location they were at and
+              the weather there;</li>
           <li>your friends and friend requests, and rounds friends have scored for you;</li>
           <li>live groups you're in (for 30 days): members' usernames, names of guests the host added, and the scores entered;</li>
           <li>for each phone you sign in on: its make and model (e.g. "Google Pixel 8") and when it was last used;</li>
@@ -168,6 +169,16 @@ public static class AccountDeletion
         <h2>Location</h2>
         <p>When you start a round the app takes one position from your phone to find the shoot location. The position is only
         used to look up nearby locations; the server stores which location the round was at, not where your phone was.</p>
+
+        <h2>Weather</h2>
+        <p>The server looks up the weather for your finished rounds from Open-Meteo (open-meteo.com) and keeps it with the
+        round. It sends Open-Meteo only the shoot location's map position, the date and the hours the round was shot: nothing
+        about you, and never your phone's position. Weather data by Open-Meteo.com.</p>
+
+        <h2>Comparing with others</h2>
+        <p>Stats can show how your average compares with everyone else's rounds of the same type, bow style, class and age
+        group. Only counts are shared (for example "better than 70% of rounds"), never names, and only when there are at least
+        20 rounds from 5 archers.</p>
 
         <h2>Nearby devices (Bluetooth and Wi-Fi)</h2>
         <p>In a live group with no signal, phones in the group share scores directly over Bluetooth and Wi-Fi (Google Nearby

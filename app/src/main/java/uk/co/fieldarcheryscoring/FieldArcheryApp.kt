@@ -43,6 +43,8 @@ class AppContainer(app: Application) {
     val friendsRepository = FriendsRepository(api, accountStore, onAccepted = { syncScheduler.request() })
     val adminRepository = AdminRepository(api, accountStore)
     val locationPageRepository = LocationPageRepository(api, accountStore)
+    /** 3.2.17: Stats → Analysis → Compared with others. */
+    val compareRepository = uk.co.fieldarcheryscoring.data.CompareRepository(api, accountStore)
     /** Live groups: one round scored on several phones through the server (2.1). */
     val liveGroupRepository = LiveGroupRepository(app, api, accountStore, roundRepository)
     /** Handicap model from the server, kept on the phone (2.2.05). */

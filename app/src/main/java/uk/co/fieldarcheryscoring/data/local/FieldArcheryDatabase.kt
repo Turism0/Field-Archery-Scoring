@@ -43,6 +43,23 @@ interface ProfileDao {
 
 @Dao
 abstract class RoundDao {
+    // ---- Round weather (database v7, app 3.2.17) ----
+
+    @Upsert
+    abstract suspend fun upsertWeather(rows: List<RoundWeatherEntity>)
+
+    @Query("DELETE FROM round_weather WHERE round_id IN (:ids)")
+    abstract suspend fun deleteWeather(ids: List<String>)
+
+    @Query("DELETE FROM round_weather")
+    abstract suspend fun clearWeather()
+
+    @Query("SELECT * FROM round_weather")
+    abstract fun observeWeather(): Flow<List<RoundWeatherEntity>>
+
+    @Query("SELECT * FROM round_weather WHERE round_id = :id")
+    abstract fun observeWeatherFor(id: String): Flow<RoundWeatherEntity?>
+
     /**
      * This archer's own rounds (not ones scored for friends or guests in a group), with the size of their group
      * (0 = not a group round).
@@ -310,8 +327,8 @@ data class RoundData(
 )
 
 @Database(
-    entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class],
-    version = 6,
+    entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class, RoundWeatherEntity::class],
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -322,8 +339,18 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): FieldArcheryDatabase =
             Room.databaseBuilder(context, FieldArcheryDatabase::class.java, "fieldarchery.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
+
+        /** v7: round weather (app 3.2.17), downloaded from the server. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `round_weather` (`round_id` TEXT NOT NULL, `temp_c` REAL, `wind_kph` REAL, " +
+                        "`gust_kph` REAL, `rain_mm` REAL, `code` INTEGER, PRIMARY KEY(`round_id`))",
+                )
+            }
+        }
 
         /** v6: rounds put away for a signed-out account (app 3.2.09). Existing rounds are all showing. */
         val MIGRATION_5_6 = object : Migration(5, 6) {

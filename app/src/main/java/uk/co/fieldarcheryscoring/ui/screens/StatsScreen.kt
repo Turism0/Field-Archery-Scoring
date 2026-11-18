@@ -76,7 +76,7 @@ import kotlin.math.roundToInt
 fun StatsScreen(vm: StatsViewModel, onBack: () -> Unit, onOpenRound: (roundId: String) -> Unit) {
     val rounds by vm.rounds.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("Bests", "Trends", "Seasons")
+    val tabs = listOf("Bests", "Trends", "Seasons", "Analysis")
 
     Scaffold(
         topBar = {
@@ -111,7 +111,8 @@ fun StatsScreen(vm: StatsViewModel, onBack: () -> Unit, onOpenRound: (roundId: S
                     )
                     tab == 0 -> BestsTab(vm, onOpenRound)
                     tab == 1 -> TrendsTab(vm, onOpenRound)
-                    else -> SeasonsTab(vm, onOpenRound)
+                    tab == 2 -> SeasonsTab(vm, onOpenRound)
+                    else -> AnalysisTab(vm, onOpenRound)
                 }
             }
         }

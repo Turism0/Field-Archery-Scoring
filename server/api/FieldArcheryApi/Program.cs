@@ -21,6 +21,8 @@ using FieldArcheryApi.Handicap;
 using FieldArcheryApi.Locations;
 using FieldArcheryApi.Offers;
 using FieldArcheryApi.Rounds;
+using FieldArcheryApi.Stats;
+using FieldArcheryApi.Weather;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +43,13 @@ SqlMapper.AddTypeMap(typeof(DateTime?), DbType.DateTime2);
 
 builder.Services.AddSingleton(new Db(connectionString));
 builder.Services.AddSingleton<TokenService>();
+// 3.2.17: weather for rounds from Open-Meteo, looked up in the background (Weather/WeatherService.cs).
+builder.Services.AddHttpClient("weather", c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(20);
+    c.DefaultRequestHeaders.UserAgent.ParseAdd("FieldArcheryScoring/1.0 (+https://fieldarcheryscoring.fnurble.co.uk)");
+});
+builder.Services.AddHostedService<WeatherService>();
 builder.Services.AddProblemDetails();
 
 // Behind Nginx Proxy Manager: trust its X-Forwarded-For so rate limits see each phone's IP,
@@ -181,6 +190,8 @@ app.MapLocationPageEndpoints();
 app.MapGroupEndpoints();
 app.MapOfferEndpoints();
 app.MapHandicapEndpoints();
+app.MapWeatherEndpoints();   // 3.2.17
+app.MapCompareEndpoints();   // 3.2.17
 app.MapAccountDeletion();   // API 2.4.02: POST /api/me/delete, /delete-account and /privacy pages
 app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");   // the web app's own pages (2.5)
 
@@ -189,5 +200,5 @@ app.Run();
 // 3.2.15: every API change must keep older apps working; see docs/API_COMPATIBILITY.md and run server/tests/Test-OldApps.ps1.
 static class ApiInfo
 {
-    public const string Version = "3.2.16";
+    public const string Version = "3.2.17";
 }

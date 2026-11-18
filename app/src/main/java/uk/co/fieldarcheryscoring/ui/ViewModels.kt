@@ -64,6 +64,10 @@ import uk.co.fieldarcheryscoring.data.StatsFilterStore
 import uk.co.fieldarcheryscoring.data.RoundRepository
 import uk.co.fieldarcheryscoring.data.RoundSummary
 import uk.co.fieldarcheryscoring.data.remote.ApiException
+import uk.co.fieldarcheryscoring.domain.Weather
+import uk.co.fieldarcheryscoring.data.CompareResult
+import uk.co.fieldarcheryscoring.data.CompareKey
+import uk.co.fieldarcheryscoring.data.CompareRepository
 import uk.co.fieldarcheryscoring.data.AppUpdates
 import uk.co.fieldarcheryscoring.data.sync.RoundSyncer
 import uk.co.fieldarcheryscoring.domain.AccountRole
@@ -313,6 +317,10 @@ class HistoryViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryChoices())
 
     /** Your current personal bests (marked "PB", 3.1.08): the best average per animal for each round type and bow style. */
+    /** 3.2.17: weather icons in the list. */
+    val weather: StateFlow<Map<String, Weather>> = roundRepo.weather
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val personalBests: StateFlow<Set<String>> = roundRepo.finishedRounds.map { PersonalStats.personalBestIds(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
@@ -339,8 +347,35 @@ class StatsViewModel(
     handicap: HandicapRepository? = null,
     profiles: ProfileRepository? = null,
     private val filterStore: StatsFilterStore? = null,
+    private val compareRepo: CompareRepository? = null,
 ) : ViewModel() {
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
+    /** 3.2.17: weather for rounds, by round id (for the Analysis tab). */
+    val weather: StateFlow<Map<String, Weather>> = roundRepo.weather
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    // ---- Compared with others (3.2.17): from the server, for the kinds of round shown ----
+
+    private val _compare = MutableStateFlow<Load<List<CompareResult>>?>(null)
+    /** Null: not asked (signed out); Loading; Failed (no signal); Ready. */
+    val compare: StateFlow<Load<List<CompareResult>>?> = _compare.asStateFlow()
+    private var compareAsked: Map<CompareKey, Double>? = null
+
+    fun loadCompare(groups: Map<CompareKey, Double>) {
+        val repo = compareRepo ?: return
+        if (groups == compareAsked && _compare.value is Load.Ready) return
+        compareAsked = groups
+        viewModelScope.launch {
+            _compare.value = Load.Loading
+            _compare.value = try {
+                Load.Ready(repo.compare(groups))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Load.Failed(e.friendlyMessage())
+            }
+        }
+    }
 
     /** Your personal handicaps (2.9): one per bow style, most rounds first. Always from all your rounds, whatever the filters. */
     val handicaps: StateFlow<List<PersonalHandicap.Handicap>> = roundRepo.finishedRounds
@@ -367,6 +402,9 @@ class StatsViewModel(
     private val shown = combine(roundRepo.finishedRounds, filter) { list, f ->
         if (f == null) emptyList() else LocalDate.now().let { today -> list.filter { f.matches(it, today) } }
     }
+
+    /** 3.2.17: the rounds that match the filters, for the Analysis tab. */
+    val shownRounds: StateFlow<List<Round>> = shown.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val bests: StateFlow<List<PersonalBest>> = shown.map { PersonalStats.bests(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -2270,6 +2308,9 @@ class ScorecardViewModel(
 
     val round: StateFlow<Round?> =
         rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 3.2.17: the round's weather, once the server has looked it up and it's downloaded. */
+    val weather: StateFlow<Weather?> = rounds.weatherFor(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Everyone in the group, for the group scorecard (empty when it's not a group round). */
     val group: StateFlow<List<GroupMember>> = rounds.group(roundId)
