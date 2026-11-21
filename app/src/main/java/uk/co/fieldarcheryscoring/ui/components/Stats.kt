@@ -25,6 +25,7 @@ import uk.co.fieldarcheryscoring.ui.OwnHandicap
 import uk.co.fieldarcheryscoring.domain.Round
 import uk.co.fieldarcheryscoring.domain.RoundStatus
 import uk.co.fieldarcheryscoring.domain.RoundStats
+import uk.co.fieldarcheryscoring.domain.StatsDisplay
 import uk.co.fieldarcheryscoring.domain.ordinal
 import java.util.Locale
 
@@ -33,13 +34,17 @@ import java.util.Locale
  * [compact] drops the per-arrow row to save space on the scoring screen.
  * [showTotal] false on scorecards (2.7.06), whose header already shows the total in large type.
  * [oneLine] (2.9.03): short screens while scoring – just "Total · avg · scored" on one line.
- * [remaining] (3.2.18): while scoring, if switched on in the menu: the points still available and the max possible.
+ * [remaining] (3.2.18): while scoring, the points still available and the max possible (shown if [display] says so).
+ * [display] (3.2.20, Pete): which figures to show while scoring; "Scored x/y" always shows.
  */
 @Composable
 fun RunningStats(
     stats: RoundStats, modifier: Modifier = Modifier, compact: Boolean = false, showTotal: Boolean = true, oneLine: Boolean = false,
-    remaining: Pair<Int, Int>? = null,
+    remaining: Pair<Int, Int>? = null, display: StatsDisplay = StatsDisplay(),
 ) {
+    val total = showTotal && display.total
+    val left = remaining?.takeIf { display.remaining }?.first
+    val max = remaining?.takeIf { display.maxPossible }?.second
     if (oneLine) {
         val avg = stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–"
         Card(
@@ -50,11 +55,11 @@ fun RunningStats(
             ),
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Total ${stats.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Avg $avg", style = MaterialTheme.typography.titleMedium)
+                if (total) Text("Total ${stats.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (display.average) Text("Avg $avg", style = MaterialTheme.typography.titleMedium)
                 Text("${stats.targetsScored + stats.funShots}/${stats.targetCount} scored", style = MaterialTheme.typography.titleMedium)
             }
-            remaining?.let { RemainingLine(it, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) }
+            RemainingLine(left, max, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
         }
         return
     }
@@ -67,12 +72,12 @@ fun RunningStats(
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth()) {
-                if (showTotal) BigStat("Total", "${stats.totalPoints}")
-                BigStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "Avg per animal" else "Avg per target", stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–")
+                if (total) BigStat("Total", "${stats.totalPoints}")
+                if (display.average) BigStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "Avg per animal" else "Avg per target", stats.averagePerAnimal?.let { String.format(Locale.UK, "%.1f", it) } ?: "–")
                 BigStat("Scored", "${stats.targetsScored + stats.funShots}/${stats.targetCount}")
             }
-            remaining?.let { RemainingLine(it) }
-            if (stats.funShots > 0) {
+            RemainingLine(left, max)
+            if (stats.funShots > 0 && total) {
                 Text(
                     "Total includes ${if (stats.funShots == 1) "a fun shot" else "${stats.funShots} fun shots"} (${stats.funPoints} points), left out of the stats",
                     style = MaterialTheme.typography.bodySmall,
@@ -80,19 +85,21 @@ fun RunningStats(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f))
-            Row(Modifier.fillMaxWidth()) {
-                // Woodsman has no inner kill; its counts are arrows.
-                if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) SmallStat("Inner kill", stats.innerKills)
-                SmallStat("Kill", stats.kills)
-                SmallStat("Wound", stats.wounds)
-                SmallStat("Miss", stats.misses)
-            }
-            if (!compact) Row(Modifier.fillMaxWidth()) {
-                stats.byArrow.forEach { (arrow, count) ->
-                    SmallStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "${ordinal(arrow)} arrow" else "Kill ${ordinal(arrow)}", count)
+            if (display.hits) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f))
+                Row(Modifier.fillMaxWidth()) {
+                    // Woodsman has no inner kill; its counts are arrows.
+                    if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) SmallStat("Inner kill", stats.innerKills)
+                    SmallStat("Kill", stats.kills)
+                    SmallStat("Wound", stats.wounds)
+                    SmallStat("Miss", stats.misses)
                 }
-                SmallStat("Overrides", stats.overrides, dimWhenZero = true)
+                if (!compact) Row(Modifier.fillMaxWidth()) {
+                    stats.byArrow.forEach { (arrow, count) ->
+                        SmallStat(if (stats.maxPerAnimal == BigGameScoring.MAX_PER_ANIMAL) "${ordinal(arrow)} arrow" else "Kill ${ordinal(arrow)}", count)
+                    }
+                    SmallStat("Overrides", stats.overrides, dimWhenZero = true)
+                }
             }
         }
     }
@@ -175,11 +182,12 @@ fun HandicapCard(round: Round, model: HandicapModel?, own: OwnHandicap? = null, 
     }
 }
 
-/** "Remaining 288   Max possible 600" (3.2.18). */
+/** "Remaining 288   Max possible 600" (3.2.18); either can be switched off (3.2.20). Nothing when both are. */
 @Composable
-private fun RemainingLine(remaining: Pair<Int, Int>, modifier: Modifier = Modifier) {
+private fun RemainingLine(remaining: Int?, max: Int?, modifier: Modifier = Modifier) {
+    if (remaining == null && max == null) return
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
-        Text("Remaining ${remaining.first}", style = MaterialTheme.typography.titleSmall)
-        Text("Max possible ${remaining.second}", style = MaterialTheme.typography.titleSmall)
+        remaining?.let { Text("Remaining $it", style = MaterialTheme.typography.titleSmall) }
+        max?.let { Text("Max possible $it", style = MaterialTheme.typography.titleSmall) }
     }
 }

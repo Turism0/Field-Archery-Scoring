@@ -36,6 +36,7 @@ import uk.co.fieldarcheryscoring.data.FriendsOverview
 import uk.co.fieldarcheryscoring.data.FriendsRepository
 import uk.co.fieldarcheryscoring.data.HandicapRepository
 import uk.co.fieldarcheryscoring.data.HomeLayoutStore
+import uk.co.fieldarcheryscoring.domain.ScoringDisplay
 import uk.co.fieldarcheryscoring.domain.HomeLayout
 import uk.co.fieldarcheryscoring.domain.makePrivateWarning
 import uk.co.fieldarcheryscoring.domain.deleteLocationWarning
@@ -1884,9 +1885,9 @@ class ScoringViewModel(
     private val liveRepo: LiveGroupRepository? = null,
     private val options: uk.co.fieldarcheryscoring.data.ScoringOptionsStore? = null,
 ) : ViewModel() {
-    /** 3.2.18: show the remaining points and max possible under the total (switched in the menu, kept on the phone). */
-    val showRemaining: StateFlow<Boolean> = options?.showRemaining ?: MutableStateFlow(false)
-    fun setShowRemaining(on: Boolean) { options?.setShowRemaining(on) }
+    /** 3.2.20: which figures to show for your card and other archers' cards (⋮ → Display options, kept on the phone). */
+    val display: StateFlow<ScoringDisplay> = options?.display ?: MutableStateFlow(ScoringDisplay())
+    fun setDisplay(d: ScoringDisplay) { options?.setDisplay(d) }
 
     /** The round opened from the nav route (in a group, whoever was tapped; usually the scorer's own round). */
     val startRoundId: String = checkNotNull(saved["roundId"])

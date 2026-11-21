@@ -2,7 +2,16 @@
 
 Android app for scoring field archery rounds (Big Game and Woodsman). Works fully offline; central sync to a self-hosted server comes in iteration 2.
 
-**Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
+**Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
+
+## Version 3.2.20
+
+- **3.2.20 (app and web app; API version number only): display options while scoring (Pete).**
+  - The scoring screen's ⋮ menu has **Display options** (replacing 3.2.18's single remaining / max possible switch): switch each of Running total, Average (per animal; per target for Woodsman), Hit counts (inner kill / kill / wound / miss, and which arrow scored in the ☰ sheet), Remaining and Max possible on or off. Knowing how you're doing can affect your shooting. "Scored x/y" always shows.
+  - In group and live scoring there are separate settings for **your card** and **other archers' cards** (friends, guests and other phones' cards). The choices apply to the stats at the top, the ☰ scorecard sheet and the totals in the names strip.
+  - Defaults as before: total, average and hit counts on; remaining and max possible off. 3.2.18's switch carries over if it was on. Kept on the phone (`ScoringOptionsStore` "display") / browser (localStorage `scoringDisplay`).
+  - `domain/ScoringDisplay.kt` (app) and `domain/scoringDisplay.ts` (web), tests `ScoringDisplayTest` / `scoringDisplay.test.ts`: Kotlin 108, web 102. The web dialog, strip and stats checked in a browser with a 3-archer group. App versionCode 82, versionName 3.2.20.
+  - Also: Android Gradle Plugin 9.5.2 (Pete's upgrade).
 
 ## Version 3.2.19
 

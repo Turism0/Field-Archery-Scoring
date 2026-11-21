@@ -62,7 +62,12 @@ fun GroupRole.label(): String = when (this) {
  * when they've been scored on this target. The archer being scored is highlighted; tap someone to score them.
  */
 @Composable
-fun GroupStrip(members: List<GroupMember>, currentRoundId: String, targetNo: Int, onSelect: (GroupMember) -> Unit) {
+fun GroupStrip(
+    members: List<GroupMember>, currentRoundId: String, targetNo: Int,
+    /** 3.2.20: whether to show someone's running total (Display options). */
+    showTotal: (GroupMember) -> Boolean = { true },
+    onSelect: (GroupMember) -> Unit,
+) {
     val scheme = MaterialTheme.colorScheme
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -83,7 +88,7 @@ fun GroupStrip(members: List<GroupMember>, currentRoundId: String, targetNo: Int
                         Text(m.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (done) Icon(Icons.Filled.Check, contentDescription = "Scored", tint = scheme.primary, modifier = Modifier.size(16.dp))
                     }
-                    Text("${m.round.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (showTotal(m)) Text("${m.round.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }

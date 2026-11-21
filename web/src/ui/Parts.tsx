@@ -1,5 +1,6 @@
 // Pieces shared by several screens, laid out as the Android app's (2.7.01): running stats, round cards in lists,
 // the scorecard header and target rows, and the group card.
+import { DEFAULT_STATS_DISPLAY, type StatsDisplay } from '../domain/scoringDisplay'
 import { weatherIcon, type Weather } from '../domain/weather'
 import { useState } from 'preact/hooks'
 import { go } from './common'
@@ -19,31 +20,38 @@ export const typeAndClass = (r: Round) => (r.type === 'WOODSMAN' ? 'Woodsman · 
 
 /** Total, average, progress, hit counts and which arrow scored. [compact] drops the arrow row (scoring screen). */
 /** [noTotal] (2.7.06): on scorecards, whose header already shows the total in large type. */
-/** [remaining] (3.2.18): while scoring, if switched on in the menu: points still available and the most the round can reach. */
-export function RunningStats({ s, targetCount, compact, noTotal, remaining }: { s: RoundStats; targetCount: number; compact?: boolean; noTotal?: boolean; remaining?: { remaining: number; maxPossible: number } | null }) {
+/** [remaining] (3.2.18): while scoring, points still available and the most the round can reach (if [display] says so). */
+/** [display] (3.2.20, Pete): which figures to show while scoring; "Scored x/y" always shows. */
+export function RunningStats({ s, targetCount, compact, noTotal, remaining, display = DEFAULT_STATS_DISPLAY }: { s: RoundStats; targetCount: number; compact?: boolean; noTotal?: boolean; remaining?: { remaining: number; maxPossible: number } | null; display?: StatsDisplay }) {
   const big = s.maxPerAnimal === 24
+  const total = !noTotal && display.total
+  const shown = 1 + (total ? 1 : 0) + (display.average ? 1 : 0)
+  const left = remaining && display.remaining ? remaining.remaining : null
+  const max = remaining && display.maxPossible ? remaining.maxPossible : null
   return (
     <div class="card hi runstats">
-      <div class={`stats ${noTotal ? 'two' : ''}`}>
-        {!noTotal && <div><b class="lg">{s.total}</b><span>Total</span></div>}
-        <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>Avg<span class="long">{big ? ' per animal' : ' per target'}</span></span></div>
+      <div class={`stats ${shown === 2 ? 'two' : shown === 1 ? 'one' : ''}`}>
+        {total && <div><b class="lg">{s.total}</b><span>Total</span></div>}
+        {display.average && <div><b class="lg">{s.averagePerAnimal != null ? s.averagePerAnimal.toFixed(1) : '–'}</b><span>Avg<span class="long">{big ? ' per animal' : ' per target'}</span></span></div>}
         <div><b class="lg">{s.targetsScored + s.funShots}/{targetCount}</b><span>Scored</span></div>
       </div>
-      {remaining && <div class="row" style="justify-content:center;gap:16px;flex-wrap:wrap">
-        <span>Remaining <b>{remaining.remaining}</b></span><span>Max possible <b>{remaining.maxPossible}</b></span></div>}
-      {s.funShots > 0 && <div class="sub" style="text-align:center;color:inherit">
+      {(left != null || max != null) && <div class="row" style="justify-content:center;gap:16px;flex-wrap:wrap">
+        {left != null && <span>Remaining <b>{left}</b></span>}{max != null && <span>Max possible <b>{max}</b></span>}</div>}
+      {s.funShots > 0 && total && <div class="sub" style="text-align:center;color:inherit">
         Total includes {s.funShots === 1 ? 'a fun shot' : `${s.funShots} fun shots`} ({s.funPoints} points), left out of the stats</div>}
-      <hr />
-      <div class={`stats ${big ? 'four' : ''}`}>
-        {big && <div><b>{s.innerKills}</b><span>Inner kill</span></div>}
-        <div><b>{s.kills}</b><span>Kill</span></div>
-        <div><b>{s.wounds}</b><span>Wound</span></div>
-        <div><b>{s.misses}</b><span>Miss</span></div>
-      </div>
-      {!compact && <div class="stats four">
-        {s.byArrow.map((c, i) => <div><b>{c}</b><span>{big ? `${ordinal(i + 1)} arrow` : `Kill ${ordinal(i + 1)}`}</span></div>)}
-        <div style={s.overrides ? '' : 'opacity:.5'}><b>{s.overrides}</b><span>Overrides</span></div>
-      </div>}
+      {display.hits && <>
+        <hr />
+        <div class={`stats ${big ? 'four' : ''}`}>
+          {big && <div><b>{s.innerKills}</b><span>Inner kill</span></div>}
+          <div><b>{s.kills}</b><span>Kill</span></div>
+          <div><b>{s.wounds}</b><span>Wound</span></div>
+          <div><b>{s.misses}</b><span>Miss</span></div>
+        </div>
+        {!compact && <div class="stats four">
+          {s.byArrow.map((c, i) => <div><b>{c}</b><span>{big ? `${ordinal(i + 1)} arrow` : `Kill ${ordinal(i + 1)}`}</span></div>)}
+          <div style={s.overrides ? '' : 'opacity:.5'}><b>{s.overrides}</b><span>Overrides</span></div>
+        </div>}
+      </>}
     </div>
   )
 }

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Switch
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -81,6 +82,8 @@ import uk.co.fieldarcheryscoring.domain.AnimalResult
 import uk.co.fieldarcheryscoring.domain.BigGameScoring
 import uk.co.fieldarcheryscoring.domain.Hit
 import uk.co.fieldarcheryscoring.domain.RoundStatus
+import uk.co.fieldarcheryscoring.domain.ScoringDisplay
+import uk.co.fieldarcheryscoring.domain.StatsDisplay
 import uk.co.fieldarcheryscoring.domain.TargetScore
 import uk.co.fieldarcheryscoring.domain.TargetType
 import uk.co.fieldarcheryscoring.domain.WoodsmanScoring
@@ -121,7 +124,8 @@ fun ScoringScreen(
     val targetNo by vm.targetNo.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
     val currentId by vm.roundId.collectAsStateWithLifecycle()
-    val showRemaining by vm.showRemaining.collectAsStateWithLifecycle()
+    val display by vm.display.collectAsStateWithLifecycle()
+    var showDisplay by remember { mutableStateOf(false) }
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == currentId }
     var showCard by rememberSaveable { mutableStateOf(false) }
@@ -245,11 +249,8 @@ fun ScoringScreen(
                                     DropdownMenuItem(text = { Text("Show my check QR") }, onClick = { menuOpen = false; checkQr = vm.checkQrText() })
                                     DropdownMenuItem(text = { Text("Scan their check QR") }, onClick = { menuOpen = false; scanCheckQr() })
                                 }
-                                // 3.2.18 (a tester via Pete): remaining and max possible under the total.
-                                DropdownMenuItem(
-                                    text = { Text(if (showRemaining) "Hide remaining and max possible" else "Show remaining and max possible") },
-                                    onClick = { menuOpen = false; vm.setShowRemaining(!showRemaining) },
-                                )
+                                // 3.2.20 (Pete): which figures show for your card and other archers' cards.
+                                DropdownMenuItem(text = { Text("Display options") }, onClick = { menuOpen = false; showDisplay = true })
                                 DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }
@@ -263,7 +264,7 @@ fun ScoringScreen(
                     // The group shares one location: show the scorer's (theirs has the GPS position).
                     LocationChip(shownLocation(group, r), signedIn, onClick = { showLocation = true })
                     if (inGroup && targetNo > 0) {
-                        GroupStrip(group, currentId, targetNo) { vm.selectMember(it) }
+                        GroupStrip(group, currentId, targetNo, showTotal = { display.forCard(it.role == GroupRole.SCORER).total }) { vm.selectMember(it) }
                     }
                     live?.let { p -> LiveBanner(p, vm.whyNotHere(), vm.checkText(), vm.checkMismatch()) { p.state?.groupId?.let(onLobby) } }
                 }
@@ -307,7 +308,8 @@ fun ScoringScreen(
         ) {
             RunningStats(
                 r.stats, compact = true, oneLine = sizes.oneLineStats,
-                remaining = if (showRemaining) r.remainingPoints to r.maxPossiblePoints else null,
+                remaining = r.remainingPoints to r.maxPossiblePoints,
+                display = display.forCard(isOwnCard(group, r.id)),
             )
             if (target.isWoodsman) WoodsmanEditor(
                 target = target,
@@ -344,12 +346,15 @@ fun ScoringScreen(
     if (showCard && r != null) {
         ScorecardSheet(
             round = r,
+            display = display.forCard(isOwnCard(group, r.id)),
             currentTarget = targetNo,
             onDismiss = { showCard = false },
             onGoTo = { vm.goTo(it); showCard = false },
             onFinish = { showCard = false; confirmFinish = true },
         )
     }
+
+    if (showDisplay) DisplayOptionsDialog(display, inGroup, onChange = vm::setDisplay, onDismiss = { showDisplay = false })
 
     if (confirmTakeOver) TakeOverDialog(onConfirm = { confirmTakeOver = false; vm.takeOver() }, onDismiss = { confirmTakeOver = false })
 
@@ -1049,4 +1054,52 @@ private fun scoreSizes(height: Dp, multi: Boolean): ScoreSizes {
     val points = (tile.value * 0.34f).coerceIn(18f, 34f).sp
     val label = (tile.value * 0.17f).coerceIn(10f, 15f).sp
     return ScoreSizes(tile, miss, points, label, gap = if (height < 560.dp) 8.dp else 12.dp, oneLineStats = height < 600.dp)
+}
+
+/** Your own card: a round on its own, or your card in a group (not a friend's, a guest's or another phone's). */
+private fun isOwnCard(group: List<GroupMember>, roundId: String): Boolean =
+    group.firstOrNull { it.roundId == roundId }?.let { it.role == GroupRole.SCORER } ?: true
+
+/**
+ * ⋮ → Display options (3.2.20, Pete): knowing how you're doing can affect your shooting, so each figure can be
+ * switched off; in a group, separately for your card and other archers' cards. Kept on the phone.
+ */
+@Composable
+private fun DisplayOptionsDialog(display: ScoringDisplay, inGroup: Boolean, onChange: (ScoringDisplay) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Display options") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Choose what to show while scoring. Knowing how you're doing can affect your shooting.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (inGroup) Text("Your card", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                DisplaySwitches(display.mine) { onChange(display.copy(mine = it)) }
+                if (inGroup) {
+                    Text("Other archers' cards", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                    DisplaySwitches(display.others) { onChange(display.copy(others = it)) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+}
+
+@Composable
+private fun DisplaySwitches(d: StatsDisplay, onChange: (StatsDisplay) -> Unit) {
+    SwitchRow("Running total", d.total) { onChange(d.copy(total = it)) }
+    SwitchRow("Average", d.average) { onChange(d.copy(average = it)) }
+    SwitchRow("Hit counts", d.hits) { onChange(d.copy(hits = it)) }
+    SwitchRow("Remaining", d.remaining) { onChange(d.copy(remaining = it)) }
+    SwitchRow("Max possible", d.maxPossible) { onChange(d.copy(maxPossible = it)) }
+}
+
+@Composable
+private fun SwitchRow(label: String, on: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = on, onCheckedChange = onToggle)
+    }
 }

@@ -1,3 +1,4 @@
+import { decodeDisplay, encodeDisplay, forCard, type ScoringDisplay, type StatsDisplay } from '../domain/scoringDisplay'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { Bar, Dialog, Menu, back, errorText, go, replace, toast, ukDate, useData } from './common'
 import { getRound } from '../data/db'
@@ -25,8 +26,10 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const [n, setN] = useState(startTarget ?? 0)
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [overrideText, setOverrideText] = useState('')
-  // 3.2.18 (a tester via Pete): remaining and max possible under the total, off unless switched on (kept on this device).
-  const [showRemaining, setShowRemaining] = useState(readShowRemaining)
+  // 3.2.20 (Pete): which figures show for your card and other archers' cards (⋮ → Display options, kept on this device).
+  const [display, setDisplayState] = useState(readDisplay)
+  const setDisplay = (d: ScoringDisplay) => { setDisplayState(d); try { localStorage.setItem(DISPLAY, encodeDisplay(d)); localStorage.removeItem(OLD_SHOW_REMAINING) } catch { /* this session only */ } }
+  const [displayOpen, setDisplayOpen] = useState(false)
   const [ask, setAsk] = useState<'finish' | 'delete' | 'takeover' | 'card' | null>(null)
   const account = useData(getAccount)
   const [locOpen, setLocOpen] = useState(false)
@@ -185,7 +188,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           { text: inGroup ? `Round details – ${name}` : 'Round details', onClick: () => go(`/edit/${current}`) },
           !!s && live.canTakeOver(s) && { text: 'Take over as host', onClick: () => setAsk('takeover') },
           ...liveCheck.menu,
-          { text: showRemaining ? 'Hide remaining and max possible' : 'Show remaining and max possible', onClick: () => { const on = !showRemaining; setShowRemaining(on); try { localStorage.setItem(SHOW_REMAINING, on ? '1' : '0') } catch { /* this session only */ } } },
+          { text: 'Display options', onClick: () => setDisplayOpen(true) },
           { text: `Delete ${what}`, onClick: () => setAsk('delete'), danger: true },
         ]} />
       </Bar>
@@ -196,7 +199,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           {group.map(m => (
             <button class={`${m.id === current ? 'on' : ''} ${isComplete(target(m, n)) ? 'done' : ''}`}
               onClick={() => setCurrent(m.id)}>
-              {memberName(m)}<br /><b>{roundTotal(m)}</b>
+              {memberName(m)}{forCard(display, isOwn(m)).total && <><br /><b>{roundTotal(m)}</b></>}
             </button>
           ))}
         </div>
@@ -212,7 +215,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
         </div>
       )}
       <main class="form">
-        <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact remaining={showRemaining ? roundRemaining(shown) : null} />
+        <RunningStats s={roundStats(shown)} targetCount={round.targetCount} compact remaining={roundRemaining(shown)} display={forCard(display, isOwn(shown))} />
         <div class={`col score-area ${t.animals.length > 1 ? 'multi' : ''}`} style={canScore ? '' : 'opacity:.55'}>
           {round.type === 'WOODSMAN'
             ? <WoodsmanEditor t={t} onArrow={a => edit(x => withArrow(x, a))} onUndo={() => edit(withoutLastArrow)}
@@ -232,6 +235,14 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       </div>
 
       {liveCheck.dialogs}
+      <Dialog open={displayOpen} title="Display options" onClose={() => setDisplayOpen(false)}
+        actions={<button onClick={() => setDisplayOpen(false)}>Done</button>}>
+        <p class="sub">Choose what to show while scoring. Knowing how you're doing can affect your shooting.</p>
+        {inGroup && <h3 class="section">Your card</h3>}
+        <DisplaySwitches d={display.mine} onChange={mine => setDisplay({ ...display, mine })} />
+        {inGroup && <><h3 class="section">Other archers' cards</h3>
+          <DisplaySwitches d={display.others} onChange={others => setDisplay({ ...display, others })} /></>}
+      </Dialog>
       <Dialog open={leaving} title="Save your changes?" onClose={() => setLeaving(false)}
         actions={<><button onClick={() => setLeaving(false)}>Keep editing</button>
           <button class="danger" onClick={cancelEdits}>Discard</button><button class="filled" onClick={saveEdits}>Save</button></>}>
@@ -263,7 +274,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       <Dialog open={ask === 'card'} title={`${typeAndClass(round)} · ${ukDate(round.shootDate)}`} onClose={() => setAsk(null)}
         actions={<><button onClick={() => { setAsk(null); go(`/card/${round.id}`) }}>Full scorecard</button><button onClick={() => setAsk(null)}>Close</button></>}>
         <div class="col">
-          <RunningStats s={roundStats(shown)} targetCount={round.targetCount} />
+          <RunningStats s={roundStats(shown)} targetCount={round.targetCount} remaining={roundRemaining(shown)} display={forCard(display, isOwn(shown))} />
           <div>{Array.from({ length: round.targetCount }, (_, i) => target(shown, i + 1)).map(x => (
             <TargetRow t={x} current={x.targetNo === n} locked={!canGoTo(shown, x.targetNo)} onGoTo={() => { setN(x.targetNo); setAsk(null) }} />
           ))}</div>
@@ -414,7 +425,24 @@ function WoodsmanEditor({ t, onArrow, onUndo, onOverride, onRemoveOverride, onCl
   )
 }
 
-const SHOW_REMAINING = 'showRemaining'
-function readShowRemaining(): boolean {
-  try { return localStorage.getItem(SHOW_REMAINING) === '1' } catch { return false }
+const DISPLAY = 'scoringDisplay'
+/** 3.2.18's single "show remaining and max possible" switch, carried over once. */
+const OLD_SHOW_REMAINING = 'showRemaining'
+function readDisplay(): ScoringDisplay {
+  try { return decodeDisplay(localStorage.getItem(DISPLAY), localStorage.getItem(OLD_SHOW_REMAINING) === '1') } catch { return decodeDisplay(null) }
+}
+
+/** Your own card: a round on its own, or your card in a group (not a friend's, a guest's or another phone's). */
+const isOwn = (r: Round) => !r.groupRole || r.groupRole === 'SCORER'
+
+const SWITCHES: [keyof StatsDisplay, string][] = [
+  ['total', 'Running total'], ['average', 'Average'], ['hits', 'Hit counts'], ['remaining', 'Remaining'], ['maxPossible', 'Max possible'],
+]
+function DisplaySwitches({ d, onChange }: { d: StatsDisplay; onChange: (d: StatsDisplay) => void }) {
+  return <div class="col" style="gap:4px">{SWITCHES.map(([k, label]) => (
+    <label class="row" style="padding:6px 0;flex-wrap:nowrap;gap:12px">
+      <span style="flex:1">{label}</span>
+      <input type="checkbox" role="switch" style="width:22px;height:22px;flex:none;margin:0" checked={d[k]} onChange={e => onChange({ ...d, [k]: (e.target as HTMLInputElement).checked })} />
+    </label>))}
+  </div>
 }

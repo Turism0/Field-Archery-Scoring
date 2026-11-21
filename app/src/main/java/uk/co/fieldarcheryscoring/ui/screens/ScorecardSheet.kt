@@ -49,6 +49,8 @@ import uk.co.fieldarcheryscoring.ui.components.RunningStats
 @Composable
 fun ScorecardSheet(
     round: Round,
+    /** 3.2.20: which figures to show (as the scoring screen). */
+    display: uk.co.fieldarcheryscoring.domain.StatsDisplay = uk.co.fieldarcheryscoring.domain.StatsDisplay(),
     currentTarget: Int,
     onDismiss: () -> Unit,
     onGoTo: (Int) -> Unit,
@@ -60,7 +62,7 @@ fun ScorecardSheet(
                 Text("Scorecard", style = MaterialTheme.typography.headlineSmall)
                 Text(round.typeAndClass, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            RunningStats(round.stats)
+            RunningStats(round.stats, remaining = round.remainingPoints to round.maxPossiblePoints, display = display)
         }
         LazyColumn(contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp), modifier = Modifier.weight(1f, fill = false)) {
             items(round.targets, key = { it.targetNo }) { t ->

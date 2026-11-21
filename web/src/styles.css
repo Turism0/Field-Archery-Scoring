@@ -111,6 +111,7 @@ h3.section { margin: 8px 0 0; font-size: calc(17 * var(--k)); font-weight: 500; 
 .tabs button.on { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
 .stats.four { grid-template-columns: repeat(4, 1fr); }
 .stats.two { grid-template-columns: repeat(2, 1fr); }
+.stats.one { grid-template-columns: 1fr; }
 svg.chart { flex: 1; min-width: 0; height: 180px; }
 .chart .grid { stroke: var(--outline-v); stroke-dasharray: 4 4; stroke-width: 1; }
 .dot { fill: var(--outline); }
