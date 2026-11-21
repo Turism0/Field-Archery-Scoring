@@ -239,6 +239,10 @@ internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
             }
+            // 3.2.21 (Pete): the archer's notes (only ever on their own rounds; friends' rounds come without them).
+            r.notes?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
+            }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text("${r.totalPoints}", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)

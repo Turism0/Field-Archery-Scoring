@@ -9,6 +9,8 @@ public static class RoundValidator
     public const int MaxTargets = 100;
     /// <summary>The highest starting target (3.1.03): any peg on the course, whatever number of targets is shot.</summary>
     public const int MaxStartTarget = 999;
+    /// <summary>Round notes (3.2.21): up to this many characters (the database column's size).</summary>
+    public const int MaxNotes = 500;
     public const int MinFan = 2;
     public const int MaxFan = 6;
     public const int MaxOverride = MaxFan * 24;
@@ -67,6 +69,7 @@ public static class RoundValidator
         if (r.ClientUpdatedUtc < r.ClientCreatedUtc) problems.Add("Updated time is before created time.");
         // 3.1.03 (Pete): any target on the course, not just up to the number shot (an 18-target half can start at 19).
         if (r.StartTarget is { } st && (st < 1 || st > MaxStartTarget)) problems.Add($"Start target must be 1 to {MaxStartTarget}.");
+        if (r.Notes is { Length: > MaxNotes }) problems.Add($"Notes can be up to {MaxNotes} characters.");
 
         var targets = r.Targets ?? [];
         var numbers = targets.Select(t => t.TargetNo).OrderBy(n => n).ToList();

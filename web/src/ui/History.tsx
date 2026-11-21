@@ -9,9 +9,10 @@ import { weatherMap } from '../data/weather'
 import { ROUND_TYPE_NAMES, bowName } from '../domain/round'
 import { HISTORY_SORTS, bowOrder, inPeriod, periodLabel, personalBestIds, sortHistory, years, type HistorySort, type Period } from '../domain/stats'
 import { type RoundType } from '../domain/scoring'
+import { notesMatch } from '../domain/roundNotes'
 
-interface Filter { type?: RoundType; bow?: string; location?: string; period: Period }
-const NONE: Filter = { period: { kind: 'all' } }
+interface Filter { type?: RoundType; bow?: string; location?: string; period: Period; search: string }
+const NONE: Filter = { period: { kind: 'all' }, search: '' }
 
 /** Finished rounds with filters, a sort order (3.2.01) and PB marks; tap for the scorecard. */
 export function History() {
@@ -35,11 +36,12 @@ export function History() {
   // 3.1.09 (Pete): no handicap or net score on the tiles; they're on the scorecard.
   const now = today()
   const list = sortHistory(rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
-    (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now)), sort)
+    (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now) && notesMatch(r.notes, f.search)), sort)
   const types = [...new Set(rounds.map(r => r.type))]
   const bows = [...new Set(rounds.map(r => r.bowStyle))].sort((a, b) => bowOrder(a) - bowOrder(b))
   const locations = [...new Set(rounds.map(r => r.locationName).filter((x): x is string => !!x))].sort()
-  const active = f.type || f.bow || f.location || f.period.kind !== 'all'
+  const active = f.type || f.bow || f.location || f.period.kind !== 'all' || !!f.search.trim()
+  const hasNotes = rounds.some(r => r.notes)
   const periodValue = f.period.kind === 'all' ? '' : f.period.kind === 'year' ? `y${f.period.year}` : f.period.kind === '12m' ? '12m' : 'dates'
   const fmt = (p: { from?: string; to?: string }) =>
     p.from && p.to ? `${ukDate(p.from)} – ${ukDate(p.to)}` : p.from ? `From ${ukDate(p.from)}` : p.to ? `To ${ukDate(p.to)}` : 'Dates…'
@@ -52,6 +54,9 @@ export function History() {
       <main>
         {!rounds.length ? <div style="text-align:center;padding-top:48px"><h2 style="font-weight:400">No finished rounds yet</h2><p class="sub">Rounds appear here once you finish them.</p></div> : <>
           {account && <div class="sub" style="text-align:center">{lastSync ? `Last synced ${new Date(lastSync).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Not synced yet'}</div>}
+          {/* 3.2.21 (Pete): find rounds by what's in their notes. */}
+          {(hasNotes || f.search) && <input type="search" placeholder="Search notes" aria-label="Search notes" value={f.search}
+            onInput={e => setF({ ...f, search: (e.target as HTMLInputElement).value })} />}
           <div class="filters">
             {(types.length > 1 || f.type) && <select class={f.type ? 'on' : ''} value={f.type ?? ''} onChange={e => setF({ ...f, type: ((e.target as HTMLSelectElement).value || undefined) as RoundType | undefined })}>
               <option value="">Type: All</option>{types.map(t => <option value={t}>{ROUND_TYPE_NAMES[t]}</option>)}</select>}

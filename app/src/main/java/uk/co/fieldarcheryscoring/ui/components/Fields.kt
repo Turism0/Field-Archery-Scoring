@@ -213,3 +213,33 @@ fun NumberField(
         modifier = modifier.fillMaxWidth(),
     )
 }
+
+/**
+ * Round notes (3.2.21, Pete): free text on the archer's own round, up to [maxLength] characters, only ever shown to them.
+ * [hint] under the box (the character count is shown alongside).
+ */
+@Composable
+fun NotesField(
+    value: String,
+    onValue: (String) -> Unit,
+    maxLength: Int,
+    modifier: Modifier = Modifier,
+    label: String = "Notes (optional)",
+    hint: String = "Only you can see these.",
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { v -> onValue(v.take(maxLength)) },
+        label = { Text(label) },
+        minLines = 2,
+        maxLines = 6,
+        supportingText = {
+            Row(Modifier.fillMaxWidth()) {
+                Text(hint, Modifier.weight(1f))
+                Text("${value.length}/$maxLength")
+            }
+        },
+        keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
+        modifier = modifier.fillMaxWidth(),
+    )
+}

@@ -259,14 +259,17 @@ data class HistoryFilter(
     /** Location name as shown on the round. */
     val location: String? = null,
     val period: PersonalStats.Period = PersonalStats.Period.All,
+    /** 3.2.21 (Pete): words to find in the round's notes ("" = any round). */
+    val search: String = "",
 ) {
-    val isActive: Boolean get() = this != HistoryFilter()
+    val isActive: Boolean get() = this.copy(search = search.trim()) != HistoryFilter()
 
     fun matches(r: RoundSummary, today: LocalDate): Boolean =
         (type == null || r.roundType == type) &&
             (bowStyle == null || r.bowStyle == bowStyle) &&
             (location == null || r.locationName == location) &&
-            period.contains(r.shootDate, today)
+            period.contains(r.shootDate, today) &&
+            uk.co.fieldarcheryscoring.domain.RoundNotes.matches(r.notes, search)
 }
 
 /** What the history filters can offer: only things that are in your rounds. */
@@ -275,6 +278,8 @@ data class HistoryChoices(
     val bowStyles: List<BowStyle> = emptyList(),
     val locations: List<String> = emptyList(),
     val years: List<Int> = emptyList(),
+    /** 3.2.21: any of your rounds have notes (the notes search only shows then). */
+    val hasNotes: Boolean = false,
 )
 
 /** Score history: finished rounds only, newest first, with filters and personal-best marks. */
@@ -314,6 +319,7 @@ class HistoryViewModel(
             bowStyles = list.mapNotNull { it.bowStyle }.distinct().sortedBy { it.ordinal },
             locations = list.mapNotNull { it.locationName?.takeIf { n -> n.isNotBlank() } }.distinct().sortedBy { it.lowercase() },
             years = PersonalStats.years(list.map { it.shootDate }),
+            hasNotes = list.any { it.notes != null },
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryChoices())
 
@@ -1521,6 +1527,8 @@ data class NewRoundForm(
     val targetCountText: String = "",
     /** Optional (2.7): the target the archer starts on, e.g. 12 on a 36-target course. Just noted on the scorecard. */
     val startTargetText: String = "",
+    /** Optional (3.2.21, Pete): the archer's notes on their own round, only ever shown to them. */
+    val notes: String = "",
     val archerClass: ArcherClass? = null,
     /** Manual choice for this round; null = use the profile (manual or from date of birth). */
     val ageGroupChoice: AgeGroup? = null,
@@ -1648,7 +1656,7 @@ class NewRoundViewModel(
             val ownId = rounds.createGroupRound(
                 f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                 f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
-                groupId = groupId, live = true, startTarget = f.startTarget,
+                groupId = groupId, live = true, startTarget = f.startTarget, notes = f.notes,
             )
             try {
                 repo.create(groupId, f.liveMethod, f.liveExpected ?: 0)
@@ -1670,10 +1678,10 @@ class NewRoundViewModel(
                 rounds.createGroupRound(
                     f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                     f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
-                    startTarget = f.startTarget,
+                    startTarget = f.startTarget, notes = f.notes,
                 )
             } else {
-                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type, f.startTarget)
+                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type, f.startTarget, f.notes)
             }
             // GPS fix in the background (if allowed); scoring starts straight away.
             locations.captureFor(id)
@@ -1809,6 +1817,9 @@ data class EditRoundForm(
     val original: Round,
     /** In a group: whose round this is ("You", a friend or a guest); null when it's not a group round. */
     val groupName: String? = null,
+    /** 3.2.21: notes, on the archer's own round only ([canNote]: not a friend's, a guest's or another phone's card). */
+    val notes: String = "",
+    val canNote: Boolean = true,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
 
@@ -1825,7 +1836,10 @@ data class EditRoundForm(
 
     val changed: Boolean
         get() = shootDate != original.shootDate || targetCount != original.targetCount || archerClass != original.archerClass ||
-            ageGroup != original.ageGroup || bowStyle != original.bowStyle || startTarget != original.startTarget
+            ageGroup != original.ageGroup || bowStyle != original.bowStyle || startTarget != original.startTarget ||
+            notesChanged
+
+    val notesChanged: Boolean get() = canNote && RoundRepository.cleanNotes(notes) != original.notes
 }
 
 /** Edit a round's details: date, number of targets, class, age group, bow style. Nav arg "roundId". */
@@ -1840,7 +1854,8 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
             val r = rounds.round(roundId).first { it != null }!!
             val member = rounds.group(roundId).first().firstOrNull { it.roundId == roundId }
             _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle,
-                r.startTarget?.toString().orEmpty(), r, member?.name)
+                r.startTarget?.toString().orEmpty(), r, member?.name,
+                notes = r.notes.orEmpty(), canNote = member == null || member.role == GroupRole.SCORER)
         }
     }
 
@@ -1852,6 +1867,7 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
         if (f.startTargetError) return
         viewModelScope.launch {
             rounds.updateDetails(roundId, f.shootDate, count, f.archerClass, f.ageGroup, f.bowStyle, f.startTarget)
+            if (f.notesChanged) rounds.setNotes(roundId, f.notes)
             onDone()
         }
     }

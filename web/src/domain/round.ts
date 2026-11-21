@@ -32,6 +32,10 @@ export const MAX_TARGETS = 100
 export const MAX_START_TARGET = 999
 export const startTargetOk = (n: number | null | undefined): n is number => n != null && Number.isInteger(n) && n >= 1 && n <= MAX_START_TARGET
 export const MAX_GROUP = 8
+/** Round notes (3.2.21, Pete): up to this many characters (the server's limit too). */
+export const MAX_NOTES = 500
+/** Notes as stored: trimmed, at most [MAX_NOTES] characters, null when blank. */
+export const cleanNotes = (s: string | null | undefined): string | null => s?.trim().slice(0, MAX_NOTES) || null
 
 /** Adult 16+, Junior 12–15, Cub under 12, on the shoot date. */
 export function ageGroupFor(dateOfBirth: string, shootDate: string): AgeGroup | null {
@@ -75,6 +79,8 @@ export interface Round {
   groupOrder?: number | null
   /** The target the archer started on (2.7): just noted on the scorecard; targets keep their numbers. */
   startTarget?: number | null
+  /** The archer's notes (3.2.21): their own rounds only; synced, but only ever shown to them. */
+  notes?: string | null
 }
 
 export function target(r: Round, n: number): TargetScore {
@@ -208,6 +214,7 @@ export function newRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
   id?: string; groupId?: string | null; groupRole?: GroupRole | null; groupName?: string | null; groupArcherId?: string | null
   groupOrder?: number | null; locationId?: string | null; locationName?: string | null; startTarget?: number | null
+  notes?: string | null
 }): Round {
   const now = nowUtc()
   return {
@@ -218,6 +225,7 @@ export function newRound(p: {
     groupName: p.groupName ?? null, groupArcherId: p.groupArcherId ?? null, groupOrder: p.groupOrder ?? null,
     locationId: p.locationId ?? null, locationName: p.locationName ?? null,
     startTarget: startTargetOk(p.startTarget) ? p.startTarget : null,
+    notes: cleanNotes(p.notes),
   }
 }
 
@@ -250,6 +258,8 @@ export function roundToJson(r: Round): Record<string, unknown> {
     ageGroup: r.ageGroup, bowStyle: r.bowStyle, status: r.status, totalPoints: roundTotal(r),
     clientCreatedUtc: r.createdUtc, clientUpdatedUtc: r.updatedUtc, locationId: r.locationId ?? null,
     roundType: r.type, groupId: r.groupId ?? null, startTarget: r.startTarget ?? null,
+    // 3.2.21: the archer's own notes ("" = none); a round scored for a friend never carries the scorer's notes.
+    notes: !r.groupRole || r.groupRole === 'SCORER' ? (r.notes ?? '') : '',
     targets: [...r.targets].sort((a, b) => a.targetNo - b.targetNo).map(targetToJson),
   }
 }
@@ -261,6 +271,7 @@ export function roundFromJson(j: any): Round {
     status: j.status, type: j.roundType === 'WOODSMAN' ? 'WOODSMAN' : 'BIG_GAME',
     targets: (j.targets ?? []).map(targetFromJson), createdUtc: j.clientCreatedUtc, updatedUtc: j.clientUpdatedUtc,
     pending: false, locationId: j.locationId ?? null, locationName: j.locationName ?? null, startTarget: j.startTarget ?? null,
+    notes: j.notes || null,
   }
 }
 

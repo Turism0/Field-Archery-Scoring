@@ -5,6 +5,7 @@ import org.json.JSONObject
 import uk.co.fieldarcheryscoring.data.AccountStore
 import uk.co.fieldarcheryscoring.data.CachedFriend
 import uk.co.fieldarcheryscoring.data.LocationRepository
+import uk.co.fieldarcheryscoring.data.local.GroupRole
 import uk.co.fieldarcheryscoring.data.local.LocationState
 import uk.co.fieldarcheryscoring.data.local.AnimalEntity
 import uk.co.fieldarcheryscoring.data.local.AnimalState
@@ -266,16 +267,18 @@ class RoundSyncer(
                 locationState = data.round.locationState ?: local.locationState,
             )
         } else data.round
+        // 3.2.21: an API from before notes doesn't send them: keep this phone's.
+        val withNotes = if (!json.has("notes") && local != null) withFix.copy(notes = local.notes) else withFix
         // And its place in a group scored on this phone (the server doesn't send it back).
         val merged = if (local?.groupId != null) {
-            withFix.copy(
+            withNotes.copy(
                 groupId = local.groupId,
                 groupRole = local.groupRole,
                 groupName = local.groupName,
                 groupArcherId = local.groupArcherId,
                 groupOrder = local.groupOrder,
             )
-        } else withFix
+        } else withNotes
         dao.replaceRound(merged, data.targets, data.animals)
     }
 
@@ -325,6 +328,8 @@ internal fun RoundData.toJson(): JSONObject {
         .put("roundType", round.roundType ?: "BIG_GAME")
         .put("groupId", round.groupId ?: JSONObject.NULL)
         .put("startTarget", round.startTarget ?: JSONObject.NULL)
+        // 3.2.21: the archer's own notes ("" = none); a round scored for a friend never carries the scorer's notes.
+        .put("notes", if (round.groupRole == null || round.groupRole == GroupRole.SCORER) round.notes.orEmpty() else "")
         .put("targets", targetArray)
 }
 
@@ -351,6 +356,7 @@ internal fun JSONObject.toRoundData(): RoundData {
         // Big Game is stored as null on the phone (as before round types).
         roundType = optStringOrNull("roundType")?.takeIf { it != "BIG_GAME" },
         startTarget = if (has("startTarget") && !isNull("startTarget")) getInt("startTarget") else null,
+        notes = optStringOrNull("notes")?.takeIf { it.isNotBlank() },
     )
     val targets = mutableListOf<TargetEntity>()
     val animals = mutableListOf<AnimalEntity>()

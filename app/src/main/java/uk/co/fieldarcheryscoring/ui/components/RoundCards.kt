@@ -17,6 +17,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -84,6 +86,13 @@ fun RoundCard(
                     } ?: ""
                     Text(it + w, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
+                // 3.2.21 (Pete): a note icon on rounds with notes (the notes themselves are on the scorecard).
+                if (r.notes != null) Text(
+                    "\uD83D\uDCDD Notes",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { contentDescription = "Has notes" },
+                )
                 // Finished rounds upload when signed in; in-progress ones stay on the phone until finished.
                 if (showSync && !inProgress) SyncLabel(r.syncState)
             }

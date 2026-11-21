@@ -100,6 +100,8 @@ data class RoundEntity(
      * PHONE ONLY — never sent with the round.
      */
     @ColumnInfo(name = "hidden_owner") val hiddenOwner: String? = null,
+    /** The archer's notes (database v8, app 3.2.21): own rounds only; synced, but only ever shown to the archer. */
+    @ColumnInfo(name = "notes") val notes: String? = null,
 )
 
 @Entity(

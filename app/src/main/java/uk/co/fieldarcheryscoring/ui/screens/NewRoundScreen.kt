@@ -52,6 +52,7 @@ import uk.co.fieldarcheryscoring.domain.RoundType
 import uk.co.fieldarcheryscoring.ui.NewRoundViewModel
 import uk.co.fieldarcheryscoring.ui.components.BottomActionBar
 import uk.co.fieldarcheryscoring.ui.components.DateField
+import uk.co.fieldarcheryscoring.ui.components.NotesField
 import uk.co.fieldarcheryscoring.ui.components.NumberField
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
@@ -211,6 +212,13 @@ fun NewRoundScreen(
                     isError = startError,
                     supportingText = if (startError) "1 to ${RoundRepository.MAX_START_TARGET}"
                     else "The course's number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36). Just noted on the scorecard: scoring starts at 1.",
+                )
+                // 3.2.21 (Pete): notes on your own card; editable later in Round details.
+                NotesField(
+                    value = f.notes,
+                    onValue = { v -> vm.update { it.copy(notes = v) } },
+                    maxLength = RoundRepository.MAX_NOTES,
+                    hint = if (f.group || f.live) "On your card only. Only you can see these." else "Only you can see these.",
                 )
             }
 

@@ -35,6 +35,7 @@ import uk.co.fieldarcheryscoring.domain.BowStyle
 import uk.co.fieldarcheryscoring.ui.EditRoundViewModel
 import uk.co.fieldarcheryscoring.ui.components.BottomActionBar
 import uk.co.fieldarcheryscoring.ui.components.DateField
+import uk.co.fieldarcheryscoring.ui.components.NotesField
 import uk.co.fieldarcheryscoring.ui.components.NumberField
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
@@ -114,6 +115,13 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
                     isError = startError,
                     supportingText = if (startError) "1 to ${RoundRepository.MAX_START_TARGET}"
                     else if (f.groupName != null) "The same for everyone in the group." else "The first target shot, if not 1.",
+                )
+                // 3.2.21 (Pete): notes on the archer's own round only.
+                if (f.canNote) NotesField(
+                    value = f.notes,
+                    onValue = { v -> vm.update { it.copy(notes = v) } },
+                    maxLength = RoundRepository.MAX_NOTES,
+                    hint = if (f.groupName != null) "On your card only. Only you can see these." else "Only you can see these.",
                 )
             }
 

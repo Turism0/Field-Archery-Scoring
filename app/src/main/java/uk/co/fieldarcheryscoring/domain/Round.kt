@@ -35,6 +35,8 @@ data class Round(
     val createdAtMillis: Long = 0,
     /** The target the archer started on (2.7), just noted on the scorecard; null = not given. */
     val startTarget: Int? = null,
+    /** The archer's notes (3.2.21): their own rounds only, never shown to friends; null = none. */
+    val notes: String? = null,
 ) {
     val totalPoints: Int get() = targets.sumOf { it.totalPoints }
 

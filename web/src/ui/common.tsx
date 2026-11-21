@@ -114,6 +114,13 @@ export function Field({ label, children, help }: { label: string; children: Comp
   return <label class="field">{label}{children}{help && <span class="sub">{help}</span>}</label>
 }
 
+/** Round notes (3.2.21, Pete): free text on the archer's own round, only ever shown to them. */
+export function NotesField({ value, onChange, max, help = 'Only you can see these.' }: { value: string; onChange: (v: string) => void; max: number; help?: string }) {
+  return <label class="field">Notes (optional)
+    <textarea rows={3} maxLength={max} value={value} onInput={e => onChange((e.target as HTMLTextAreaElement).value.slice(0, max))} />
+    <span class="sub row between"><span>{help}</span><span>{value.length}/{max}</span></span></label>
+}
+
 /** A modal dialog (the browser's own, so it works with the keyboard and screen readers). */
 export function Dialog({ open, title, children, actions, onClose }: {
   open: boolean; title: string; children?: ComponentChildren; actions: ComponentChildren; onClose?: () => void

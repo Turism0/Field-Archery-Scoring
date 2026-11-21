@@ -5,7 +5,7 @@ import { refreshModelIfStale } from './handicap'
 import { lookUpPending, refreshNames } from './locations'
 import { claimDeviceData, getAccount, signedOutByServer, type Friend } from './account'
 import {
-  newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
+  cleanNotes, newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
 } from '../domain/round'
 import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
 import { missingOnServer } from '../domain/deviceData'
@@ -42,9 +42,10 @@ export interface MemberDraft {
 /** A round on your own, or a group scored on this device (you first, then the others in order). */
 export async function startRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
-  members?: MemberDraft[]; groupId?: string; startTarget?: number | null
+  members?: MemberDraft[]; groupId?: string; startTarget?: number | null; notes?: string | null
 }): Promise<string> {
   const groupId = p.members?.length || p.groupId ? (p.groupId ?? crypto.randomUUID()) : null
+  // Notes (3.2.21) go on your own card only.
   const mine = newRound({ ...p, groupId, groupRole: groupId ? 'SCORER' : null, groupOrder: groupId ? 0 : null })
   const others = (p.members ?? []).map((m, i) => newRound({
     shootDate: p.shootDate, targetCount: p.targetCount, type: p.type, archerClass: m.archerClass, ageGroup: m.ageGroup,
@@ -270,6 +271,8 @@ async function applyRemote(j: any) {
     : r
   // Its position stays on this device (the server never has it).
   if (local?.fixLat != null) merged = { ...merged, fixLat: local.fixLat, fixLon: local.fixLon, locationState: merged.locationId ? null : local.locationState }
+  // 3.2.21: an API from before notes doesn't send them: keep this device's.
+  if (local && !('notes' in j)) merged = { ...merged, notes: local.notes ?? null }
   await putRound(merged, false)
 }
 
@@ -323,6 +326,14 @@ export async function saveTypedRound(p: {
   })
   if (p.finished) syncNow()
   return r.id
+}
+
+/** The archer's notes on their own round (3.2.21); blank clears them. Only this round, not the rest of a group. */
+export async function setNotes(id: string, notes: string | null) {
+  const r = await getRound(id)
+  const clean = cleanNotes(notes)
+  if (!r || (r.notes ?? null) === clean) return
+  await putRound({ ...r, notes: clean, updatedUtc: nowUtc(), pending: true, failed: false })
 }
 
 /** Live groups (2.7): the host's start target on every card in the group here (only where it differs). */

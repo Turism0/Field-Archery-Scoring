@@ -297,3 +297,7 @@ header.bar .titles .sub { font-size: calc(13 * var(--k)); white-space: nowrap; o
   .scoring .tile-score, .scoring .arrows3 > div { height: clamp(40px, 11dvh, 64px); }
   .scoring .miss-tile { height: 40px; }
 }
+
+/* 3.2.21: round notes */
+.notes { font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
+label.field textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--outline, #888); border-radius: 8px; background: var(--surface, inherit); color: var(--text, inherit); resize: vertical; }

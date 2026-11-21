@@ -93,6 +93,8 @@ data class RoundSummary(
     val locationId: String? = null,
     val roundType: RoundType = RoundType.BIG_GAME,
     val bowStyle: BowStyle? = null,
+    /** The archer's notes (3.2.21), shown as a one-line preview. */
+    val notes: String? = null,
 )
 
 /** Someone being added to a group round on this phone: a friend (account) or a guest (name only). */
@@ -144,6 +146,7 @@ class RoundRepository(
                 locationId = it.locationId,
                 roundType = it.type(),
                 bowStyle = it.bowStyle,
+                notes = it.notes,
                 groupSize = row.groupSize,
                 targetsLine = if (it.type() == RoundType.WOODSMAN) targetsDescription(it.targetCount, it.targetCount, 0, 0)
                 else targetsDescription(it.targetCount, row.animalCount, row.predatorPreyCount, row.fanCount),
@@ -183,6 +186,8 @@ class RoundRepository(
         type: RoundType = RoundType.BIG_GAME,
         /** The target the archer started on (2.7), or null. */
         startTarget: Int? = null,
+        /** The archer's notes (3.2.21), or null. */
+        notes: String? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val now = Instant.now(clock)
@@ -201,6 +206,7 @@ class RoundRepository(
                 updatedAt = now,
                 roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
                 startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
+                notes = cleanNotes(notes),
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -226,6 +232,8 @@ class RoundRepository(
         live: Boolean = false,
         /** The target the group started on (2.7), the same on everyone's card, or null. */
         startTarget: Int? = null,
+        /** The scorer's notes (3.2.21): on their own card only. */
+        notes: String? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         require(live || others.isNotEmpty()) { "A group needs someone else" }
@@ -257,6 +265,7 @@ class RoundRepository(
             )
         }
         val mine = make(0, GroupRole.SCORER, null, null, archerClass, ageGroup, bowStyle)
+            .let { it.copy(round = it.round.copy(notes = cleanNotes(notes))) }
         val rest = others.mapIndexed { i, m -> make(i + 1, m.role, m.name.trim(), m.archerId, m.archerClass, m.ageGroup, m.bowStyle) }
         dao.createRounds(listOf(mine) + rest)
         return mine.round.id
@@ -466,6 +475,12 @@ class RoundRepository(
 
     suspend fun setStatus(roundId: String, status: RoundStatus) = touch(roundId) { it.copy(status = status) }
 
+    /** The archer's notes on their own round (3.2.21); blank clears them. Only this round, not the rest of a group. */
+    suspend fun setNotes(roundId: String, notes: String?) {
+        val clean = cleanNotes(notes)
+        if (dao.getRound(roundId)?.notes != clean) touch(roundId) { it.copy(notes = clean) }
+    }
+
     /** Live groups (2.7): the host's start target for every card in the group on this phone (only where it differs). */
     suspend fun setGroupStartTarget(groupId: String, startTarget: Int?) {
         for (r in dao.getGroup(groupId)) {
@@ -492,6 +507,11 @@ class RoundRepository(
         const val MAX_GROUP = 8
         /** Days guests' scores are kept. */
         const val GUEST_DAYS = 30L
+        /** Round notes (3.2.21): up to this many characters (the server's limit too). */
+        const val MAX_NOTES = 500
+
+        /** Notes as stored: trimmed, at most [MAX_NOTES] characters, null when blank. */
+        fun cleanNotes(notes: String?): String? = notes?.trim()?.take(MAX_NOTES)?.takeIf { it.isNotEmpty() }
     }
 }
 
@@ -516,6 +536,7 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         type = type(),
         createdAtMillis = createdAt.toEpochMilli(),
         startTarget = startTarget,
+        notes = notes,
         location = RoundLocation(
             status = when (locationState) {
                 null -> LocationStatus.NONE

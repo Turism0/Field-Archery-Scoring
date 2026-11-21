@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Bar, Card, Dialog, Field, Select, Seg, back } from './common'
+import { Bar, Card, Dialog, Field, NotesField, Select, Seg, back } from './common'
 import { getRound } from '../data/db'
-import { updateDetails } from '../data/rounds'
-import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_START_TARGET, MAX_TARGETS, startTargetOk, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
+import { setNotes, updateDetails } from '../data/rounds'
+import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_NOTES, MAX_START_TARGET, cleanNotes, MAX_TARGETS, startTargetOk, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { isComplete } from '../domain/scoring'
 
 /**
@@ -17,11 +17,12 @@ export function EditRound({ id }: { id: string }) {
   const [age, setAge] = useState<AgeGroup>('ADULT')
   const [bow, setBow] = useState('LB')
   const [start, setStart] = useState('')
+  const [notes, setNotesText] = useState('')   // 3.2.21 (Pete)
   const [confirm, setConfirm] = useState(false)
   useEffect(() => {
     getRound(id).then(x => {
       if (!x) return
-      setR(x); setDate(x.shootDate); setCount(String(x.targetCount)); setCls(x.archerClass); setAge(x.ageGroup); setBow(x.bowStyle); setStart(x.startTarget ? String(x.startTarget) : '')
+      setR(x); setDate(x.shootDate); setCount(String(x.targetCount)); setCls(x.archerClass); setAge(x.ageGroup); setBow(x.bowStyle); setStart(x.startTarget ? String(x.startTarget) : ''); setNotesText(x.notes ?? '')
     })
   }, [id])
   if (!r) return <Bar title="Round details" />
@@ -31,9 +32,13 @@ export function EditRound({ id }: { id: string }) {
   const startOk = startN == null || startTargetOk(startN)
   const removed = countOk ? r.targets.filter(t => t.targetNo > n && isComplete(t)).map(t => t.targetNo) : []
   const reopens = countOk && n > r.targetCount && r.status === 'COMPLETED'
-  const changed = date !== r.shootDate || n !== r.targetCount || cls !== r.archerClass || age !== r.ageGroup || bow !== r.bowStyle || startN !== (r.startTarget ?? null)
+  const detailsChanged = date !== r.shootDate || n !== r.targetCount || cls !== r.archerClass || age !== r.ageGroup || bow !== r.bowStyle || startN !== (r.startTarget ?? null)
   const name = r.groupId ? (r.groupRole === 'SCORER' || !r.groupRole ? 'You' : r.groupName) : null
-  const save = async () => { await updateDetails(r.id, date, n, cls, age, bow, startN); back() }
+  // 3.2.21: notes on the archer's own round only (not a friend's, a guest's or another phone's card).
+  const canNote = !r.groupRole || r.groupRole === 'SCORER'
+  const notesChanged = canNote && cleanNotes(notes) !== (r.notes ?? null)
+  const changed = detailsChanged || notesChanged
+  const save = async () => { if (detailsChanged) await updateDetails(r.id, date, n, cls, age, bow, startN); if (notesChanged) await setNotes(r.id, notes); back() }
   return (
     <>
       <Bar title={name ? `Round details · ${name}` : 'Round details'}>
@@ -50,6 +55,7 @@ export function EditRound({ id }: { id: string }) {
           <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : r.groupId ? 'The same for everyone in the group.' : 'The first target shot, if not 1.'}>
             <input inputMode="numeric" value={start} onInput={e => setStart((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
+          {canNote && <NotesField value={notes} onChange={setNotesText} max={MAX_NOTES} help={r.groupId ? 'On your card only. Only you can see these.' : undefined} />}
         </Card>
         <Card title="Archer" sub={name && name !== 'You' ? `Only changes ${name}'s round.` : 'Only changes this round, not your profile.'}>
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />

@@ -21,7 +21,9 @@ public sealed record RoundDto(
     // The scoring group the round was shot in (schema v6), if any.
     Guid? GroupId = null,
     // The target the archer started on (schema v9, 2.7): just noted on the scorecard; targets keep their numbers.
-    int? StartTarget = null);
+    int? StartTarget = null,
+    // The archer's notes (schema v13, 3.2.21): "" = none. Null = not sent (older apps): what's stored is kept.
+    string? Notes = null);
 
 public sealed record TargetDto(
     int TargetNo,
@@ -57,4 +59,6 @@ public sealed record StoredRoundDto(
     Guid? LocationId,
     string? LocationName,
     string RoundType,
-    int? StartTarget = null);
+    int? StartTarget = null,
+    // Only for the archer who owns the round (3.2.21); null for friends and Admins.
+    string? Notes = null);

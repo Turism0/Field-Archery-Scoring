@@ -143,7 +143,7 @@ public static class AccountDeletion
 
     private const string PrivacyHtml = $"""
         <h1>Field Archery Scoring – privacy policy</h1>
-        <p>Last updated 18 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
+        <p>Last updated 21 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
         individual, not a company, and is not connected with the National Field Archery Society (NFAS).
         Contact: <a href="mailto:{ContactEmail}">{ContactEmail}</a>.</p>
 
@@ -156,13 +156,15 @@ public static class AccountDeletion
         <ul>
           <li>your username and a one-way hash of your password and recovery code (never the password or code itself);
               no email address, phone number or real name;</li>
-          <li>your rounds: date, class (Gents / Ladies), age group, bow style, scores, which shoot location they were at and
-              the weather there;</li>
+          <li>your rounds: date, class (Gents / Ladies), age group, bow style, scores, which shoot location they were at,
+              the weather there, and any notes you write on them;</li>
           <li>your friends and friend requests, and rounds friends have scored for you;</li>
           <li>live groups you're in (for 30 days): members' usernames, names of guests the host added, and the scores entered;</li>
           <li>for each phone you sign in on: its make and model (e.g. "Google Pixel 8") and when it was last used;</li>
           <li>shoot locations you name: the name and the club's position.</li>
         </ul>
+        <p>Round notes are yours alone: friends who can see your rounds don't see them. They're free text, so please don't
+        put other people's personal details in them.</p>
         <p>Friends you accept can see your finished rounds. Everyone's finished rounds at a public shoot location count towards
         that location's stats, which show bow styles and classes but no names.</p>
 

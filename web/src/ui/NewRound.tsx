@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Bar, Card, Dialog, Field, Select, Seg, errorText, go, replace, today, useData } from './common'
+import { NotesField, Bar, Card, Dialog, Field, Select, Seg, errorText, go, replace, today, useData } from './common'
 import { cachedFriends, getAccount, getProfile, type Friend } from '../data/account'
 import { startRound, deleteRound, type MemberDraft } from '../data/rounds'
 import { create, METHODS, type LiveMethod } from '../data/live'
 import { getRound } from '../data/db'
 import { captureFor } from '../data/locations'
 import {
-  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_GROUP, MAX_START_TARGET, MAX_TARGETS, ROUND_TYPE_NAMES, ageGroupFor, startTargetOk, type AgeGroup, type ArcherClass,
+  AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_GROUP, MAX_NOTES, MAX_START_TARGET, MAX_TARGETS, ROUND_TYPE_NAMES, ageGroupFor, startTargetOk, type AgeGroup, type ArcherClass,
 } from '../domain/round'
 import type { RoundType } from '../domain/scoring'
 
@@ -22,6 +22,7 @@ export function NewRound({ type }: { type: RoundType }) {
   const [date, setDate] = useState(today())
   const [targets, setTargets] = useState('')
   const [startText, setStartText] = useState('')
+  const [notes, setNotes] = useState('')   // 3.2.21 (Pete)
   const [cls, setCls] = useState<ArcherClass>()
   const [ageChoice, setAgeChoice] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
@@ -62,7 +63,7 @@ export function NewRound({ type }: { type: RoundType }) {
     try {
       const id = await startRound({ shootDate: date, targetCount: count, archerClass: cls!, ageGroup: age!, bowStyle: bow!, type,
         members: group ? members.map(({ key: _, ...m }) => m) : [], groupId: isLive ? crypto.randomUUID() : undefined,
-        startTarget: startText ? startN : null })
+        startTarget: startText ? startN : null, notes })
       captureFor(id)   // shoot location: one GPS position, looked up when there's signal
       if (isLive) {
         const r = (await getRound(id))!
@@ -110,6 +111,7 @@ export function NewRound({ type }: { type: RoundType }) {
           <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : 'The course\'s number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36-target course). Just noted on the scorecard: scoring starts at 1.'}>
             <input inputMode="numeric" value={startText} onInput={e => setStartText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
           </Field>
+          <NotesField value={notes} onChange={setNotes} max={MAX_NOTES} help={group ? 'On your card only. Only you can see these.' : undefined} />
         </Card>
         <Card title={group ? 'You' : 'Archer'} sub="Filled in from your profile. Changes here only affect this round.">
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />

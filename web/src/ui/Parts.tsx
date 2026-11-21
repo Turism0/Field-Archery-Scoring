@@ -67,6 +67,8 @@ export function RoundCard({ r, showSync, pb, groupSize = 1, net, weather, onClic
         <span class="row" style="gap:8px"><b>{longDate(r.shootDate)}</b>{pb && <span class="pb">PB</span>}</span>
         <span class="sub">{typeAndClass(r)} · {targetsLine(r)}{groupSize > 1 ? ` · group of ${groupSize}` : ''}</span>
         {r.locationName && <span class="sub">{r.locationName}{weather ? ` ${weatherIcon(weather.code)}${weather.tempC != null ? ` ${Math.round(weather.tempC)}°C` : ''}` : ''}</span>}
+        {/* 3.2.21 (Pete): a note icon on rounds with notes (the notes themselves are on the scorecard). */}
+        {r.notes && <span class="sub" aria-label="Has notes">📝 Notes</span>}
         {showSync && !going && <SyncLabel r={r} />}
       </span>
       <span style="text-align:right"><span class="num-big">{roundTotal(r)}</span><span class="sub" style="display:block">points</span>
@@ -94,6 +96,8 @@ export function CardHeader({ r, showLocation }: { r: Round; showLocation?: boole
         <span class="sub">{typeAndClass(r)} · {targetsLine(r)}</span>
         {r.startTarget && <span class="sub">Started at target {r.startTarget}</span>}
         {showLocation && r.locationName && <span class="sub">{r.locationName}</span>}
+        {/* 3.2.21 (Pete): the archer's notes (only ever on their own rounds; friends' rounds come without them). */}
+        {r.notes && <span class="notes">{r.notes}</span>}
       </div>
       <div style="text-align:right"><div class="huge">{roundTotal(r)}</div><div class="sub">points</div></div>
     </div>

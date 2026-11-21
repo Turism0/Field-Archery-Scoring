@@ -70,7 +70,7 @@ public static class OfferEndpoints
         Guid? locationId = round.LocationId is { } lid && await LocationEndpoints.CurrentAsync(conn, lid, tx, ct) is { } loc ? loc.LocationId : null;
         var p = new
         {
-            roundId, forId = o.ForArcherId, me, o.GroupId, json = JsonSerializer.Serialize(round with { LocationId = locationId }, Json),
+            roundId, forId = o.ForArcherId, me, o.GroupId, json = JsonSerializer.Serialize(round with { LocationId = locationId, Notes = null }, Json),   // 3.2.21: notes stay with the scorer
             roundType = RoundValidator.TypeOf(round), shootDate = round.ShootDate.ToDateTime(TimeOnly.MinValue),
             targetCount = (short)round.TargetCount, round.ArcherClass, round.AgeGroup, round.BowStyle, round.TotalPoints, locationId,
         };

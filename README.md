@@ -4,6 +4,15 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.21
+
+- **3.2.21 (app, web app and API; run `server/sql/017_round_notes.sql` first): round notes (Pete).**
+  - **Notes (optional)** box on the New round screen (up to 500 characters), and in **Round details** to add or change them later, during or after the round. In a group or live round they go on your own card only; friends', guests' and other phones' cards have none. An archer joining a live group can add theirs in Round details.
+  - Shown on the scorecard (under the date and class) and as a **📝 Notes** mark in Score history, which also has a **Search notes** box (every word must appear, any case) when any of your rounds have notes.
+  - **Private:** synced with the round (`dbo.Round.Notes`, schema 13; phone database v8, column `notes`), but the API only returns them to the archer who owns the round. Friends viewing your scorecards, round offers and Admins never get them, and they're never sent to a live group. Privacy policy updated.
+  - **Backwards compatible:** older apps don't send notes, so the API keeps what's stored when one of them uploads a round; a phone keeps its notes if an older API doesn't send them. No MinVersions change.
+  - New `domain/RoundNotes.kt` / `domain/roundNotes.ts` (search), tests `RoundNotesTest` / `roundNotes.test.ts`; server test `server/tests/Test-RoundNotes.ps1` (in Run-AllTests). Kotlin 111, web 106. Web new round, scorecard, history search and Round details checked in a browser. App versionCode 83, versionName 3.2.21 (includes 3.2.20, which wasn't released on its own).
+
 ## Version 3.2.20
 
 - **3.2.20 (app and web app; API version number only): display options while scoring (Pete).**

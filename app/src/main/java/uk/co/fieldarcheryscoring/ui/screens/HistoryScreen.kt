@@ -23,6 +23,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -119,6 +121,21 @@ fun HistoryScreen(vm: HistoryViewModel, onBack: () -> Unit, onOpenRound: (RoundS
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (signedIn) item(key = "sync") { SyncStatusLine(lastSync) }
+                    // 3.2.21 (Pete): find rounds by what's in their notes.
+                    if (choices.hasNotes || filter.search.isNotEmpty()) item(key = "search") {
+                        OutlinedTextField(
+                            value = filter.search,
+                            onValueChange = { v -> vm.setFilter { it.copy(search = v) } },
+                            label = { Text("Search notes") },
+                            singleLine = true,
+                            trailingIcon = {
+                                if (filter.search.isNotEmpty()) IconButton(onClick = { vm.setFilter { it.copy(search = "") } }) {
+                                    Icon(Icons.Filled.Clear, contentDescription = "Clear search")
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     item(key = "filters") {
                         HistoryFilters(filter, choices, onChange = vm::setFilter, onPickDates = { pickDates = true }, sort = sort, onSort = vm::setSort)
                     }
