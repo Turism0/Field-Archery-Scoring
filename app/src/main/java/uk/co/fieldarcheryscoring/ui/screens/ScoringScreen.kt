@@ -1,5 +1,6 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import uk.co.fieldarcheryscoring.ui.components.NameArcherDialog
 import androidx.compose.ui.platform.LocalContext
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
@@ -126,6 +127,10 @@ fun ScoringScreen(
     val currentId by vm.roundId.collectAsStateWithLifecycle()
     val display by vm.display.collectAsStateWithLifecycle()
     var showDisplay by remember { mutableStateOf(false) }
+    // 3.2.23 (Pete): name other archers (this phone only): ⋮ → Name archers, or long press in the names strip.
+    val localNames by vm.localNames.collectAsStateWithLifecycle()
+    var namingList by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf<GroupMember?>(null) }
     val inGroup = group.size > 1
     val member = group.firstOrNull { it.roundId == currentId }
     var showCard by rememberSaveable { mutableStateOf(false) }
@@ -139,10 +144,16 @@ fun ScoringScreen(
     var qrOutcome by remember { mutableStateOf<uk.co.fieldarcheryscoring.ui.QrCheckOutcome?>(null) }
     val context = LocalContext.current
     fun scanCheckQr() {
-        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-        GmsBarcodeScanning.getClient(context, options).startScan()
-            .addOnSuccessListener { code -> code.rawValue?.let { qrOutcome = vm.checkScanned(it) } }
-            .addOnFailureListener { e -> qrOutcome = uk.co.fieldarcheryscoring.ui.QrCheckOutcome(problem = "Couldn't scan: ${e.message ?: "try again, or read the scores out"}") }
+        // 3.2.22: a scanner that can't start says why instead of closing the app.
+        try {
+            val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+            GmsBarcodeScanning.getClient(context, options).startScan()
+                .addOnSuccessListener { code -> code.rawValue?.let { qrOutcome = vm.checkScanned(it) } }
+                .addOnFailureListener { e -> qrOutcome = uk.co.fieldarcheryscoring.ui.QrCheckOutcome(problem = "Couldn't scan: ${e.message ?: "try again, or read the scores out"}") }
+        } catch (e: Exception) {
+            android.util.Log.e("ScoringScreen", "QR scanner wouldn't start", e)
+            qrOutcome = uk.co.fieldarcheryscoring.ui.QrCheckOutcome(problem = "Couldn't open the scanner (${e.javaClass.simpleName}: ${e.message}). Read the scores out instead.")
+        }
     }
     var showLocation by rememberSaveable { mutableStateOf(false) }
     var askedForName by rememberSaveable { mutableStateOf(false) }
@@ -251,6 +262,9 @@ fun ScoringScreen(
                                 }
                                 // 3.2.20 (Pete): which figures show for your card and other archers' cards.
                                 DropdownMenuItem(text = { Text("Display options") }, onClick = { menuOpen = false; showDisplay = true })
+                                if (group.any { it.archerId != null }) {
+                                    DropdownMenuItem(text = { Text("Name archers") }, onClick = { menuOpen = false; namingList = true })
+                                }
                                 DropdownMenuItem(text = { Text("Delete $what") }, onClick = { menuOpen = false; confirmDelete = true })
                             }
                         }
@@ -264,7 +278,7 @@ fun ScoringScreen(
                     // The group shares one location: show the scorer's (theirs has the GPS position).
                     LocationChip(shownLocation(group, r), signedIn, onClick = { showLocation = true })
                     if (inGroup && targetNo > 0) {
-                        GroupStrip(group, currentId, targetNo, showTotal = { display.forCard(it.role == GroupRole.SCORER).total }) { vm.selectMember(it) }
+                        GroupStrip(group, currentId, targetNo, showTotal = { display.forCard(it.role == GroupRole.SCORER).total }, onName = { naming = it }) { vm.selectMember(it) }
                     }
                     live?.let { p -> LiveBanner(p, vm.whyNotHere(), vm.checkText(), vm.checkMismatch()) { p.state?.groupId?.let(onLobby) } }
                 }
@@ -351,6 +365,37 @@ fun ScoringScreen(
             onDismiss = { showCard = false },
             onGoTo = { vm.goTo(it); showCard = false },
             onFinish = { showCard = false; confirmFinish = true },
+        )
+    }
+
+    if (namingList) {
+        AlertDialog(
+            onDismissRequest = { namingList = false },
+            title = { Text("Name archers") },
+            text = {
+                Column {
+                    Text(
+                        "Give archers the names you know them by. Only you see them, on this phone; their username shows " +
+                            "underneath. Tip: long press someone in the names strip.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    group.filter { it.archerId != null }.forEach { m ->
+                        TextButton(onClick = { namingList = false; naming = m }) {
+                            Text(if (m.usernameUnder != null) "${m.name} (${m.usernameUnder})" else "${m.name}: add a name")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { namingList = false }) { Text("Done") } },
+        )
+    }
+    naming?.let { m ->
+        val id = m.archerId
+        if (id != null) NameArcherDialog(
+            username = m.usernameUnder ?: m.name,
+            current = localNames[id],
+            onSave = { name -> vm.setName(id, name); naming = null },
+            onDismiss = { naming = null },
         )
     }
 
@@ -1008,7 +1053,7 @@ private fun LiveBanner(poll: LivePoll, whyNot: String?, check: String?, mismatch
             }
             // 3+ scorers: whose cards this phone scores.
             if (s != null && s.started && s.method == LiveMethod.MULTI.code) {
-                val mine = s.members.sortedBy { it.sortOrder }.filter { s.canScore(it.memberId) }.map { it.name }
+                val mine = s.members.sortedBy { it.sortOrder }.filter { s.canScore(it.memberId) }.map { if (it.memberId == s.myMemberId) it.name else s.nameOf(it) }
                 if (mine.isNotEmpty()) {
                     Text("You score: ${mine.joinToString(", ")}", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSecondaryContainer)

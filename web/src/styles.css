@@ -301,3 +301,6 @@ header.bar .titles .sub { font-size: calc(13 * var(--k)); white-space: nowrap; o
 /* 3.2.21: round notes */
 .notes { font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
 label.field textarea { font: inherit; padding: 10px 12px; border: 1px solid var(--outline, #888); border-radius: 8px; background: var(--surface, inherit); color: var(--text, inherit); resize: vertical; }
+
+/* 3.2.23: "Add a name" / "Change name" links for names you give other archers */
+.link { color: var(--primary); font-size: calc(13 * var(--k)); display: inline-block; padding: 2px 0; cursor: pointer; }

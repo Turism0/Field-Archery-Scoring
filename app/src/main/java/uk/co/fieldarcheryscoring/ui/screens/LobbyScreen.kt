@@ -1,5 +1,9 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import uk.co.fieldarcheryscoring.ui.components.NameArcherDialog
+import uk.co.fieldarcheryscoring.data.LiveGroupState
+import androidx.compose.foundation.clickable
+import uk.co.fieldarcheryscoring.domain.ArcherNames
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -76,6 +80,7 @@ fun LobbyScreen(
     var confirmCancel by remember { mutableStateOf(false) }
     var confirmEarlyStart by remember { mutableStateOf(false) }
     var confirmTakeOver by remember { mutableStateOf(false) }
+    var naming by remember { mutableStateOf<LiveMember?>(null) }   // 3.2.23
     val s = poll?.state
     AskForNearby()
 
@@ -149,7 +154,7 @@ fun LobbyScreen(
                 title = if (s.expected > 0) "In the group (${s.members.size} of ${s.expected})" else "In the group (${s.members.size})",
                 subtitle = "In scoring order.",
             ) {
-                s.members.sortedBy { it.sortOrder }.forEach { m -> MemberLine(m, isMe = m.memberId == s.myMemberId) }
+                s.members.sortedBy { it.sortOrder }.forEach { m -> MemberLine(m, isMe = m.memberId == s.myMemberId, s = s, onName = { naming = m }) }
             }
             // No signal: phone to phone instead; Bluetooth off etc. (2.3)
             poll?.let { LiveLinkNotes(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -200,12 +205,21 @@ fun LobbyScreen(
             title = { Text("Start without everyone?") },
             text = {
                 Text(
-                    "${s.members.size} of ${s.expected} are in: " + s.members.sortedBy { it.sortOrder }.joinToString(", ") { it.name } +
+                    "${s.members.size} of ${s.expected} are in: " + s.members.sortedBy { it.sortOrder }.joinToString(", ") { s.nameOf(it) } +
                         ". Anyone else can still join with the code; who scores which card is shared out again when they do.",
                 )
             },
             confirmButton = { TextButton(onClick = { confirmEarlyStart = false; vm.start() }) { Text("Start") } },
             dismissButton = { TextButton(onClick = { confirmEarlyStart = false }) { Text("Wait") } },
+        )
+    }
+    naming?.let { m ->
+        val id = m.archerId
+        if (id != null) NameArcherDialog(
+            username = m.name,
+            current = poll?.state?.localNames?.get(id),
+            onSave = { name -> vm.setName(id, name); naming = null },
+            onDismiss = { naming = null },
         )
     }
     if (confirmTakeOver) TakeOverDialog(onConfirm = { confirmTakeOver = false; vm.takeOver() }, onDismiss = { confirmTakeOver = false })
@@ -230,10 +244,22 @@ fun LobbyScreen(
 }
 
 @Composable
-private fun MemberLine(m: LiveMember, isMe: Boolean) {
+private fun MemberLine(m: LiveMember, isMe: Boolean, s: LiveGroupState? = null, onName: (() -> Unit)? = null) {
+    // 3.2.23 (Pete): the name you gave them, with their username underneath; "Add a name" for anyone with an account.
+    val shown = s?.nameOf(m) ?: m.name
+    val under = s?.let { ArcherNames.usernameUnder(m.name, m.archerId, it.localNames) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Column(Modifier.weight(1f)) {
-            Text(if (isMe) "${m.name} (you)" else m.name, style = MaterialTheme.typography.titleSmall)
+            Text(if (isMe) "${m.name} (you)" else shown, style = MaterialTheme.typography.titleSmall)
+            if (!isMe && under != null) Text(under, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!isMe && m.archerId != null && onName != null) {
+                Text(
+                    if (under == null) "Add a name" else "Change name",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable(onClick = onName).padding(vertical = 4.dp),
+                )
+            }
             Text(
                 "${m.archerClass.displayName} · ${m.ageGroup.displayName} · ${m.bowStyle.label}",
                 style = MaterialTheme.typography.bodySmall,
@@ -243,7 +269,7 @@ private fun MemberLine(m: LiveMember, isMe: Boolean) {
         Text(
             when (m.kind) {
                 "HOST" -> "Host"
-                "JOINED" -> "Own phone"
+                "JOINED" -> if (m.onWeb) "Web app" else "Own phone"
                 "FRIEND" -> "Friend"
                 else -> "Guest"
             },

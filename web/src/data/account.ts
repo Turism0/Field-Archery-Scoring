@@ -31,13 +31,13 @@ function deviceName(): string {
 // 'dataOwner' = the account the showing rounds belong to (none: nobody was signed in); 'owners' = each account's
 // username; 'stash:<id>' = a put-away account's profile and Stats filters.
 
-interface Stash { profile?: Profile; statsFilter?: string | null }
+interface Stash { profile?: Profile; statsFilter?: string | null; archerNames?: Record<string, string> | null }
 
 /** Signing out (or the server ending the sign-in): [owner]'s rounds, profile and Stats filters are put away here. */
 async function putAway(owner: string) {
   let statsFilter: string | null = null
   try { statsFilter = localStorage.getItem('statsFilter') } catch { /* not kept */ }
-  await setKv(`stash:${owner}`, { profile: await getProfile(), statsFilter } satisfies Stash)
+  await setKv(`stash:${owner}`, { profile: await getProfile(), statsFilter, archerNames: (await getKv<Record<string, string>>('archerNames')) ?? null } satisfies Stash)
   await hideShowing(owner)
   await clearSession()
 }
@@ -49,6 +49,7 @@ async function bringBack(owner: string) {
   if (s) {
     if (s.profile) await saveProfile(s.profile)
     try { if (s.statsFilter) localStorage.setItem('statsFilter', s.statsFilter) } catch { /* not kept */ }
+    if (s.archerNames) await setKv('archerNames', s.archerNames)   // 3.2.23
     await setKv(`stash:${owner}`, null)
   }
 }

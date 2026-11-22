@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks'
-import { Bar, Card, Dialog, Field, Loading, back, errorText, go, one, toast, ukDate, useData, useLoad } from './common'
+import { Bar, Card, Dialog, Field, Loading, NameArcherDialog, back, errorText, go, one, toast, ukDate, useData, useLoad } from './common'
+import { getArcherNames, setArcherName } from '../data/archerNames'
+import { displayName, usernameUnder } from '../domain/archerNames'
 import { getAccount } from '../data/account'
 import { getModel } from '../data/handicap'
 import * as friends from '../data/friends'
@@ -12,6 +14,9 @@ export function Friends() {
   const account = useData(getAccount)
   const [data, retry] = useLoad(async () => account ? { o: await friends.overview(), offers: await friends.offers() } : null, [account?.token])
   const [name, setName] = useState('')
+  // 3.2.23 (Pete): names you give friends (this browser only).
+  const names = useData(getArcherNames) ?? {}
+  const [naming, setNaming] = useState<{ id: string; username: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function act(f: () => Promise<unknown>, done?: string) {
@@ -52,7 +57,7 @@ export function Friends() {
           {v.o.incoming.length > 0 && <>
             <h3 class="section">Friend requests</h3>
             {v.o.incoming.map(r => (
-              <div class="card row between"><b>{r.username}</b><span>
+              <div class="card row between"><b>{displayName(r.username, r.archerId, names)}</b><span>
                 <button disabled={busy} onClick={() => act(() => friends.removeFriend(r.archerId))}>Decline</button>
                 <button class="filled" disabled={busy} onClick={() => act(() => friends.acceptFriend(r.archerId), `You and ${r.username} are now friends.`)}>Accept</button></span></div>
             ))}
@@ -60,7 +65,7 @@ export function Friends() {
           {v.o.outgoing.length > 0 && <>
             <h3 class="section">Waiting for them to accept</h3>
             {v.o.outgoing.map(r => (
-              <div class="card row between"><b>{r.username}</b>
+              <div class="card row between"><b>{displayName(r.username, r.archerId, names)}</b>
                 <button disabled={busy} onClick={() => act(() => friends.removeFriend(r.archerId))}>Cancel</button></div>
             ))}
           </>}
@@ -74,8 +79,11 @@ export function Friends() {
               f.woodsmanRounds > 0 ? `Woodsman: ${f.woodsmanRounds} round${f.woodsmanRounds === 1 ? '' : 's'}${f.woodsmanBest != null ? ` · best ${f.woodsmanBest}` : ''}` : '',
             ].filter(Boolean)
             return (
-              <button class="tile" onClick={() => go(`/friend/${f.archerId}?name=${encodeURIComponent(f.username)}`)}>
-                <span class="grow"><b>{f.username}</b>
+              <button class="tile" onClick={() => go(`/friend/${f.archerId}?name=${encodeURIComponent(displayName(f.username, f.archerId, names))}`)}>
+                <span class="grow"><b>{displayName(f.username, f.archerId, names)}</b>
+                  {usernameUnder(f.username, f.archerId, names) && <span class="sub" style="display:block">{f.username}</span>}
+                  <span role="button" tabIndex={0} class="link" onClick={e => { e.stopPropagation(); setNaming({ id: f.archerId, username: f.username }) }}>
+                    {names[f.archerId] ? 'Change name' : 'Add a name'}</span>
                   {lines.length ? lines.map(l => <span class="sub" style="display:block">{l}</span>) : <span class="sub">No finished rounds yet</span>}
                   {f.lastShootDate && <span class="sub" style="display:block">Last shot {ukDate(f.lastShootDate)}</span>}</span>
                 {/* Personal handicap (2.9): their main bow's, big; any others underneath. */}
@@ -88,6 +96,8 @@ export function Friends() {
           })}
         </div></div>}</Loading>
       </main>
+      {naming && <NameArcherDialog username={naming.username} current={names[naming.id] ?? null}
+        onSave={n => { setArcherName(naming.id, n); setNaming(null) }} onClose={() => setNaming(null)} />}
     </>
   )
 }

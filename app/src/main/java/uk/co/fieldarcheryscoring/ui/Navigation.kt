@@ -171,7 +171,7 @@ fun FieldArcheryNavHost() {
         // Friends: list and requests → a friend's finished rounds → their scorecard (read-only).
         composable("friends") {
             FriendsScreen(
-                vm = appViewModel { c, _ -> FriendsViewModel(c.friendsRepository, c.accountRepository, c.handicapRepository) },
+                vm = appViewModel { c, _ -> FriendsViewModel(c.friendsRepository, c.accountRepository, c.handicapRepository, c.archerNamesStore) },
                 onBack = { nav.popBackStack() },
                 onProfile = { nav.navigate("profile") },
                 onOpenFriend = { f -> nav.navigate("friend/${f.archerId}/${f.username}") },
@@ -201,7 +201,7 @@ fun FieldArcheryNavHost() {
             val archerId = entry.arguments?.getString("archerId").orEmpty()
             val username = entry.arguments?.getString("username").orEmpty()
             FriendRoundsScreen(
-                vm = appViewModel { c, saved -> FriendRoundsViewModel(c.friendsRepository, saved, c.handicapRepository) },
+                vm = appViewModel { c, saved -> FriendRoundsViewModel(c.friendsRepository, saved, c.handicapRepository, c.archerNamesStore) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { r -> nav.navigate("friendCard/$archerId/$username/${r.roundId}") },
             )
@@ -243,7 +243,7 @@ fun FieldArcheryNavHost() {
             arguments = listOf(navArgument("groupId") { type = NavType.StringType }),
         ) {
             LobbyScreen(
-                vm = appViewModel { c, saved -> LobbyViewModel(c.liveGroupRepository, c.roundRepository, saved) },
+                vm = appViewModel { c, saved -> LobbyViewModel(c.liveGroupRepository, c.roundRepository, saved, c.archerNamesStore) },
                 onBack = { nav.popBackStack() },
                 onStarted = { id -> nav.navigate(scoringRoute(id)) { popUpTo("home") } },
                 onGone = { nav.popBackStack("home", inclusive = false) },
@@ -312,7 +312,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScoringScreen(
-                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved, c.liveGroupRepository, c.scoringOptionsStore) },
+                vm = appViewModel { c, saved -> ScoringViewModel(c.roundRepository, saved, c.liveGroupRepository, c.scoringOptionsStore, c.archerNamesStore) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 // Finishing shows the scorecard; back from there goes home.
@@ -329,7 +329,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScorecardScreen(
-                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved, c.handicapRepository) },
+                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved, c.handicapRepository, c.friendsRepository, c.archerNamesStore) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },

@@ -29,7 +29,7 @@ export function useLiveCheck(s: live.LiveState | null, gid: string | undefined, 
     .sort((a, b) => (live.member(s!, a)?.sortOrder ?? 0) - (live.member(s!, b)?.sortOrder ?? 0))
   const others = s ? live.otherScorerNames(s, cards.length ? cards : Object.keys(live.waitingForCheck(s)).map(k => k.slice(k.indexOf('|') + 1))) : []
   const who = others.join(' and ') || 'the other scorer'
-  const name = (id: string) => (id === s?.myMemberId ? `${live.member(s!, id)?.name ?? 'You'} (you)` : live.member(s!, id)?.name ?? '?')
+  const name = (id: string) => (id === s?.myMemberId ? `${live.member(s!, id)?.name ?? 'You'} (you)` : (live.member(s!, id) ? live.nameOf(s!, live.member(s!, id)!) : '?'))
 
   const qrEntries = s && showQr ? live.waitingForCheck(s, { includeChecked: true }) : {}
   const qrCount = Object.keys(qrEntries).length

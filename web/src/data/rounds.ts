@@ -123,6 +123,12 @@ export async function setGroupMember(id: string, role: GroupRole, name: string |
   if (r) await putRound({ ...r, groupRole: role, groupName: name, groupOrder: order })
 }
 
+/** 3.2.23: a live group member's account, for names you give other archers (cards from before 3.2.23 have none). */
+export async function setGroupArcher(id: string, archerId: string | null) {
+  const r = await getRound(id)
+  if (r && (r.groupArcherId ?? null) !== archerId) await putRound({ ...r, groupArcherId: archerId })
+}
+
 /** Deletes a round (in a group, everyone's). Your own goes from the server too on the next sync. */
 export async function deleteRound(r: Round) {
   for (const x of await groupOf(r)) await putRound({ ...x, deleted: true, updatedUtc: nowUtc(), pending: true }, false)

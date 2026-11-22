@@ -6,7 +6,7 @@
 import { getKv, groupRounds, setKv } from './db'
 import { ApiError, request } from './api'
 import { getAccount } from './account'
-import { addGroupRound, saveTarget, setGroupMember, setGroupStartTarget, setStatus, deleteRound } from './rounds'
+import { addGroupRound, saveTarget, setGroupArcher, setGroupMember, setGroupStartTarget, setStatus, deleteRound } from './rounds'
 import { getRound } from './db'
 import { targetFromJson, targetToJson, nowUtc, type AgeGroup, type ArcherClass, type GroupRole, type Round } from '../domain/round'
 import { isBlank, isComplete, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
@@ -32,6 +32,8 @@ export const isJoinQr = (text: string) => /^fieldarchery:join:[A-Z0-9]{6}$/i.tes
 export interface LiveMember {
   memberId: string; kind: string; archerId: string | null; name: string
   archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; sortOrder: number; scorers: string[]
+  /** 3.2.23: 'android' / 'web' for archers on their own device (from the server; null when not known). */
+  app?: string | null
 }
 export interface LiveEntry { targetNo: number; cardMemberId: string; scorerMemberId: string; target: TargetScore; points: number; enteredUtc: string }
 
@@ -45,7 +47,12 @@ export interface LiveState {
   manualChecks: string[]
   /** No signal: this is the last copy kept here, with this phone's entries since and matching worked out here (2.8). */
   offline: boolean
+  /** 3.2.23: names you've given other archers (account id → name), shown instead of usernames. This browser only. */
+  localNames?: Record<string, string>
 }
+
+/** What to call a member here: the name you gave them (3.2.23), else their username (or a guest's name). */
+export const nameOf = (s: LiveState, m: LiveMember) => (m.archerId && s.localNames?.[m.archerId]) || m.name
 
 /** What this device keeps about a live group. */
 interface LiveInfo { memberId: string; code: string; method: string; host: boolean; expected?: number }
@@ -68,7 +75,7 @@ export const canTakeOver = (s: LiveState) => !isHost(s) && s.myKind === 'JOINED'
 export const cell = (s: LiveState, n: number, card: string) => s.cells[`${n}|${card}`]
 
 export function scorerNames(s: LiveState, card: string): string[] {
-  return (member(s, card)?.scorers ?? []).map(id => id === s.myMemberId ? 'You' : member(s, id)?.name ?? '?')
+  return (member(s, card)?.scorers ?? []).map(id => id === s.myMemberId ? 'You' : (member(s, id) ? nameOf(s, member(s, id)!) : '?'))
 }
 
 /** Double / 3+ scorers: where a card's score on a target has got to. */
@@ -77,7 +84,7 @@ export function checkText(s: LiveState, n: number, card: string, iEntered: boole
   const scorers = member(s, card)?.scorers ?? []
   if (!scorers.length) return null
   const entered = s.entries.filter(e => e.targetNo === n && e.cardMemberId === card && scorers.includes(e.scorerMemberId))
-  const name = (id: string) => id === s.myMemberId ? 'you' : member(s, id)?.name ?? '?'
+  const name = (id: string) => id === s.myMemberId ? 'you' : (member(s, id) ? nameOf(s, member(s, id)!) : '?')
   const state = cell(s, n, card)
   let text: string
   if (state === 'MATCHED') text = 'Both scores match: saved.'
@@ -273,7 +280,7 @@ export function waitingForCheck(s: LiveState, opts: { targets?: number[]; includ
 
 /** The other scorers of these cards (for "Check with Sue"). */
 export function otherScorerNames(s: LiveState, cards: string[]): string[] {
-  return [...new Set(cards.flatMap(c => member(s, c)?.scorers ?? []))].filter(id => id !== s.myMemberId).map(id => member(s, id)?.name ?? '?')
+  return [...new Set(cards.flatMap(c => member(s, c)?.scorers ?? []))].filter(id => id !== s.myMemberId).map(id => (member(s, id) ? nameOf(s, member(s, id)!) : '?'))
 }
 
 /** A score this device entered for a card: kept and sent again if there's no signal. */
@@ -321,7 +328,7 @@ function parse(j: any): LiveState {
     members: (j.members as any[]).map(m => ({
       memberId: m.memberId, kind: m.kind, archerId: m.archerId ?? null, name: m.name ?? '?',
       archerClass: (m.archerClass === 'L' ? 'LADIES' : 'GENTS') as ArcherClass, ageGroup: m.ageGroup, bowStyle: m.bowStyle,
-      sortOrder: m.sortOrder, scorers: m.scorers ?? [],
+      sortOrder: m.sortOrder, scorers: m.scorers ?? [], app: m.app ?? null,
     })).sort((a, b) => a.sortOrder - b.sortOrder),
     entries: ((j.entries ?? []) as any[]).map(e => ({
       targetNo: e.targetNo, cardMemberId: e.cardMemberId, scorerMemberId: e.scorerMemberId,
@@ -348,9 +355,13 @@ async function apply(s: LiveState) {
         id: m.memberId, groupId: s.groupId, groupRole: role, groupName: isMe ? null : m.name, groupOrder: m.sortOrder,
         shootDate: s.shootDate, targetCount: s.targetCount, type: s.roundType, archerClass: m.archerClass, ageGroup: m.ageGroup,
         bowStyle: m.bowStyle, locationId: s.locationId, locationName: s.locationName, startTarget: s.startTarget ?? null,
+        groupArcherId: isMe ? null : m.archerId,   // 3.2.23: for names you give them
       })
-    } else if (existing.groupRole !== role || existing.groupOrder !== m.sortOrder || (!isMe && existing.groupName !== m.name)) {
-      await setGroupMember(m.memberId, role, isMe ? null : m.name, m.sortOrder)
+    } else {
+      if (existing.groupRole !== role || existing.groupOrder !== m.sortOrder || (!isMe && existing.groupName !== m.name)) {
+        await setGroupMember(m.memberId, role, isMe ? null : m.name, m.sortOrder)
+      }
+      if (!isMe && m.archerId && existing.groupArcherId !== m.archerId) await setGroupArcher(m.memberId, m.archerId)
     }
   }
   // Start target (2.7): the host's round decides (sent with the group); everyone else takes it.

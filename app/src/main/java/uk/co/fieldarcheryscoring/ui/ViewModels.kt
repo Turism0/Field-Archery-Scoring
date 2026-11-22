@@ -925,7 +925,13 @@ class FriendsViewModel(
     private val friends: FriendsRepository,
     accounts: AccountRepository,
     handicap: HandicapRepository? = null,
+    /** 3.2.23: names you give friends (this phone only). */
+    private val names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
 ) : ViewModel() {
+    /** 3.2.23: what you call each friend on this phone (account id → name). */
+    val localNames: StateFlow<Map<String, String>> = names?.names ?: MutableStateFlow(emptyMap())
+    fun setName(archerId: String, name: String?) { names?.setName(archerId, name) }
+
     /** For each friend's handicap rating on the list (2.4; null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
@@ -1037,12 +1043,19 @@ class FriendsViewModel(
 }
 
 /** A friend's finished rounds, newest first. */
-class FriendRoundsViewModel(private val friends: FriendsRepository, saved: SavedStateHandle, handicap: HandicapRepository? = null) : ViewModel() {
+class FriendRoundsViewModel(
+    private val friends: FriendsRepository,
+    saved: SavedStateHandle,
+    handicap: HandicapRepository? = null,
+    names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
+) : ViewModel() {
     /** For handicap points and the friend's rating (null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
 
     val archerId: String = checkNotNull(saved["archerId"])
     val username: String = checkNotNull(saved["username"])
+    /** 3.2.23: what you call them on this phone, if you've named them. */
+    val localName: String? = names?.names?.value?.get(archerId)
 
     private val _rounds = MutableStateFlow<Load<List<FriendRoundSummary>>>(Load.Loading)
     val rounds: StateFlow<Load<List<FriendRoundSummary>>> = _rounds.asStateFlow()
@@ -1182,8 +1195,13 @@ class LobbyViewModel(
     private val live: LiveGroupRepository,
     private val rounds: RoundRepository,
     saved: SavedStateHandle,
+    /** 3.2.23: names you give other archers (this phone only). */
+    private val names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
 ) : ViewModel() {
     val groupId: String = checkNotNull(saved["groupId"])
+
+    /** 3.2.23: what you call [archerId] on this phone; blank goes back to their username. */
+    fun setName(archerId: String, name: String?) { names?.setName(archerId, name) }
 
     val poll: StateFlow<LivePoll?> = live.poll(groupId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -1271,6 +1289,12 @@ class JoinViewModel(profiles: ProfileRepository, private val live: LiveGroupRepo
                 onJoined(groupId)
             } catch (e: ApiException) {
                 _form.update { it.copy(busy = false, error = e.message) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 3.2.22: anything else (phone-to-phone, an odd reply) says what went wrong instead of closing the app.
+                android.util.Log.e("JoinViewModel", "Join failed", e)
+                _form.update { it.copy(busy = false, error = "Couldn't join (${e.javaClass.simpleName}: ${e.message}). Try again, or type the code.") }
             }
         }
     }
@@ -1900,7 +1924,12 @@ class ScoringViewModel(
     private val saved: SavedStateHandle,
     private val liveRepo: LiveGroupRepository? = null,
     private val options: uk.co.fieldarcheryscoring.data.ScoringOptionsStore? = null,
+    /** 3.2.23: names you give other archers (this phone only). */
+    private val names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
 ) : ViewModel() {
+    val localNames: StateFlow<Map<String, String>> = names?.names ?: MutableStateFlow(emptyMap())
+    fun setName(archerId: String, name: String?) { names?.setName(archerId, name) }
+
     /** 3.2.20: which figures to show for your card and other archers' cards (⋮ → Display options, kept on the phone). */
     val display: StateFlow<ScoringDisplay> = options?.display ?: MutableStateFlow(ScoringDisplay())
     fun setDisplay(d: ScoringDisplay) { options?.setDisplay(d) }
@@ -2007,7 +2036,7 @@ class ScoringViewModel(
         ManualCheck(
             targets = due,
             cards = cards.map { card ->
-                val name = s.member(card)?.let { if (it.memberId == s.myMemberId) "${it.name} (you)" else it.name } ?: "?"
+                val name = s.member(card)?.let { if (it.memberId == s.myMemberId) "${it.name} (you)" else s.nameOf(it) } ?: "?"
                 ManualCheck.Card(card, name, due.map { waiting[it to card] })
             },
             others = s.otherScorerNames(cards),
@@ -2064,7 +2093,7 @@ class ScoringViewModel(
         val r = LiveCheckQr.compare(mine, p)
         if (r.matched.isNotEmpty()) viewModelScope.launch { liveRepo?.markChecked(gid, r.matched) }
         val other = s.members.firstOrNull { LiveCheckQr.short(it.memberId) == p.scorer }?.name ?: "the other scorer"
-        fun card(id: String) = s.member(id)?.let { if (it.memberId == s.myMemberId) "you" else it.name } ?: "?"
+        fun card(id: String) = s.member(id)?.let { if (it.memberId == s.myMemberId) "you" else s.nameOf(it) } ?: "?"
         fun what(t: TargetScore) = when {
             t.isOverridden -> "overridden"
             t.isWoodsman -> t.arrows.describe()
@@ -2314,6 +2343,9 @@ class ScorecardViewModel(
     private val rounds: RoundRepository,
     saved: SavedStateHandle,
     handicap: HandicapRepository? = null,
+    /** 3.2.23: to offer adding archers you named in a group as friends. */
+    private val friends: FriendsRepository? = null,
+    private val names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
 ) : ViewModel() {
     /** For the round's handicap points (null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
@@ -2329,6 +2361,49 @@ class ScorecardViewModel(
     /** Everyone in the group, for the group scorecard (empty when it's not a group round). */
     val group: StateFlow<List<GroupMember>> = rounds.group(roundId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ---- 3.2.23 (Pete): archers you named in this group who aren't your friends yet: offer to add them ----
+
+    /** Account ids of your friends and requests either way (null until known: needs signal and a sign-in). */
+    private val _known = MutableStateFlow<Set<String>?>(null)
+    /** Requests sent from here, by account id. */
+    private val _sent = MutableStateFlow<Set<String>>(emptySet())
+    val sent: StateFlow<Set<String>> = _sent.asStateFlow()
+
+    /** Named archers in this finished group who aren't friends (or asked either way). Empty until that's known. */
+    val suggestFriends: StateFlow<List<GroupMember>> = combine(group, round, _known) { g, r, known ->
+        if (known == null || r?.status != RoundStatus.COMPLETED) emptyList()
+        else g.filter { it.archerId != null && it.usernameUnder != null && it.archerId !in known }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    init {
+        friends?.let { f ->
+            viewModelScope.launch {
+                _known.value = runCatching { f.overview() }.getOrNull()?.let { o ->
+                    (o.friends.map { it.archerId } + o.incoming.map { it.archerId } + o.outgoing.map { it.archerId }).toSet()
+                }
+            }
+        }
+    }
+
+    private val _friendMessage = MutableStateFlow<String?>(null)
+    val friendMessage: StateFlow<String?> = _friendMessage.asStateFlow()
+
+    /** Sends a friend request to [m] (by their username). */
+    fun addFriend(m: GroupMember) {
+        val id = m.archerId ?: return
+        val username = m.usernameUnder ?: return
+        viewModelScope.launch {
+            _friendMessage.value = try {
+                friends?.sendRequest(username)
+                _sent.value = _sent.value + id
+                "Friend request sent to ${m.name}."
+            } catch (e: ApiException) {
+                e.message
+            }
+        }
+    }
+    fun friendMessageShown() { _friendMessage.value = null }
 
     /** A new personal best (your own finished rounds only): this round and the one it beat. */
     val personalBest: StateFlow<Pair<Round, Round>?> = rounds.finishedRounds.map { all ->

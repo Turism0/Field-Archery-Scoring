@@ -1,5 +1,6 @@
 package uk.co.fieldarcheryscoring.data
 
+import uk.co.fieldarcheryscoring.domain.ArcherNames
 import uk.co.fieldarcheryscoring.domain.Weather
 import uk.co.fieldarcheryscoring.domain.RoundType
 import uk.co.fieldarcheryscoring.domain.TargetType
@@ -112,11 +113,15 @@ data class NewGroupMember(
 data class GroupMember(
     val roundId: String,
     val role: GroupRole,
-    /** "You" for the scorer, else the friend's username or the guest's name. */
+    /** "You" for the scorer, else the name you gave them (3.2.23), the friend's username or the guest's name. */
     val name: String,
     val round: Round,
     /** For a friend's round: PENDING = not sent yet (or changed since), SYNCED = sent, FAILED = refused. */
     val syncState: SyncState,
+    /** 3.2.23: their account (friends, and archers on their own phone in a live group); null for you and guests. */
+    val archerId: String? = null,
+    /** 3.2.23: their username, shown small under a name you gave them (null when [name] is the username). */
+    val usernameUnder: String? = null,
 )
 
 class RoundRepository(
@@ -124,6 +129,8 @@ class RoundRepository(
     private val clock: Clock = Clock.systemUTC(),
     /** Called after any change that may need uploading (asks the background sync to run). */
     private val onChanged: () -> Unit = {},
+    /** 3.2.23: names you've given other archers (account id → name), shown in groups instead of usernames. */
+    private val names: kotlinx.coroutines.flow.StateFlow<Map<String, String>> = kotlinx.coroutines.flow.MutableStateFlow(emptyMap()),
 ) {
     /** 3.2.17: weather for rounds (looked up by the server and downloaded), by round id. */
     val weather: Flow<Map<String, Weather>> = dao.observeWeather().map { list -> list.associate { it.roundId to it.toWeather() } }
@@ -290,6 +297,8 @@ class RoundRepository(
         locationId: String?,
         locationName: String?,
         startTarget: Int? = null,
+        /** 3.2.23: the member's account (not for guests), so names you give them can be shown. */
+        archerId: String? = null,
     ) {
         if (dao.getRound(id) != null) return
         val now = Instant.now(clock)
@@ -309,6 +318,7 @@ class RoundRepository(
                 groupId = groupId,
                 groupRole = role,
                 groupName = name,
+                groupArcherId = archerId,
                 groupOrder = order,
                 locationId = locationId,
                 locationName = locationName,
@@ -324,6 +334,9 @@ class RoundRepository(
     suspend fun setGroupMember(id: String, role: GroupRole, name: String?, order: Int) =
         dao.setGroupMember(id, role.name, name, order)
 
+    /** 3.2.23: a live group member's account, for names you give them (rows from before 3.2.23 have none). */
+    suspend fun setGroupArcher(id: String, archerId: String?) = dao.setGroupArcher(id, archerId)
+
     /** The rows of a group on this phone (live groups use them to match members). */
     suspend fun groupRounds(groupId: String): List<RoundEntity> = dao.getGroup(groupId)
 
@@ -334,15 +347,19 @@ class RoundRepository(
         .distinctUntilChanged()
         .flatMapLatest { groupId ->
             if (groupId == null) flowOf(emptyList())
-            else dao.observeGroup(groupId).mapLatest { rows ->
+            else kotlinx.coroutines.flow.combine(dao.observeGroup(groupId), names) { rows, given -> rows to given }.mapLatest { (rows, given) ->
                 rows.mapNotNull { row ->
                     val d = dao.loadRound(row.id) ?: return@mapNotNull null
+                    val you = row.groupRole == GroupRole.SCORER || row.groupRole == null
+                    val archerId = row.groupArcherId.takeUnless { you }
                     GroupMember(
                         roundId = row.id,
                         role = row.groupRole ?: GroupRole.SCORER,
-                        name = if (row.groupRole == GroupRole.SCORER || row.groupRole == null) "You" else row.groupName.orEmpty(),
+                        name = if (you) "You" else ArcherNames.display(row.groupName.orEmpty(), archerId, given),
                         round = d.round.toDomain(d.targets, d.animals),
                         syncState = row.syncState,
+                        archerId = archerId,
+                        usernameUnder = if (you) null else ArcherNames.usernameUnder(row.groupName, archerId, given),
                     )
                 }
             }

@@ -1,6 +1,7 @@
 import { decodeDisplay, encodeDisplay, forCard, type ScoringDisplay, type StatsDisplay } from '../domain/scoringDisplay'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { Bar, Dialog, Menu, back, errorText, go, replace, toast, ukDate, useData } from './common'
+import { Bar, Dialog, Menu, NameArcherDialog, back, errorText, go, replace, toast, ukDate, useData } from './common'
+import { getArcherNames, setArcherName } from '../data/archerNames'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
@@ -12,7 +13,7 @@ import {
   cleared, isComplete, ordinal, sameResult, totalPoints, withAnimalResult, withArrow, withOverride, withType, withoutLastArrow,
   woodsmanFinished, type AnimalResult, type Hit, type TargetScore, type TargetType,
 } from '../domain/scoring'
-import { RunningStats, TargetRow, memberName, typeAndClass } from './Parts'
+import { RunningStats, TargetRow, memberName, memberUsernameUnder, typeAndClass } from './Parts'
 import { useLiveCheck } from './LiveCheck'
 
 /**
@@ -30,6 +31,9 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const [display, setDisplayState] = useState(readDisplay)
   const setDisplay = (d: ScoringDisplay) => { setDisplayState(d); try { localStorage.setItem(DISPLAY, encodeDisplay(d)); localStorage.removeItem(OLD_SHOW_REMAINING) } catch { /* this session only */ } }
   const [displayOpen, setDisplayOpen] = useState(false)
+  const names = useData(getArcherNames) ?? {}
+  const [namingList, setNamingList] = useState(false)
+  const [naming, setNaming] = useState<Round | null>(null)
   const [ask, setAsk] = useState<'finish' | 'delete' | 'takeover' | 'card' | null>(null)
   const account = useData(getAccount)
   const [locOpen, setLocOpen] = useState(false)
@@ -93,7 +97,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   }, [own?.locationState, !!account])
 
   const isLive = !!info
-  const s = state
+  // 3.2.23 (Pete): names you give other archers (this browser only) show in the group and its messages.
+  const s = state ? { ...state, localNames: names } : state
   // Double / 3+ scorers with no signal (2.8): checks by hand, read out or by QR.
   const liveCheck = useLiveCheck(s, gid ?? undefined, () => { if (gid) live.offlineState(gid).then(x => x && setState(x)) })
   const checked = !!s && live.checked(s)
@@ -125,7 +130,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const check = s ? live.checkText(s, n, current, canScore && !!mine[`${n}|${current}`]) : null
   const mismatch = !!s && live.cell(s, n, current) === 'MISMATCH'
   const youScore = s && s.status === 'STARTED' && s.method === 'MULTI'
-    ? s.members.filter(m => live.canScore(s, m.memberId)).map(m => m.name) : []
+    ? s.members.filter(m => live.canScore(s, m.memberId)).map(m => m.memberId === s.myMemberId ? m.name : live.nameOf(s, m)) : []
 
   async function edit(change: (t: TargetScore) => TargetScore) {
     if (!canScore) { toast(whyNot ?? "You can't score this card."); return }
@@ -189,6 +194,7 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           !!s && live.canTakeOver(s) && { text: 'Take over as host', onClick: () => setAsk('takeover') },
           ...liveCheck.menu,
           { text: 'Display options', onClick: () => setDisplayOpen(true) },
+          group.some(m => m.groupArcherId && !isOwn(m)) && { text: 'Name archers', onClick: () => setNamingList(true) },
           { text: `Delete ${what}`, onClick: () => setAsk('delete'), danger: true },
         ]} />
       </Bar>
@@ -199,7 +205,9 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
           {group.map(m => (
             <button class={`${m.id === current ? 'on' : ''} ${isComplete(target(m, n)) ? 'done' : ''}`}
               onClick={() => setCurrent(m.id)}>
-              {memberName(m)}{forCard(display, isOwn(m)).total && <><br /><b>{roundTotal(m)}</b></>}
+              {memberName(m, names)}
+              {memberUsernameUnder(m, names) && <><br /><span class="sub" style="font-size:11px">{m.groupName}</span></>}
+              {forCard(display, isOwn(m)).total && <><br /><b>{roundTotal(m)}</b></>}
             </button>
           ))}
         </div>
@@ -207,7 +215,10 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       {isLive && (
         <div class={`banner ${problem || mismatch ? 'bad' : ''}`} style="margin:8px 16px 0">
           <b>Live group{s ? ` · ${s.code} · ${s.status === 'CLOSED' ? 'finished' : s.status === 'STARTED' ? live.methodOf(s.method)?.name : 'waiting to start'}` : ''}</b>
-          {problem && <span>{s?.offline ? 'No signal. Keep scoring: scores are kept on this phone and sent when there\'s signal.' : `Can't reach the server (${problem}). Keep scoring: scores are sent when it's back.`}</span>}
+          {problem && <span>{s?.offline
+            // 3.2.23 (Pete): say the web app can't share scores over Bluetooth like the Android app.
+            ? 'No signal: lost touch with the group. The web app can\'t share scores over Bluetooth like the Android app, so yours and the others\' come through once there\'s signal. Keep scoring: yours are kept here.'
+            : `Can't reach the server (${problem}), so you've lost touch with the group. The web app can't use Bluetooth instead. Keep scoring: scores are sent when it's back.`}</span>}
           {whyNot && <span>{whyNot}</span>}
           {youScore.length > 0 && <span>You score: {youScore.join(', ')}</span>}
           {check && <span style={mismatch ? 'font-weight:600' : ''}>{check}</span>}
@@ -235,6 +246,16 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
       </div>
 
       {liveCheck.dialogs}
+      <Dialog open={namingList} title="Name archers" onClose={() => setNamingList(false)} actions={<button onClick={() => setNamingList(false)}>Done</button>}>
+        <p class="sub">Give archers the names you know them by. Only you see them, in this browser; their username shows underneath.</p>
+        {group.filter(m => m.groupArcherId && !isOwn(m)).map(m => (
+          <button class="plain row between" style="width:100%" onClick={() => { setNamingList(false); setNaming(m) }}>
+            <span>{memberName(m, names)}{memberUsernameUnder(m, names) ? ` (${m.groupName})` : ''}</span>
+            <span class="link">{names[m.groupArcherId!] ? 'Change name' : 'Add a name'}</span>
+          </button>))}
+      </Dialog>
+      {naming && naming.groupArcherId && <NameArcherDialog username={naming.groupName ?? '?'} current={names[naming.groupArcherId] ?? null}
+        onSave={x => { setArcherName(naming.groupArcherId!, x); setNaming(null) }} onClose={() => setNaming(null)} />}
       <Dialog open={displayOpen} title="Display options" onClose={() => setDisplayOpen(false)}
         actions={<button onClick={() => setDisplayOpen(false)}>Done</button>}>
         <p class="sub">Choose what to show while scoring. Knowing how you're doing can affect your shooting.</p>

@@ -26,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,9 @@ fun NewRoundScreen(
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
     // Add / edit a friend or guest in a group round.
+    // 3.2.22 (Pete): live groups hide adding friends / guests until asked, so people don't add someone who'll join on
+    // their own phone.
+    var onThisPhone by rememberSaveable { mutableStateOf(false) }
     var memberDialog by remember { mutableStateOf<Pair<GroupRole, GroupMemberDraft?>?>(null) }
     // Ask for location when starting (Android only shows the prompt until it's been refused twice).
     // Either answer starts the round; without permission the round simply has no location.
@@ -138,8 +142,9 @@ fun NewRoundScreen(
                     )
                     2 -> {
                         Text(
-                            "Others join on their own phones with a code or QR. Needs signing in; with no signal, phones " +
-                                "share scores directly (Bluetooth).",
+                            "Everyone with the app joins on their own phone with the group's code or QR, once you've " +
+                                "created the group. Don't add them here. Needs signing in; with no signal, phones share " +
+                                "scores directly (Bluetooth).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -167,7 +172,7 @@ fun NewRoundScreen(
                             onValue = { v -> vm.update { it.copy(liveExpectedText = v) } },
                             isError = expectedError,
                             supportingText = if (expectedError) "${f.liveExpectedRange.first} to ${f.liveExpectedRange.last}"
-                            else "Start waits until this many are in (friends and guests you add count).",
+                            else "Start waits until this many are in: everyone who joins on their own phone, plus anyone you score on this phone.",
                         )
                         if (f.liveMethod.checked) {
                             Text(
@@ -247,10 +252,20 @@ fun NewRoundScreen(
                 )
             }
 
-            if (f.group) {
+            if (f.live && !onThisPhone && f.members.isEmpty()) {
                 SectionCard(
-                    title = "Group",
-                    subtitle = if (f.live) "Friends and guests you add are scored on your phone (optional: others can join with the code)."
+                    title = "Someone without a phone?",
+                    subtitle = "Only for an archer who hasn't got the app with them: you score them on this phone. Anyone " +
+                        "with the app joins with the code instead.",
+                ) {
+                    OutlinedButton(onClick = { onThisPhone = true }) { Text("Score someone on this phone") }
+                }
+            }
+            if (f.group && (!f.live || onThisPhone || f.members.isNotEmpty())) {
+                SectionCard(
+                    title = if (f.live) "Scored on this phone" else "Group",
+                    subtitle = if (f.live) "Archers without the app or a phone: you enter their scores. Anyone with the app joins " +
+                        "with the code instead; don't add them here."
                     else "In scoring order. You're first; up to ${RoundRepository.MAX_GROUP} archers.",
                 ) {
                     Text("You", style = MaterialTheme.typography.titleSmall)

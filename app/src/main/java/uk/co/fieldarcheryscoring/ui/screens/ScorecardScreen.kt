@@ -164,6 +164,11 @@ fun ScorecardScreen(
                         )
                     }
                     if (inGroup) GroupCard(group, vm.roundId) { onOpenMember(it.roundId) }
+                    // 3.2.23 (Pete): archers you named in the group who aren't friends yet.
+                    val suggest by vm.suggestFriends.collectAsStateWithLifecycle()
+                    val sent by vm.sent.collectAsStateWithLifecycle()
+                    val friendMessage by vm.friendMessage.collectAsStateWithLifecycle()
+                    if (suggest.isNotEmpty()) AddFriendsCard(suggest, sent, friendMessage, onAdd = vm::addFriend)
                     RunningStats(r.stats, showTotal = false)
                     HandicapCard(r, handicap, ownHandicap)
                     MoreStats(r.stats)
@@ -304,6 +309,38 @@ private fun PersonalBestCard(me: Round, beat: Round) {
                     (if (me.funPoints > 0) " (fun shots left out)" else "") + ". It beat ${avg(beat)} (${beat.shootDate.format(UkDate)}).",
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+    }
+}
+
+/** 3.2.23: "Add as friends?" for archers you named in a finished group, so you can see each other's rounds. */
+@Composable
+private fun AddFriendsCard(
+    members: List<uk.co.fieldarcheryscoring.data.GroupMember>,
+    sent: Set<String>,
+    message: String?,
+    onAdd: (uk.co.fieldarcheryscoring.data.GroupMember) -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Add as friends?", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "You shot with these archers. As friends you can see each other's finished rounds.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            members.forEach { m ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(m.name, style = MaterialTheme.typography.titleSmall)
+                        m.usernameUnder?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                    val done = m.archerId in sent
+                    androidx.compose.material3.TextButton(onClick = { onAdd(m) }, enabled = !done) {
+                        Text(if (done) "Request sent" else "Add friend")
+                    }
+                }
+            }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

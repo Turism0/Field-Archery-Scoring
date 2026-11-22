@@ -19,6 +19,8 @@ export function NewRound({ type }: { type: RoundType }) {
   const account = useData(getAccount)
   const friends = useData(cachedFriends) ?? []
   const [mode, setMode] = useState<Mode>('solo')
+  // 3.2.22 (Pete): live groups hide adding friends / guests until asked, so people don't add someone who'll join on their own phone.
+  const [onThisPhone, setOnThisPhone] = useState(false)
   const [date, setDate] = useState(today())
   const [targets, setTargets] = useState('')
   const [startText, setStartText] = useState('')
@@ -89,7 +91,7 @@ export function NewRound({ type }: { type: RoundType }) {
           <Seg<Mode> options={['solo', 'group', 'live']} value={mode} label={m => ({ solo: 'Just me', group: 'Group', live: 'Live group' })[m]} onChange={m => { setMode(m); setError(null) }} />
           {mode === 'group' && <div class="sub">You score everyone on this phone, archer by archer on each target.</div>}
           {isLive && <>
-            <div class="sub">Others join on their own phones with a code or QR. Needs signing in, and signal on the web app (the Android app also shares scores phone to phone with no signal).</div>
+            <div class="sub"><b>Everyone with the app joins on their own phone</b> with the group's code or QR, once you've created the group. Don't add them here. Needs signing in, and signal on the web app (the Android app also shares scores phone to phone with no signal).</div>
             {!account && <div class="error">Sign in (Profile) to make a live group.</div>}
             {METHODS.map(m => (
               <label class="row" style="align-items:flex-start;flex-wrap:nowrap">
@@ -97,7 +99,7 @@ export function NewRound({ type }: { type: RoundType }) {
                 <span><span>{m.name}</span><div class="sub">{m.help}</div></span>
               </label>
             ))}
-            <Field label="Archers in the group (with you)" help={expected && !expOk ? `${members.length + 1} to ${MAX_GROUP}` : 'Start waits until this many are in (friends and guests you add count).'}>
+            <Field label="Archers in the group (with you)" help={expected && !expOk ? `${members.length + 1} to ${MAX_GROUP}` : 'Start waits until this many are in: everyone who joins on their own phone, plus anyone you score on this phone.'}>
               <input inputMode="numeric" value={expected} onInput={e => setExpected((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 2))} />
             </Field>
             {METHODS.find(m => m.code === method)?.checked && <div class="sub">Go through the group archer by archer: they call their score and both their scorers enter it. Everyone moves on once the two match.</div>}
@@ -128,8 +130,14 @@ export function NewRound({ type }: { type: RoundType }) {
             </select>
           </Field>
         </Card>
-        {group && (
-          <Card title="Group" sub={isLive ? 'Friends and guests you add are scored on your phone (optional: others can join with the code).'
+        {isLive && !onThisPhone && !members.length && (
+          <Card title="Someone without a phone?">
+            <div class="sub">Only for an archer who hasn't got the app with them: you score them on this phone. Anyone with the app joins with the code instead.</div>
+            <button class="outlined" onClick={() => setOnThisPhone(true)}>Score someone on this phone</button>
+          </Card>
+        )}
+        {group && (!isLive || onThisPhone || members.length > 0) && (
+          <Card title={isLive ? 'Scored on this phone' : 'Group'} sub={isLive ? "Archers without the app or a phone: you enter their scores. Anyone with the app joins with the code instead; don't add them here."
             : `In scoring order. You're first; up to ${MAX_GROUP} archers.`}>
             {members.map((m, i) => (
               <div class="row" style="flex-wrap:nowrap;gap:0">

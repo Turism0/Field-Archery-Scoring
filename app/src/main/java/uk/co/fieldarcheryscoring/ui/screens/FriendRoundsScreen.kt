@@ -75,8 +75,8 @@ fun FriendRoundsScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(vm.username)
-                        Text("Finished rounds", style = MaterialTheme.typography.bodySmall,
+                        Text(vm.localName ?: vm.username)
+                        Text(if (vm.localName != null) "${vm.username} · finished rounds" else "Finished rounds", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },

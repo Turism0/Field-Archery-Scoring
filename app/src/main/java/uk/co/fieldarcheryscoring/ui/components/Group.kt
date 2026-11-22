@@ -1,5 +1,7 @@
 package uk.co.fieldarcheryscoring.ui.components
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -61,11 +63,14 @@ fun GroupRole.label(): String = when (this) {
  * The group along the top of the scoring screen: everyone in scoring order with their running total and a tick
  * when they've been scored on this target. The archer being scored is highlighted; tap someone to score them.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun GroupStrip(
     members: List<GroupMember>, currentRoundId: String, targetNo: Int,
     /** 3.2.20: whether to show someone's running total (Display options). */
     showTotal: (GroupMember) -> Boolean = { true },
+    /** 3.2.23: long press someone with an account to name them (null: no naming here). */
+    onName: ((GroupMember) -> Unit)? = null,
     onSelect: (GroupMember) -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -77,17 +82,23 @@ fun GroupStrip(
             val current = m.roundId == currentRoundId
             val done = m.round.target(targetNo).isComplete
             Surface(
-                onClick = { onSelect(m) },
                 shape = MaterialTheme.shapes.medium,
                 color = if (current) scheme.primaryContainer else scheme.surfaceContainerHigh,
                 contentColor = if (current) scheme.onPrimaryContainer else scheme.onSurface,
                 border = if (current) BorderStroke(2.dp, scheme.primary) else null,
+                modifier = Modifier.clip(MaterialTheme.shapes.medium).combinedClickable(
+                    onClick = { onSelect(m) },
+                    onLongClick = if (onName != null && m.archerId != null) ({ onName(m) }) else null,
+                    onLongClickLabel = "Name ${m.name}",
+                ),
             ) {
                 Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(m.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (done) Icon(Icons.Filled.Check, contentDescription = "Scored", tint = scheme.primary, modifier = Modifier.size(16.dp))
                     }
+                    // 3.2.23: the username under a name you gave them.
+                    m.usernameUnder?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     if (showTotal(m)) Text("${m.round.totalPoints}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
             }
@@ -119,6 +130,7 @@ fun GroupCard(members: List<GroupMember>, currentRoundId: String, onOpen: (Group
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = if (m.roundId == currentRoundId) FontWeight.Bold else FontWeight.Normal,
                         )
+                        m.usernameUnder?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant) }   // 3.2.23
                         Text(
                             "${m.round.typeAndClass} · ${m.round.targetsComplete}/${m.round.targetCount} targets",
                             style = MaterialTheme.typography.bodySmall,

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import qrcode from 'qrcode-generator'
-import { Bar, Card, Dialog, Seg, Select, errorText, go, replace, today, toast, useData } from './common'
+import { Bar, Card, Dialog, NameArcherDialog, Seg, Select, errorText, go, replace, today, toast, useData } from './common'
+import { getArcherNames, setArcherName } from '../data/archerNames'
+import { displayName, usernameUnder } from '../domain/archerNames'
 import { QrScanner } from './QrScanner'
 import { getAccount, getProfile } from '../data/account'
 import { groupRounds } from '../data/db'
@@ -65,6 +67,8 @@ export function Lobby({ groupId }: { groupId: string }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [ask, setAsk] = useState<'cancel' | 'early' | 'takeover' | null>(null)
+  const names = useData(getArcherNames) ?? {}   // 3.2.23
+  const [naming, setNaming] = useState<live.LiveMember | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -114,10 +118,16 @@ export function Lobby({ groupId }: { groupId: string }) {
           <div>{s.roundType === 'WOODSMAN' ? 'Woodsman' : 'Big Game'} · {s.targetCount} targets{s.locationName ? ` · ${s.locationName}` : ''}</div>
         </Card>
         <Card title={expected ? `In the group (${s.members.length} of ${expected})` : `In the group (${s.members.length})`} sub="In scoring order.">
-          {s.members.map(m => (
-            <div class="row between"><span><b>{m.name}{m.memberId === s.myMemberId ? ' (you)' : ''}</b><div class="sub">{CLASS_NAMES[m.archerClass]} · {AGE_NAMES[m.ageGroup]} · {m.bowStyle}</div></span>
-              <span class="sub">{({ HOST: 'Host', JOINED: 'Own phone', FRIEND: 'Friend', GUEST: 'Guest' } as Record<string, string>)[m.kind]}</span></div>
-          ))}
+          {s.members.map(m => {
+            // 3.2.23 (Pete): the name you gave them (this browser only), username underneath, and "Add a name".
+            const me = m.memberId === s.myMemberId
+            const under = me ? null : usernameUnder(m.name, m.archerId, names)
+            return <div class="row between"><span><b>{me ? `${m.name} (you)` : displayName(m.name, m.archerId, names)}</b>
+              {under && <div class="sub">{under}</div>}
+              {!me && m.archerId && <div><span role="button" tabIndex={0} class="link" onClick={() => setNaming(m)}>{under ? 'Change name' : 'Add a name'}</span></div>}
+              <div class="sub">{CLASS_NAMES[m.archerClass]} · {AGE_NAMES[m.ageGroup]} · {m.bowStyle}</div></span>
+              <span class="sub">{m.kind === 'JOINED' && m.app === 'web' ? 'Web app' : ({ HOST: 'Host', JOINED: 'Own phone', FRIEND: 'Friend', GUEST: 'Guest' } as Record<string, string>)[m.kind]}</span></div>
+          })}
         </Card>
         {problem && <div class="error">Can't reach the server ({problem}). Trying again…</div>}
         {host ? <>
@@ -132,6 +142,8 @@ export function Lobby({ groupId }: { groupId: string }) {
           {live.canTakeOver(s) && <button disabled={busy} onClick={() => setAsk('takeover')}>Host's phone gone? Take over as host</button>}
         </>}
       </main>
+      {naming?.archerId && <NameArcherDialog username={naming.name} current={names[naming.archerId] ?? null}
+        onSave={x => { setArcherName(naming.archerId!, x); setNaming(null) }} onClose={() => setNaming(null)} />}
       <Dialog open={ask === 'cancel'} title={host ? 'Cancel the group?' : 'Leave the group?'} onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Keep</button><button onClick={() => { setAsk(null); act(async () => {
           if (host) await live.close(groupId); else await live.leave(groupId, false)
@@ -143,7 +155,7 @@ export function Lobby({ groupId }: { groupId: string }) {
       </Dialog>
       <Dialog open={ask === 'early'} title="Start without everyone?" onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Wait</button><button onClick={() => { setAsk(null); act(() => live.start(groupId)) }}>Start</button></>}>
-        {s.members.length} of {expected} are in: {s.members.map(m => m.name).join(', ')}. Anyone else can still join with the code.
+        {s.members.length} of {expected} are in: {s.members.map(m => m.memberId === s.myMemberId ? m.name : displayName(m.name, m.archerId, names)).join(', ')}. Anyone else can still join with the code.
       </Dialog>
       <Dialog open={ask === 'takeover'} title="Take over as host?" onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Cancel</button><button onClick={() => { setAsk(null); act(() => live.takeOver(groupId)) }}>Take over</button></>}>

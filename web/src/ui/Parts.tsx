@@ -1,5 +1,6 @@
 // Pieces shared by several screens, laid out as the Android app's (2.7.01): running stats, round cards in lists,
 // the scorecard header and target rows, and the group card.
+import { displayName, usernameUnder } from '../domain/archerNames'
 import { DEFAULT_STATS_DISPLAY, type StatsDisplay } from '../domain/scoringDisplay'
 import { weatherIcon, type Weather } from '../domain/weather'
 import { useState } from 'preact/hooks'
@@ -139,7 +140,12 @@ export function TargetRow({ t, current, locked, onGoTo, goToLabel, readOnly }: {
 
 const ROLE_LABEL: Record<string, string> = { SCORER: 'You', FRIEND: 'Friend', GUEST: 'Guest', MIRROR: 'Own phone' }
 export const roleLabel = (r: Round) => ROLE_LABEL[r.groupRole ?? 'SCORER']
-export const memberName = (r: Round) => (r.groupRole == null || r.groupRole === 'SCORER' ? 'You' : r.groupName ?? '?')
+/** "You", or the name you gave them (3.2.23, [names]), their username, or a guest's name. */
+export const memberName = (r: Round, names: Record<string, string> = {}) =>
+  (r.groupRole == null || r.groupRole === 'SCORER' ? 'You' : displayName(r.groupName ?? '?', r.groupArcherId, names))
+/** 3.2.23: the username to show small under a name you gave them (null otherwise). */
+export const memberUsernameUnder = (r: Round, names: Record<string, string> = {}) =>
+  (r.groupRole == null || r.groupRole === 'SCORER' ? null : usernameUnder(r.groupName, r.groupArcherId, names))
 
 /** What happens to a friend's or guest's round. */
 function MemberStatus({ m }: { m: Round }) {
@@ -156,14 +162,15 @@ function MemberStatus({ m }: { m: Round }) {
 }
 
 /** Everyone in the group, highest total first, with what's happening to each round. */
-export function GroupCard({ group, currentId }: { group: Round[]; currentId: string }) {
+export function GroupCard({ group, currentId, names = {} }: { group: Round[]; currentId: string; names?: Record<string, string> }) {
   return (
     <div class="card low">
       <h2>Group</h2>
       {[...group].sort((a, b) => roundTotal(b) - roundTotal(a)).map((m, i) => (
         <div class="row between" style="flex-wrap:nowrap">
           <span class="sub" style="width:20px">{i + 1}</span>
-          <span class="grow"><span style={m.id === currentId ? 'font-weight:700' : ''}>{memberName(m)}</span>
+          <span class="grow"><span style={m.id === currentId ? 'font-weight:700' : ''}>{memberName(m, names)}</span>
+            {memberUsernameUnder(m, names) && <span class="sub" style="display:block">{m.groupName}</span>}
             <span class="sub" style="display:block">{typeAndClass(m)} · {targetsComplete(m)}/{m.targetCount} targets</span>
             <MemberStatus m={m} /></span>
           {m.id !== currentId ? <button onClick={() => go(`/card/${m.id}`)}>Open</button> : <span />}

@@ -1,5 +1,10 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import uk.co.fieldarcheryscoring.ui.components.NameArcherDialog
+import androidx.compose.foundation.clickable
+import uk.co.fieldarcheryscoring.domain.ArcherNames
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,10 +77,16 @@ fun FriendsScreen(
     val username by vm.username.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val localNames by vm.localNames.collectAsStateWithLifecycle()   // 3.2.23
+    var naming by remember { mutableStateOf<Pair<String, String>?>(null) }   // archerId to username
     val snackbar = remember { SnackbarHostState() }
 
     // Load when the screen opens, and again after signing in from here.
     LaunchedEffect(signedIn) { if (signedIn) vm.load() }
+
+    naming?.let { (id, user) ->
+        NameArcherDialog(user, localNames[id], onSave = { name -> vm.setName(id, name); naming = null }, onDismiss = { naming = null })
+    }
 
     LaunchedEffect(message) {
         message?.let {
@@ -168,7 +179,7 @@ fun FriendsScreen(
                         if (data.incoming.isNotEmpty()) {
                             item(key = "incomingHeader") { Header("Friend requests") }
                             items(data.incoming, key = { "in-" + it.archerId }) { req ->
-                                RequestRow(req, "wants to be friends", busy) {
+                                RequestRow(req.copy(username = ArcherNames.display(req.username, req.archerId, localNames)), "wants to be friends", busy) {
                                     TextButton(onClick = { vm.decline(req) }, enabled = !busy) { Text("Decline") }
                                     Button(onClick = { vm.accept(req) }, enabled = !busy) { Text("Accept") }
                                 }
@@ -177,7 +188,7 @@ fun FriendsScreen(
                         if (data.outgoing.isNotEmpty()) {
                             item(key = "outgoingHeader") { Header("Waiting for them to accept") }
                             items(data.outgoing, key = { "out-" + it.archerId }) { req ->
-                                RequestRow(req, "request sent", busy) {
+                                RequestRow(req.copy(username = ArcherNames.display(req.username, req.archerId, localNames)), "request sent", busy) {
                                     TextButton(onClick = { vm.cancel(req) }, enabled = !busy) { Text("Cancel") }
                                 }
                             }
@@ -194,7 +205,7 @@ fun FriendsScreen(
                         }
                         items(data.friends, key = { "f-" + it.archerId }) { f ->
                             // Their personal handicaps (2.9): main bow first.
-                            FriendCard(f, PersonalHandicap.all(f.recent)) { onOpenFriend(f) }
+                            FriendCard(f, PersonalHandicap.all(f.recent), localNames[f.archerId], onName = { naming = f.archerId to f.username }) { onOpenFriend(f) }
                         }
                     }
                 }
@@ -257,7 +268,7 @@ private fun OfferRow(offer: RoundOffer, busy: Boolean, onOpen: () -> Unit, actio
 
 /** Friend with a summary: rounds, best, average per animal, last shot. */
 @Composable
-private fun FriendCard(f: FriendSummary, handicaps: List<PersonalHandicap.Handicap>, onClick: () -> Unit) {
+private fun FriendCard(f: FriendSummary, handicaps: List<PersonalHandicap.Handicap>, localName: String?, onName: () -> Unit, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -265,7 +276,17 @@ private fun FriendCard(f: FriendSummary, handicaps: List<PersonalHandicap.Handic
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(f.username, style = MaterialTheme.typography.titleLarge)
+                // 3.2.23 (Pete): the name you gave them (only on this phone), with their username underneath.
+                Text(localName ?: f.username, style = MaterialTheme.typography.titleLarge)
+                if (localName != null && !localName.equals(f.username, ignoreCase = true)) {
+                    Text(f.username, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Text(
+                    if (localName == null) "Add a name" else "Change name",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable(onClick = onName).padding(vertical = 2.dp),
+                )
                 Text(
                     if (f.rounds == 0 && f.woodsmanRounds == 0) "No finished rounds yet"
                     else buildString {

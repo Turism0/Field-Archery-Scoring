@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks'
-import { Bar, Card, Dialog, Menu, go, replace, ukDate, useData, useDesktop } from './common'
-import { CardHeader, GroupCard, RunningStats, TargetRow, memberName, roleLabel } from './Parts'
+import { Bar, Card, Dialog, Menu, errorText, go, replace, toast, ukDate, useData, useDesktop } from './common'
+import { getArcherNames } from '../data/archerNames'
+import * as friends from '../data/friends'
+import { CardHeader, GroupCard, RunningStats, TargetRow, memberName, memberUsernameUnder, roleLabel } from './Parts'
 import { getRound } from '../data/db'
 import { getAccount } from '../data/account'
 import { LocationChip, LocationSheet } from './Locations'
@@ -26,6 +28,13 @@ export function Scorecard({ id }: { id: string }) {
   const model = useData(getModel)
   const account = useData(getAccount)
   const weather = useData(async () => (await weatherMap())[id] ?? null, [id])
+  // 3.2.23 (Pete): names you give other archers, and offering to add the ones you named as friends.
+  const names = useData(getArcherNames) ?? {}
+  const known = useData(async () => {
+    if (!(await getAccount())) return null
+    try { const o = await friends.overview(); return new Set([...o.friends, ...o.incoming, ...o.outgoing].map(f => f.archerId)) } catch { return null }
+  }, [id])
+  const [sent, setSent] = useState<string[]>([])
   const desktop = useDesktop()
   const [locOpen, setLocOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -39,7 +48,7 @@ export function Scorecard({ id }: { id: string }) {
   const editTarget = (n: number) => go(desktop ? `/grid/${round.id}` : `/score/${round.id}${n ? `?t=${n}` : ''}`)
   return (
     <>
-      <Bar title="Scorecard" sub={inGroup ? (own ? `You · group of ${group.length}` : `${memberName(round)} · ${roleLabel(round)}`) : undefined} onBack={() => go('/')}>
+      <Bar title="Scorecard" sub={inGroup ? (own ? `You · group of ${group.length}` : `${memberName(round, names)} · ${roleLabel(round)}`) : undefined} onBack={() => go('/')}>
         {!mirror && <button class="icon" aria-label="Edit scores" onClick={() => editTarget(0)}>✎</button>}
         {!mirror && <Menu items={[
           round.status === 'COMPLETED' && { text: inGroup ? 'Reopen group round' : 'Reopen round', onClick: () => setStatus(round, 'IN_PROGRESS') },
@@ -56,7 +65,19 @@ export function Scorecard({ id }: { id: string }) {
         </Card>}
         {!mirror && <LocationChip round={round} signedIn={!!account} onClick={() => setLocOpen(true)} />}
         {weather && <div class="sub" style="padding:0 4px">{weatherIcon(weather.code)} {weatherLine(weather)}<span style="opacity:.7"> · Weather data by Open-Meteo.com</span></div>}
-        {inGroup && <GroupCard group={group} currentId={round.id} />}
+        {inGroup && <GroupCard group={group} currentId={round.id} names={names} />}
+        {(() => {
+          const suggest = known && round.status === 'COMPLETED'
+            ? group.filter(m => m.groupArcherId && memberUsernameUnder(m, names) && !known.has(m.groupArcherId)) : []
+          return suggest.length > 0 && <Card title="Add as friends?" sub="You shot with these archers. As friends you can see each other's finished rounds." cls="hi">
+            {suggest.map(m => <div class="row between" style="flex-wrap:nowrap">
+              <span><b>{memberName(m, names)}</b><div class="sub">{m.groupName}</div></span>
+              <button class="tonal" disabled={sent.includes(m.groupArcherId!)} onClick={async () => {
+                try { await friends.sendRequest(m.groupName!); setSent([...sent, m.groupArcherId!]); toast(`Friend request sent to ${memberName(m, names)}.`) }
+                catch (e) { toast(errorText(e)) }
+              }}>{sent.includes(m.groupArcherId!) ? 'Request sent' : 'Add friend'}</button></div>)}
+          </Card>
+        })()}
         <RunningStats s={s} targetCount={round.targetCount} noTotal />
         {/* Your own rounds get the net score with your personal handicap; others just the multiplier (2.9). */}
         <HandicapCard round={round} model={model} mine={own ? mine : undefined} />

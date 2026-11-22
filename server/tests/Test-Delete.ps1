@@ -94,7 +94,14 @@ $r = Call POST '/api/locations/nearby' @{ latitude = 52.0; longitude = -1.5 } -T
 Expect 'nearby locations with the position in the body (kept out of the logs)' ($r.Status -eq 200 -and $null -ne $r.Body.locations) (Why $r)
 
 $p = Invoke-WebRequest -Uri "$BaseUrl/privacy" -SkipHttpErrorCheck
-Expect 'the privacy policy page is there, with the contact email' ($p.StatusCode -eq 200 -and $p.Content -match 'fieldarcheryscoring@gmail.com') "($($p.StatusCode))"
+# 3.2.24: Cloudflare's Email Address Obfuscation swaps the address for data-cfemail="<hex>" (first byte is the key,
+# the rest XOR'd with it) and decodes it in the browser, so decode those too.
+$emails = @([regex]::Matches($p.Content, 'data-cfemail="([0-9a-fA-F]+)"') | ForEach-Object {
+    $h = $_.Groups[1].Value; $k = [Convert]::ToInt32($h.Substring(0, 2), 16)
+    -join (1..($h.Length / 2 - 1) | ForEach-Object { [char]([Convert]::ToInt32($h.Substring($_ * 2, 2), 16) -bxor $k) })
+})
+$hasEmail = $p.Content -match 'fieldarcheryscoring@gmail.com' -or $emails -contains 'fieldarcheryscoring@gmail.com'
+Expect 'the privacy policy page is there, with the contact email' ($p.StatusCode -eq 200 -and $hasEmail) "($($p.StatusCode))"
 
 Write-Host ''
 if ($script:problems -eq 0) { Write-Host 'All delete tests passed.' -ForegroundColor Green }

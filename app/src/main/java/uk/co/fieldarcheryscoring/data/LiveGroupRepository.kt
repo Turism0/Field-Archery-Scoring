@@ -1,5 +1,7 @@
 package uk.co.fieldarcheryscoring.data
 
+import kotlinx.coroutines.flow.StateFlow
+import uk.co.fieldarcheryscoring.domain.ArcherNames
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
@@ -85,8 +87,12 @@ data class LiveMember(
     val sortOrder: Int,
     /** Member ids of whoever scores this card (empty until the group starts). */
     val scorers: List<String>,
+    /** 3.2.23: "android" / "web" for archers on their own device (from the server; null when not known). */
+    val app: String? = null,
 ) {
     val hasPhone: Boolean get() = kind == "HOST" || kind == "JOINED"
+    /** On the web app: no Bluetooth, so their scores only come through with signal. */
+    val onWeb: Boolean get() = hasPhone && app == "web"
 }
 
 /** One scorer's entry for one card on one target. */
@@ -126,6 +132,8 @@ data class LiveGroupState(
     val formerHosts: Set<String> = emptySet(),
     /** The target the group started on (2.7), set by the host; just noted on everyone's card. */
     val startTarget: Int? = null,
+    /** 3.2.23: names you've given other archers (account id → name), shown instead of usernames. This phone only. */
+    val localNames: Map<String, String> = emptyMap(),
 ) {
     val isHost: Boolean get() = myKind == "HOST"
     /** Everyone the host expects is in (or no number was given). */
@@ -139,16 +147,23 @@ data class LiveGroupState(
 
     fun member(id: String) = members.firstOrNull { it.memberId == id }
 
+    /** What to call a member here: the name you gave them (3.2.23), else their username (or a guest's name). */
+    fun nameOf(m: LiveMember): String = ArcherNames.display(m.name, m.archerId, localNames)
+    fun nameOf(id: String): String? = member(id)?.let { nameOf(it) }
+
+    /** Others in the group on the web app (no Bluetooth: their scores only come through with signal). */
+    val othersOnWeb: List<LiveMember> get() = members.filter { it.onWeb && it.memberId != myMemberId }
+
     /** Can this phone score [cardMemberId]'s card? */
     fun canScore(cardMemberId: String) = started && member(cardMemberId)?.scorers?.contains(myMemberId) == true
 
     /** Names of whoever scores a card, for "Dave is scoring this card". */
     fun scorerNames(cardMemberId: String): List<String> =
-        member(cardMemberId)?.scorers.orEmpty().mapNotNull { id -> member(id)?.let { if (it.memberId == myMemberId) "You" else it.name } }
+        member(cardMemberId)?.scorers.orEmpty().mapNotNull { id -> member(id)?.let { if (it.memberId == myMemberId) "You" else nameOf(it) } }
 
     /** The other scorers of the cards this phone scores (for "Check with Sue"). */
     fun otherScorerNames(cards: Collection<String>): List<String> =
-        cards.flatMap { member(it)?.scorers.orEmpty() }.distinct().filter { it != myMemberId }.mapNotNull { member(it)?.name }
+        cards.flatMap { member(it)?.scorers.orEmpty() }.distinct().filter { it != myMemberId }.mapNotNull { nameOf(it) }
 
     /**
      * Double / 3+ scorers: targets due a check by hand (2.3): five this phone has entered whose other scorer's entries
@@ -175,7 +190,7 @@ data class LiveGroupState(
         val scorers = member(cardMemberId)?.scorers.orEmpty()
         if (scorers.isEmpty()) return null
         val entered = entries.filter { it.targetNo == targetNo && it.cardMemberId == cardMemberId && it.scorerMemberId in scorers }
-        fun name(id: String) = if (id == myMemberId) "you" else member(id)?.name ?: "?"
+        fun name(id: String) = if (id == myMemberId) "you" else nameOf(id) ?: "?"
         return when (cells[targetNo to cardMemberId]) {
             "MATCHED" -> "Both scores match: saved."
             "MISMATCH" -> {
@@ -214,17 +229,23 @@ data class LivePoll(
     fun linkNote(): String? {
         val s = state ?: return problem?.let { "Can't reach the server ($it). Looking for the host's phone…" }
         if (s.closed || problem == null) return null
+        // 3.2.23 (Pete): say it's Bluetooth, and who's on the web app (no Bluetooth there, so only with signal).
+        val web = s.othersOnWeb
+        val webNote = if (web.isEmpty()) "" else " " + web.joinToString(" and ") { s.nameOf(it) } +
+            (if (web.size == 1) " is" else " are") + " on the web app, which can't use Bluetooth: their scores come through " +
+            "once you both have signal."
+        val bluetooth = s.members.count { it.hasPhone && !it.onWeb && it.memberId != s.myMemberId }
         return if (s.isHost) {
-            val others = s.members.count { it.hasPhone && it.memberId != s.myMemberId }
             when {
-                others == 0 -> "No signal. Keep scoring: it's sent when there's signal."
-                nearby.connected == 0 -> "No signal and no phones in range. Keep scoring: it all catches up when they're back in range."
-                nearby.connected < others -> "No signal: sharing phone to phone with ${nearby.connected} of $others phones."
-                else -> "No signal: sharing phone to phone."
+                bluetooth == 0 && web.isEmpty() -> "No signal. Keep scoring: it's sent when there's signal."
+                bluetooth == 0 -> "No signal. Keep scoring: it's sent when there's signal." + webNote
+                nearby.connected == 0 -> "No signal, and no phones in Bluetooth range. Keep scoring: it all catches up when they're back in range." + webNote
+                nearby.connected < bluetooth -> "No signal: sharing scores over Bluetooth with ${nearby.connected} of $bluetooth phones." + webNote
+                else -> "No signal: sharing scores over Bluetooth." + webNote
             }
         } else {
-            if (nearby.connected > 0) "No signal: sharing with the host's phone."
-            else "Out of range of the host. Keep scoring: it all catches up when you're back in range."
+            (if (nearby.connected > 0) "No signal: sharing scores with the host's phone over Bluetooth."
+            else "Out of Bluetooth range of the host. Keep scoring: it all catches up when you're back in range.") + webNote
         }
     }
 }
@@ -249,6 +270,8 @@ class LiveGroupRepository(
     private val api: FieldArcheryApi,
     private val accounts: AccountStore,
     private val rounds: RoundRepository,
+    /** 3.2.23: names you've given other archers, shown in the group instead of usernames (this phone only). */
+    private val names: StateFlow<Map<String, String>> = MutableStateFlow(emptyMap()),
 ) {
     private val prefs = context.getSharedPreferences("live_groups", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -567,8 +590,9 @@ class LiveGroupRepository(
      * phones (phone to phone), and copies saved scores into this phone's rounds. Ends once the group is closed.
      */
     fun poll(groupId: String): Flow<LivePoll> =
-        combine(replicas.map { it[groupId] }, serverProblem.map { it[groupId] }, nearby.status) { r, problem, near ->
-            LivePoll(r?.let { stateOf(it) }, problem, if (nearbyGroup == groupId) near else NearbyStatus(needsPermission = near.needsPermission, bluetoothOff = near.bluetoothOff, wifiOff = near.wifiOff))
+        // 3.2.23: names you give other archers show straight away (they're only ever on this phone).
+        combine(replicas.map { it[groupId] }, serverProblem.map { it[groupId] }, nearby.status, names) { r, problem, near, given ->
+            LivePoll(r?.let { stateOf(it).copy(localNames = given) }, problem, if (nearbyGroup == groupId) near else NearbyStatus(needsPermission = near.needsPermission, bluetoothOff = near.bluetoothOff, wifiOff = near.wifiOff))
         }
             .distinctUntilChanged()
             .transformWhile { emit(it); it.state?.closed != true }
@@ -1154,9 +1178,14 @@ class LiveGroupRepository(
                 rounds.addGroupRound(
                     s.groupId, m.memberId, role, if (isMe) null else m.name, m.sortOrder, s.shootDate, s.targetCount,
                     s.roundType, m.archerClass, m.ageGroup, m.bowStyle, s.locationId, s.locationName, s.startTarget,
+                    archerId = if (isMe) null else m.archerId,
                 )
-            } else if (existing.groupRole != role || existing.groupOrder != m.sortOrder || (!isMe && existing.groupName != m.name)) {
-                rounds.setGroupMember(m.memberId, role, if (isMe) null else m.name, m.sortOrder)
+            } else {
+                if (existing.groupRole != role || existing.groupOrder != m.sortOrder || (!isMe && existing.groupName != m.name)) {
+                    rounds.setGroupMember(m.memberId, role, if (isMe) null else m.name, m.sortOrder)
+                }
+                // 3.2.23: their account, so names you give them show (cards from before 3.2.23 have none).
+                if (!isMe && m.archerId != null && existing.groupArcherId != m.archerId) rounds.setGroupArcher(m.memberId, m.archerId)
             }
         }
         // Start target (2.7): the host's own round decides (changed with Round details); the others take the host's.
@@ -1209,6 +1238,7 @@ class LiveGroupRepository(
         .put("bowStyle", m.bowStyle.code)
         .put("sortOrder", m.sortOrder)
         .put("scorers", JSONArray().apply { m.scorers.forEach { put(it) } })
+        .put("app", m.app ?: JSONObject.NULL)
 
     private fun parseMember(m: JSONObject) = LiveMember(
         memberId = m.getString("memberId"),
@@ -1220,6 +1250,7 @@ class LiveGroupRepository(
         bowStyle = BowStyle.fromCode(m.getString("bowStyle")) ?: BowStyle.entries.first(),
         sortOrder = m.optInt("sortOrder"),
         scorers = m.optJSONArray("scorers").strings(),
+        app = if (m.isNull("app")) null else m.optString("app").ifEmpty { null },
     )
 
     private fun entryJson(e: LiveRules.Entry) = JSONObject()

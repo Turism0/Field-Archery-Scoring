@@ -4,6 +4,23 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.23
+
+- **3.2.23 (app, web app and API; run `server/sql/018_group_member_app.sql` first): names you give other archers; Bluetooth and web app wording in live groups (Pete).**
+  - **Names for other archers (this device only):** usernames stay as they are, but you can give anyone with an account a name you know them by. It's shown instead of their username, with the username in small text underneath, in Friends (friend list, requests, their rounds), live group lobbies, the scoring names strip, group scorecards and messages ("Waiting for Dave to enter"). Add or change one from **Friends → Add a name**, the lobby (**Add a name** under each archer), the scoring screen (**⋮ → Name archers**, or long press someone in the names strip on Android), and it's remembered for future groups. Kept only on that phone or in that browser (`ArcherNamesStore` / kv `archerNames`), put away and brought back with the account at sign-out and sign-in, and **never sent anywhere**: no privacy policy change. Live group cards now remember each member's account (`round.group_archer_id`) so names can be shown.
+  - **Add as friends?** on a finished group round's scorecard: archers you named who aren't friends yet (or asked either way), with an Add friend button.
+  - **Bluetooth wording (Android):** "No signal: sharing scores over Bluetooth" (with "N of M phones" when some are out of range, and "Out of Bluetooth range of the host" for a joined phone).
+  - **Web app members:** the API notes which app each archer in a live group uses (`ScoreGroupMember.App`, schema 14, from the `X-App-Version` header; `app` in the group). With no signal, Android phones say who's on the web app and that it can't use Bluetooth, so their scores come through once both have signal; lobbies label them **Web app**. On the web app itself, losing signal says it's lost touch with the group and that the web app can't share scores over Bluetooth like the Android app.
+  - New `domain/ArcherNames.kt` / `domain/archerNames.ts` with tests (Kotlin 114, web 109); server test `server/tests/Test-GroupApps.ps1` (in Run-AllTests). Web Friends naming, the scoring strip, ⋮ → Name archers and Add as friends checked in a browser. App versionCode 85, versionName 3.2.23 (includes 3.2.22).
+  - **Test-Delete fix:** the privacy page check failed because Cloudflare's Email Address Obfuscation replaces the contact address with an encoded `data-cfemail` value (browsers still show it). The test now decodes that too.
+
+## Version 3.2.22
+
+- **3.2.22 (app and web app; API version number only): clearer live group setup; the QR scanner can't close the app (testers via Pete).**
+  - **Live group setup:** testers were adding a guest for someone who'd then join on their own phone. Now the Live group text says everyone with the app joins on their own phone with the code or QR once the group's made, so don't add them. Adding friends or guests is under **Someone without a phone? → Score someone on this phone** (hidden until tapped, or while anyone's added), in a section called **Scored on this phone**. "Archers in the group" explains it counts both.
+  - **QR scanner (Android):** a tester's app closed when tapping Scan QR code on the Join screen. Starting the scanner (Join screen and the scoring screen's check QR) now catches any error and shows it ("Couldn't open the scanner (…). Type the code instead.") rather than closing, and logs it (`adb logcat -s JoinScreen`). Joining also now shows any unexpected error instead of closing the app (only server errors were caught). The root cause isn't known yet: no crash report in Play Console; if the crash is inside Google's scanner screen itself this won't stop it, but the log will show it.
+  - Tests: Kotlin 111, web 106 (unchanged); the web live group setup checked in a browser. App versionCode 84, versionName 3.2.22 (not released on its own: in 3.2.23).
+
 ## Version 3.2.21
 
 - **3.2.21 (app, web app and API; run `server/sql/017_round_notes.sql` first): round notes (Pete).**

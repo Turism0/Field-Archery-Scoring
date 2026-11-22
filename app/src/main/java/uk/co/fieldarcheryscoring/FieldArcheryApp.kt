@@ -39,14 +39,16 @@ class AppContainer(app: Application) {
     val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore, locationRepository)
 
     val profileRepository = ProfileRepository(db.profileDao())
-    val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() })
+    /** 3.2.23: names you've given other archers (this phone only). */
+    val archerNamesStore = uk.co.fieldarcheryscoring.data.ArcherNamesStore(app)
+    val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() }, names = archerNamesStore.names)
     val friendsRepository = FriendsRepository(api, accountStore, onAccepted = { syncScheduler.request() })
     val adminRepository = AdminRepository(api, accountStore)
     val locationPageRepository = LocationPageRepository(api, accountStore)
     /** 3.2.17: Stats → Analysis → Compared with others. */
     val compareRepository = uk.co.fieldarcheryscoring.data.CompareRepository(api, accountStore)
     /** Live groups: one round scored on several phones through the server (2.1). */
-    val liveGroupRepository = LiveGroupRepository(app, api, accountStore, roundRepository)
+    val liveGroupRepository = LiveGroupRepository(app, api, accountStore, roundRepository, names = archerNamesStore.names)
     /** Handicap model from the server, kept on the phone (2.2.05). */
     val handicapRepository = HandicapRepository(app, api, accountStore)
     /** How Home's tiles are arranged (2.4.01). */
@@ -60,7 +62,7 @@ class AppContainer(app: Application) {
     }
 
     /** Whose rounds are on this phone (3.2.02). */
-    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository)
+    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository, archerNamesStore)
     val accountRepository = AccountRepository(api, accountStore, profileRepository, deviceData, onSignedIn = { syncScheduler.request() })
 }
 

@@ -90,10 +90,16 @@ fun JoinScreen(
                 FilledTonalButton(
                     onClick = {
                         scanProblem = null
-                        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-                        GmsBarcodeScanning.getClient(context, options).startScan()
-                            .addOnSuccessListener { code -> code.rawValue?.let { vm.onCode(it) } }
-                            .addOnFailureListener { e -> scanProblem = "Couldn't scan: ${e.message ?: "try typing the code"}" }
+                        // 3.2.22: a scanner that can't start says why instead of closing the app (a tester's crash).
+                        try {
+                            val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+                            GmsBarcodeScanning.getClient(context, options).startScan()
+                                .addOnSuccessListener { code -> code.rawValue?.let { vm.onCode(it) } }
+                                .addOnFailureListener { e -> scanProblem = "Couldn't scan: ${e.message ?: "try typing the code"}" }
+                        } catch (e: Exception) {
+                            android.util.Log.e("JoinScreen", "QR scanner wouldn't start", e)
+                            scanProblem = "Couldn't open the scanner (${e.javaClass.simpleName}: ${e.message}). Type the code instead."
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Scan QR code") }

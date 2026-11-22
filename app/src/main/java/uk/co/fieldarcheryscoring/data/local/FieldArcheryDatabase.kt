@@ -111,6 +111,10 @@ abstract class RoundDao {
     @Query("UPDATE round SET group_role = :role, group_name = :name, group_order = :order WHERE id = :id")
     abstract suspend fun setGroupMember(id: String, role: String, name: String?, order: Int)
 
+    /** 3.2.23: a live group member's account id (for names you give other archers). */
+    @Query("UPDATE round SET group_archer_id = :archerId WHERE id = :id")
+    abstract suspend fun setGroupArcher(id: String, archerId: String?)
+
     /** Friends' rounds to send as requests (finished) or withdraw (deleted). */
     @Query(
         "SELECT id FROM round WHERE group_role = 'FRIEND' AND sync_state = 'PENDING' AND hidden_owner IS NULL " +

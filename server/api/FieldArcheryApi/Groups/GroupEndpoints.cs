@@ -55,7 +55,7 @@ public static class GroupEndpoints
         DateTime ShootDate, Guid? LocationId, string Status, DateTime CreatedUtc, DateTime UpdatedUtc, short? StartTarget);
 
     private sealed record MemberRow(Guid MemberId, string Kind, Guid? ArcherId, string? GuestName, string? Username,
-        string ArcherClass, string AgeGroup, string BowStyle, short SortOrder, Guid? RoundId);
+        string ArcherClass, string AgeGroup, string BowStyle, short SortOrder, Guid? RoundId, string? App);
 
     private sealed record EntryRow(short TargetNo, Guid CardMemberId, Guid ScorerMemberId, string EntryJson, short Points,
         DateTime EnteredUtc, DateTime ServerUpdatedUtc);
@@ -80,7 +80,7 @@ public static class GroupEndpoints
 
     // ---- Create / update (host) -------------------------------------------------------------------------------
 
-    private static async Task<IResult> Put(Guid groupId, GroupIn g, ClaimsPrincipal user, Db db, CancellationToken ct)
+    private static async Task<IResult> Put(Guid groupId, GroupIn g, ClaimsPrincipal user, Db db, HttpRequest request, CancellationToken ct)
     {
         var me = user.ArcherId();
         var code = g.Code?.Trim().ToUpperInvariant();
@@ -210,6 +210,12 @@ public static class GroupEndpoints
             }
         }
 
+        // 3.2.23: which app the host is using (the phones say who's on the web app: no Bluetooth there).
+        if (AppVersionCheck.AppOf(request) is { } hostApp)
+            await conn.ExecuteAsync(new CommandDefinition(
+                "UPDATE dbo.ScoreGroupMember SET App = @hostApp WHERE GroupId = @groupId AND Kind = 'HOST';",
+                new { groupId, hostApp }, tx, cancellationToken: ct));
+
         var members = (await conn.QueryAsync<MemberRow>(new CommandDefinition(MembersSql, new { groupId }, tx, cancellationToken: ct))).ToList();
 
         if (g.Order is { } wanted)
@@ -242,7 +248,7 @@ public static class GroupEndpoints
 
     // ---- Join -------------------------------------------------------------------------------------------------
 
-    private static async Task<IResult> Join(JoinIn j, ClaimsPrincipal user, Db db, CancellationToken ct)
+    private static async Task<IResult> Join(JoinIn j, ClaimsPrincipal user, Db db, HttpRequest request, CancellationToken ct)
     {
         var me = user.ArcherId();
         var code = j.Code?.Trim().ToUpperInvariant();
@@ -269,9 +275,10 @@ public static class GroupEndpoints
             await conn.ExecuteAsync(new CommandDefinition("""
                 UPDATE dbo.ScoreGroupMember
                 SET Kind = 'JOINED', ArcherClass = @ArcherClass, AgeGroup = @AgeGroup, BowStyle = @BowStyle,
-                    RoundId = COALESCE(@RoundId, RoundId)
+                    RoundId = COALESCE(@RoundId, RoundId), App = COALESCE(@app, App)
                 WHERE GroupId = @groupId AND MemberId = @memberId;
-                """, new { groupId = group.GroupId, memberId = mine.MemberId, j.ArcherClass, j.AgeGroup, j.BowStyle, j.RoundId },
+                """, new { groupId = group.GroupId, memberId = mine.MemberId, j.ArcherClass, j.AgeGroup, j.BowStyle, j.RoundId,
+                    app = AppVersionCheck.AppOf(request) },
                 tx, cancellationToken: ct));
         }
         else
@@ -279,11 +286,12 @@ public static class GroupEndpoints
             try
             {
                 await conn.ExecuteAsync(new CommandDefinition("""
-                    INSERT dbo.ScoreGroupMember (GroupId, MemberId, Kind, ArcherId, ArcherClass, AgeGroup, BowStyle, SortOrder, RoundId)
+                    INSERT dbo.ScoreGroupMember (GroupId, MemberId, Kind, ArcherId, ArcherClass, AgeGroup, BowStyle, SortOrder, RoundId, App)
                     SELECT @groupId, @MemberId, 'JOINED', @me, @ArcherClass, @AgeGroup, @BowStyle,
-                           ISNULL(MAX(SortOrder), 0) + 1, @RoundId
+                           ISNULL(MAX(SortOrder), 0) + 1, @RoundId, @app
                     FROM dbo.ScoreGroupMember WHERE GroupId = @groupId;
-                    """, new { groupId = group.GroupId, j.MemberId, me, j.ArcherClass, j.AgeGroup, j.BowStyle, j.RoundId },
+                    """, new { groupId = group.GroupId, j.MemberId, me, j.ArcherClass, j.AgeGroup, j.BowStyle, j.RoundId,
+                        app = AppVersionCheck.AppOf(request) },
                     tx, cancellationToken: ct));
             }
             catch (SqlException ex) when (Db.IsDuplicateKey(ex))
@@ -391,6 +399,8 @@ public static class GroupEndpoints
                 // Round ids are only shown to the host and the archer themselves.
                 roundId = group.HostId == me || m.ArcherId == me ? m.RoundId : null,
                 scorers = scorers[m.MemberId].ToList(),
+                // 3.2.23: "android" / "web" for archers on their own device (null when not known).
+                app = m.App,
             }),
             entries = entries.Where(e => since3 is null || e.ServerUpdatedUtc > since3).Select(e => new
             {
@@ -564,7 +574,8 @@ public static class GroupEndpoints
         "GroupId, Code, HostId, Method, RoundType, TargetCount, CAST(ShootDate AS datetime2(3)) AS ShootDate, LocationId, Status, CreatedUtc, UpdatedUtc, StartTarget";
 
     private const string MembersSql = """
-        SELECT m.MemberId, m.Kind, m.ArcherId, m.GuestName, a.Username, m.ArcherClass, m.AgeGroup, m.BowStyle, m.SortOrder, m.RoundId
+        SELECT m.MemberId, m.Kind, m.ArcherId, m.GuestName, a.Username, m.ArcherClass, m.AgeGroup, m.BowStyle, m.SortOrder, m.RoundId,
+               m.App
         FROM dbo.ScoreGroupMember m LEFT JOIN dbo.Archer a ON a.ArcherId = m.ArcherId
         WHERE m.GroupId = @groupId
         ORDER BY m.SortOrder, m.AddedUtc;

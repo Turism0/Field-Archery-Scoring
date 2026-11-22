@@ -32,6 +32,15 @@ public static class AppVersionCheck
         });
     }
 
+    /// <summary>Which app made the call (3.2.23): "android", "web", or null (no header, or something else).</summary>
+    public static string? AppOf(HttpRequest request)
+    {
+        var sent = request.Headers[Header].ToString();
+        var slash = sent.IndexOf('/');
+        var kind = (slash < 0 ? sent : sent[..slash]).Trim().ToLowerInvariant();
+        return kind is "android" or "web" ? kind : null;
+    }
+
     /// <summary>"android/66" or "web/3.2.05" against the minimums. Anything unreadable is let through.</summary>
     public static bool TooOld(string sent, int minAndroid, int[] minWeb)
     {

@@ -204,3 +204,21 @@ export function Menu({ items, label = 'More' }: { items: ({ text: string; onClic
     </span>
   )
 }
+
+/**
+ * Name another archer (3.2.23, Pete): what you call [username] in this browser. Only you see it; it's never sent
+ * anywhere. Saving a blank name (or "Use username") goes back to their username.
+ */
+export function NameArcherDialog({ username, current, onSave, onClose }: {
+  username: string; current: string | null; onSave: (name: string | null) => void; onClose: () => void
+}) {
+  const [text, setText] = useState(current ?? '')
+  return (
+    <Dialog open title={current ? 'Change name' : `Name ${username}`} onClose={onClose}
+      actions={<>{current ? <button onClick={() => onSave(null)}>Use username</button> : <button onClick={onClose}>Cancel</button>}
+        <button class="filled" onClick={() => onSave(text.trim() || null)}>Save</button></>}>
+      <p class="sub">What you call {username}. It's shown in this browser instead of their username, and only you see it.</p>
+      <Field label="Name"><input maxLength={40} value={text} autocapitalize="words" onInput={e => setText((e.target as HTMLInputElement).value)} /></Field>
+    </Dialog>
+  )
+}

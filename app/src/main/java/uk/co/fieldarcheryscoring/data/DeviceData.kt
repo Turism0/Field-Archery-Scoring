@@ -24,6 +24,8 @@ class DeviceData(
     private val profile: ProfileDao,
     private val statsFilter: StatsFilterStore,
     private val liveGroups: LiveGroupRepository,
+    /** 3.2.23: names you've given other archers, put away and brought back like the Stats filters. */
+    private val archerNames: ArcherNamesStore? = null,
 ) {
     /** Kept apart from the account's own file, which is cleared whenever the sign-in ends. Backed up with the rounds. */
     private val prefs = context.getSharedPreferences("device_data", Context.MODE_PRIVATE)
@@ -53,6 +55,7 @@ class DeviceData(
     suspend fun putAway(who: String) {
         profile.get()?.let { prefs.edit().putString(K_PROFILE + who, it.toJson()).apply() }
         statsFilter.current()?.let { prefs.edit().putString(K_FILTER + who, it).apply() }
+        archerNames?.current()?.let { prefs.edit().putString(K_NAMES + who, it).apply() }
         rounds.hideShowing(who)
         clearSession()
         if (owner == who) owner = null
@@ -63,7 +66,8 @@ class DeviceData(
         rounds.showHidden(who)
         prefs.getString(K_PROFILE + who, null)?.let { profile.upsert(profileFromJson(it)) }
         prefs.getString(K_FILTER + who, null)?.let { statsFilter.restore(it) }
-        prefs.edit().remove(K_PROFILE + who).remove(K_FILTER + who).apply()
+        prefs.getString(K_NAMES + who, null)?.let { archerNames?.restore(it) }
+        prefs.edit().remove(K_PROFILE + who).remove(K_FILTER + who).remove(K_NAMES + who).apply()
     }
 
     /**
@@ -83,13 +87,13 @@ class DeviceData(
             rounds.deleteShowing()
             if (earlier.isNotEmpty()) rounds.deleteHidden(earlier)
         }
-        prefs.edit().apply { earlier.forEach { remove(K_PROFILE + it); remove(K_FILTER + it); remove(K_NAME + it) } }.apply()
+        prefs.edit().apply { earlier.forEach { remove(K_PROFILE + it); remove(K_FILTER + it); remove(K_NAME + it); remove(K_NAMES + it) } }.apply()
     }
 
     /** Signing out with "Also remove my rounds from this phone": the showing rounds and this account's things go. */
     suspend fun removeShowing(who: String) {
         rounds.deleteShowing()
-        prefs.edit().remove(K_PROFILE + who).remove(K_FILTER + who).apply()
+        prefs.edit().remove(K_PROFILE + who).remove(K_FILTER + who).remove(K_NAMES + who).apply()
         clearSession()
         if (owner == who) owner = null
     }
@@ -98,6 +102,7 @@ class DeviceData(
     suspend fun clearSession() {
         profile.clear()
         statsFilter.clear()
+        archerNames?.clear()
         liveGroups.clearAll()
         rounds.clearWeather()   // 3.2.17: downloaded again for the account that signs in
     }
@@ -127,5 +132,6 @@ class DeviceData(
         const val K_NAME = "name:"
         const val K_PROFILE = "profile:"
         const val K_FILTER = "filter:"
+        const val K_NAMES = "names:"
     }
 }
