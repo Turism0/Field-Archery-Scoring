@@ -77,6 +77,7 @@ fun ScorecardScreen(
     onOpenMember: (roundId: String) -> Unit = {},
 ) {
     val round by vm.round.collectAsStateWithLifecycle()
+    val equipmentLine by vm.equipmentLine.collectAsStateWithLifecycle()
     val group by vm.group.collectAsStateWithLifecycle()
     val personalBest by vm.personalBest.collectAsStateWithLifecycle()
     val handicap by vm.handicapModel.collectAsStateWithLifecycle()
@@ -147,7 +148,7 @@ fun ScorecardScreen(
         ) {
             item {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RoundHeader(r)
+                    RoundHeader(r, equipment = equipmentLine)
                     personalBest?.let { (me, beat) -> PersonalBestCard(me, beat) }
                     LocationChip(r.location, signedIn, onClick = { showLocation = true })
                     // 3.2.17: weather at the shoot location while the round was shot (looked up by the server).
@@ -215,7 +216,7 @@ fun ScorecardScreen(
 }
 
 @Composable
-internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
+internal fun RoundHeader(r: Round, showLocation: Boolean = false, equipment: String? = null) {
     val scheme = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -244,6 +245,8 @@ internal fun RoundHeader(r: Round, showLocation: Boolean = false) {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
                 }
             }
+            // 3.2.24 (Pete): the bow and arrows (own rounds only).
+            equipment?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant) }
             // 3.2.21 (Pete): the archer's notes (only ever on their own rounds; friends' rounds come without them).
             r.notes?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)

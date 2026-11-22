@@ -64,6 +64,7 @@ internal fun AnalysisTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     val filter by vm.filter.collectAsStateWithLifecycle()
     val weather by vm.weather.collectAsStateWithLifecycle()
     val compare by vm.compare.collectAsStateWithLifecycle()
+    val kit by vm.equipment.collectAsStateWithLifecycle()
     val types = filter?.types?.sortedBy { it.ordinal }.orEmpty()
 
     // Compared with others: one ask for every kind of round shown (round type, bow style, class and age group).
@@ -88,6 +89,10 @@ internal fun AnalysisTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
                 item(key = "thirds-$type") { ThirdsCard(list, type) }
                 item(key = "compare-$type") { CompareCard(list, type, compare, groups) }
                 item(key = "locations-$type") { LocationsCard(list, type, onOpenRound) }
+                // 3.2.24 (Pete): your bows and arrows compared (once you've used more than one).
+                if (list.mapNotNull { it.bowId }.distinct().size > 1 || list.mapNotNull { it.arrowId }.distinct().size > 1) {
+                    item(key = "equipment-$type") { EquipmentCard(list, type, kit.first, kit.second, onOpenRound) }
+                }
                 item(key = "weather-$type") { WeatherCard(list, type, weather) }
             }
         }
@@ -288,6 +293,38 @@ private fun LocationsCard(rounds: List<Round>, type: RoundType, onOpenRound: (St
                 }
                 Text(one(l.average), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+        }
+    }
+}
+
+/** 3.2.24 (Pete): each bow and set of arrows: rounds, average and best, and how often you kill (Big Game). */
+@Composable
+private fun EquipmentCard(
+    rounds: List<Round>, type: RoundType, bows: List<uk.co.fieldarcheryscoring.domain.Bow>,
+    arrows: List<uk.co.fieldarcheryscoring.domain.ArrowSet>, onOpenRound: (String) -> Unit,
+) {
+    val byBow = remember(rounds) { Analysis.byEquipment(rounds) { it.bowId } }
+    val byArrows = remember(rounds) { Analysis.byEquipment(rounds) { it.arrowId } }
+    SectionCard(title = "By equipment", subtitle = "Average and best ${per(type)} with each bow and set of arrows.") {
+        EquipmentRows("Bows", byBow, onOpenRound) { id -> bows.firstOrNull { it.id == id }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown bow" }
+        EquipmentRows("Arrows", byArrows, onOpenRound) { id -> arrows.firstOrNull { it.id == id }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown arrows" }
+    }
+}
+
+@Composable
+private fun EquipmentRows(
+    title: String, list: List<uk.co.fieldarcheryscoring.domain.EquipmentSummary>, onOpenRound: (String) -> Unit, name: (String) -> String,
+) {
+    if (list.size < 2) return
+    Text(title, style = MaterialTheme.typography.titleSmall)
+    list.forEach { e ->
+        Row(Modifier.fillMaxWidth().clickable { onOpenRound(e.bestRound.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(name(e.id), fontWeight = FontWeight.Bold)
+                Muted("${e.rounds} round${if (e.rounds == 1) "" else "s"} · best ${one(e.best)}" +
+                    (e.killRate?.let { " · kills ${(it * 100).roundToInt()}%" } ?: ""))
+            }
+            Text(one(e.average), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
     }
 }

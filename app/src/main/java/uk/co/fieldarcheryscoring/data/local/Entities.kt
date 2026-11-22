@@ -102,6 +102,9 @@ data class RoundEntity(
     @ColumnInfo(name = "hidden_owner") val hiddenOwner: String? = null,
     /** The archer's notes (database v8, app 3.2.21): own rounds only; synced, but only ever shown to the archer. */
     @ColumnInfo(name = "notes") val notes: String? = null,
+    /** The bow and arrows it was shot with (database v9, app 3.2.24): own rounds only; synced, only shown to the archer. */
+    @ColumnInfo(name = "bow_id") val bowId: String? = null,
+    @ColumnInfo(name = "arrow_id") val arrowId: String? = null,
 )
 
 @Entity(
@@ -166,4 +169,44 @@ data class RoundWeatherEntity(
     @ColumnInfo(name = "gust_kph") val gustKph: Double? = null,
     @ColumnInfo(name = "rain_mm") val rainMm: Double? = null,
     val code: Int? = null,
+)
+
+/**
+ * A bow (database v9, app 3.2.24): synced with the account, private to the archer. [bowStyles] = bow style codes,
+ * comma-separated. Deleted ones are kept (flagged) so rounds shot with them still show their name. Put away with the
+ * rounds when the archer signs out ([hiddenOwner]).
+ */
+@Entity(tableName = "bow")
+data class BowEntity(
+    @PrimaryKey val id: String,
+    val type: String,
+    val make: String? = null,
+    val model: String? = null,
+    @ColumnInfo(name = "poundage_lb") val poundageLb: Double? = null,
+    @ColumnInfo(name = "bow_styles") val bowStyles: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
+    val deleted: Boolean = false,
+    @ColumnInfo(name = "hidden_owner") val hiddenOwner: String? = null,
+)
+
+/** A set of arrows (database v9, app 3.2.24), used with the bows in [bowIds] (comma-separated). As [BowEntity]. */
+@Entity(tableName = "arrow_set")
+data class ArrowSetEntity(
+    @PrimaryKey val id: String,
+    val make: String? = null,
+    val model: String? = null,
+    @ColumnInfo(name = "length_in") val lengthIn: Double? = null,
+    @ColumnInfo(name = "arrow_grains") val arrowGrains: Double? = null,
+    val spine: String? = null,
+    @ColumnInfo(name = "fletch_count") val fletchCount: Int? = null,
+    @ColumnInfo(name = "fletch_material") val fletchMaterial: String? = null,
+    @ColumnInfo(name = "fletch_length_in") val fletchLengthIn: Double? = null,
+    @ColumnInfo(name = "fletch_colours") val fletchColours: String? = null,
+    @ColumnInfo(name = "point_grains") val pointGrains: Double? = null,
+    @ColumnInfo(name = "bow_ids") val bowIds: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "sync_state") val syncState: SyncState = SyncState.PENDING,
+    val deleted: Boolean = false,
+    @ColumnInfo(name = "hidden_owner") val hiddenOwner: String? = null,
 )

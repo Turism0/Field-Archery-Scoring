@@ -15,6 +15,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import uk.co.fieldarcheryscoring.data.EquipmentRepository
+import uk.co.fieldarcheryscoring.domain.Equipment
+import uk.co.fieldarcheryscoring.domain.EquipmentChoice
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -261,12 +265,17 @@ data class HistoryFilter(
     val period: PersonalStats.Period = PersonalStats.Period.All,
     /** 3.2.21 (Pete): words to find in the round's notes ("" = any round). */
     val search: String = "",
+    /** 3.2.24 (Pete): rounds shot with this bow / these arrows. */
+    val bowId: String? = null,
+    val arrowId: String? = null,
 ) {
     val isActive: Boolean get() = this.copy(search = search.trim()) != HistoryFilter()
 
     fun matches(r: RoundSummary, today: LocalDate): Boolean =
         (type == null || r.roundType == type) &&
             (bowStyle == null || r.bowStyle == bowStyle) &&
+            (bowId == null || r.bowId == bowId) &&
+            (arrowId == null || r.arrowId == arrowId) &&
             (location == null || r.locationName == location) &&
             period.contains(r.shootDate, today) &&
             uk.co.fieldarcheryscoring.domain.RoundNotes.matches(r.notes, search)
@@ -280,6 +289,9 @@ data class HistoryChoices(
     val years: List<Int> = emptyList(),
     /** 3.2.21: any of your rounds have notes (the notes search only shows then). */
     val hasNotes: Boolean = false,
+    /** 3.2.24: the bows and arrows your rounds were shot with (deleted ones too). */
+    val bows: List<uk.co.fieldarcheryscoring.domain.Bow> = emptyList(),
+    val arrows: List<uk.co.fieldarcheryscoring.domain.ArrowSet> = emptyList(),
 )
 
 /** Score history: finished rounds only, newest first, with filters and personal-best marks. */
@@ -288,6 +300,7 @@ class HistoryViewModel(
     accounts: AccountRepository,
     syncer: RoundSyncer,
     accountStore: AccountStore,
+    equipment: EquipmentRepository? = null,
 ) : SyncingViewModel(syncer, accountStore, accounts) {
     private val finished = roundRepo.rounds.map { list -> list.filter { it.status == RoundStatus.COMPLETED } }
 
@@ -313,8 +326,12 @@ class HistoryViewModel(
     /** How many finished rounds there are before filtering. */
     val totalCount: StateFlow<Int> = finished.map { it.size }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
-    val choices: StateFlow<HistoryChoices> = finished.map { list ->
+    val choices: StateFlow<HistoryChoices> = combine(finished, equipment?.bows ?: flowOf(emptyList()), equipment?.arrows ?: flowOf(emptyList())) { list, bows, arrows ->
+        val bowIds = list.mapNotNull { it.bowId }.toSet()
+        val arrowIds = list.mapNotNull { it.arrowId }.toSet()
         HistoryChoices(
+            bows = bows.filter { it.id in bowIds }.sortedBy { Equipment.label(it).lowercase() },
+            arrows = arrows.filter { it.id in arrowIds }.sortedBy { Equipment.label(it).lowercase() },
             types = list.map { it.roundType }.distinct().sortedBy { it.ordinal },
             bowStyles = list.mapNotNull { it.bowStyle }.distinct().sortedBy { it.ordinal },
             locations = list.mapNotNull { it.locationName?.takeIf { n -> n.isNotBlank() } }.distinct().sortedBy { it.lowercase() },
@@ -355,8 +372,22 @@ class StatsViewModel(
     profiles: ProfileRepository? = null,
     private val filterStore: StatsFilterStore? = null,
     private val compareRepo: CompareRepository? = null,
+    equipmentRepo: EquipmentRepository? = null,
 ) : ViewModel() {
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
+
+    /** 3.2.24: your bows and arrows (deleted ones too), for the filters and Analysis → By equipment. */
+    val equipment: StateFlow<Pair<List<uk.co.fieldarcheryscoring.domain.Bow>, List<uk.co.fieldarcheryscoring.domain.ArrowSet>>> =
+        combine(equipmentRepo?.bows ?: flowOf(emptyList()), equipmentRepo?.arrows ?: flowOf(emptyList())) { b, a -> b to a }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList<uk.co.fieldarcheryscoring.domain.Bow>() to emptyList())
+
+    /** 3.2.24 (Pete): your handicap over time for each bow style that has one (always all your rounds, like the handicap). */
+    val handicapHistory: StateFlow<Map<BowStyle, List<PersonalHandicap.HistoryPoint>>> = roundRepo.finishedRounds
+        .map { rounds ->
+            val entries = rounds.mapNotNull { it.handicapEntry() }
+            PersonalHandicap.all(entries).associate { h -> h.bowStyle to PersonalHandicap.history(entries, h.bowStyle) }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** 3.2.17: weather for rounds, by round id (for the Analysis tab). */
     val weather: StateFlow<Map<String, Weather>> = roundRepo.weather
@@ -1249,6 +1280,9 @@ data class JoinForm(
     val archerClass: ArcherClass? = null,
     val ageGroup: AgeGroup? = null,
     val bowStyle: BowStyle? = null,
+    /** 3.2.24: the bow and arrows picked (null = the last used or only one; Equipment.NONE = none). */
+    val bowId: String? = null,
+    val arrowId: String? = null,
     val busy: Boolean = false,
     val error: String? = null,
 ) {
@@ -1256,9 +1290,22 @@ data class JoinForm(
 }
 
 /** Join a live group: type or scan the code, check class / age group / bow, join. */
-class JoinViewModel(profiles: ProfileRepository, private val live: LiveGroupRepository) : ViewModel() {
+class JoinViewModel(
+    profiles: ProfileRepository,
+    private val live: LiveGroupRepository,
+    private val rounds: RoundRepository? = null,
+    equipment: EquipmentRepository? = null,
+) : ViewModel() {
     private val _form = MutableStateFlow(JoinForm())
     val form: StateFlow<JoinForm> = _form.asStateFlow()
+
+    /** 3.2.24: the bows and arrows for the bow style picked (only shown with two or more). */
+    val equipmentChoice: StateFlow<EquipmentChoice?> =
+        equipmentChoices(equipment, rounds?.rounds ?: flowOf(emptyList()), _form.map { Triple(it.bowStyle, it.bowId, it.arrowId) }.distinctUntilChanged())
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun pickBow(id: String) = _form.update { it.copy(bowId = id, arrowId = null) }
+    fun pickArrows(id: String) = _form.update { it.copy(arrowId = id) }
 
     init {
         viewModelScope.launch {
@@ -1285,6 +1332,8 @@ class JoinViewModel(profiles: ProfileRepository, private val live: LiveGroupRepo
         viewModelScope.launch {
             try {
                 val groupId = live.join(f.code, f.archerClass!!, f.ageGroup!!, f.bowStyle!!)
+                // 3.2.24: your bow and arrows on your round in the group.
+                equipmentChoice.value?.let { c -> rounds?.useEquipmentInGroup(groupId, c.bowId, c.arrowId) }
                 _form.update { it.copy(busy = false) }
                 onJoined(groupId)
             } catch (e: ApiException) {
@@ -1553,6 +1602,9 @@ data class NewRoundForm(
     val startTargetText: String = "",
     /** Optional (3.2.21, Pete): the archer's notes on their own round, only ever shown to them. */
     val notes: String = "",
+    /** 3.2.24: the bow and arrows picked (null = not picked: the last used or only one; Equipment.NONE = none). */
+    val bowId: String? = null,
+    val arrowId: String? = null,
     val archerClass: ArcherClass? = null,
     /** Manual choice for this round; null = use the profile (manual or from date of birth). */
     val ageGroupChoice: AgeGroup? = null,
@@ -1613,6 +1665,22 @@ data class GroupMemberDraft(
     val bowStyle: BowStyle,
 )
 
+/**
+ * 3.2.24: the bows and arrows to offer for a bow style and what's been picked ([pick]: bow style, bow id, arrows id),
+ * starting on the last ones used with that bow style (your most recent round with it that had a bow, not [skipRound]).
+ */
+internal fun equipmentChoices(
+    equipment: EquipmentRepository?,
+    rounds: kotlinx.coroutines.flow.Flow<List<RoundSummary>>,
+    pick: kotlinx.coroutines.flow.Flow<Triple<BowStyle?, String?, String?>>,
+    skipRound: String? = null,
+): kotlinx.coroutines.flow.Flow<EquipmentChoice> =
+    combine(equipment?.bows ?: flowOf(emptyList()), equipment?.arrows ?: flowOf(emptyList()), rounds, pick) { b, a, rs, p ->
+        val (style, bowId, arrowId) = p
+        val last = rs.firstOrNull { it.id != skipRound && it.bowStyle == style && it.bowId != null }
+        Equipment.choose(b, a, style, bowId, arrowId, last?.bowId, last?.arrowId)
+    }
+
 class NewRoundViewModel(
     private val profiles: ProfileRepository,
     private val rounds: RoundRepository,
@@ -1620,9 +1688,18 @@ class NewRoundViewModel(
     private val type: RoundType = RoundType.BIG_GAME,
     private val accountStore: AccountStore? = null,
     private val live: LiveGroupRepository? = null,
+    private val equipment: EquipmentRepository? = null,
 ) : ViewModel() {
     private val _form = MutableStateFlow<NewRoundForm?>(null)
     val form: StateFlow<NewRoundForm?> = _form.asStateFlow()
+
+    /** 3.2.24: the bows and arrows for the bow style picked (only shown with two or more). */
+    val equipmentChoice: StateFlow<EquipmentChoice?> =
+        equipmentChoices(equipment, rounds.rounds, _form.map { Triple(it?.bowStyle, it?.bowId, it?.arrowId) }.distinctUntilChanged())
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun pickBow(id: String) = update { it.copy(bowId = id, arrowId = null) }
+    fun pickArrows(id: String) = update { it.copy(arrowId = id) }
 
     /** Signed in: friends can be added to a group (else guests only). */
     val signedIn: Boolean get() = accountStore?.account?.value != null
@@ -1681,6 +1758,7 @@ class NewRoundViewModel(
                 f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                 f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
                 groupId = groupId, live = true, startTarget = f.startTarget, notes = f.notes,
+                bowId = equipmentChoice.value?.bowId, arrowId = equipmentChoice.value?.arrowId,
             )
             try {
                 repo.create(groupId, f.liveMethod, f.liveExpected ?: 0)
@@ -1703,9 +1781,13 @@ class NewRoundViewModel(
                     f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type,
                     f.members.map { NewGroupMember(it.role, it.name, it.archerId, it.archerClass, it.ageGroup, it.bowStyle) },
                     startTarget = f.startTarget, notes = f.notes,
+                    bowId = equipmentChoice.value?.bowId, arrowId = equipmentChoice.value?.arrowId,
                 )
             } else {
-                rounds.createRound(f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type, f.startTarget, f.notes)
+                rounds.createRound(
+                    f.shootDate, f.targetCount!!, f.archerClass!!, f.ageGroup!!, f.bowStyle!!, type, f.startTarget, f.notes,
+                    bowId = equipmentChoice.value?.bowId, arrowId = equipmentChoice.value?.arrowId,
+                )
             }
             // GPS fix in the background (if allowed); scoring starts straight away.
             locations.captureFor(id)
@@ -1844,6 +1926,9 @@ data class EditRoundForm(
     /** 3.2.21: notes, on the archer's own round only ([canNote]: not a friend's, a guest's or another phone's card). */
     val notes: String = "",
     val canNote: Boolean = true,
+    /** 3.2.24: the bow and arrows (own round only, like notes); Equipment.NONE = none. */
+    val bowId: String? = null,
+    val arrowId: String? = null,
 ) {
     val targetCount: Int? get() = targetCountText.toIntOrNull()?.takeIf { it in 1..RoundRepository.MAX_TARGETS }
 
@@ -1867,11 +1952,24 @@ data class EditRoundForm(
 }
 
 /** Edit a round's details: date, number of targets, class, age group, bow style. Nav arg "roundId". */
-class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateHandle) : ViewModel() {
+class EditRoundViewModel(
+    private val rounds: RoundRepository,
+    saved: SavedStateHandle,
+    equipment: EquipmentRepository? = null,
+) : ViewModel() {
     private val roundId: String = checkNotNull(saved["roundId"])
 
     private val _form = MutableStateFlow<EditRoundForm?>(null)
     val form: StateFlow<EditRoundForm?> = _form.asStateFlow()
+
+    /** 3.2.24: the bows and arrows for the bow style, starting on the round's own (own round only). */
+    val equipmentChoice: StateFlow<EquipmentChoice?> =
+        equipmentChoices(equipment, rounds.rounds, _form.map { Triple(it?.bowStyle, it?.bowId, it?.arrowId) }.distinctUntilChanged(), skipRound = roundId)
+            .map { c -> c.takeIf { _form.value?.canNote == true } }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun pickBow(id: String) = update { it.copy(bowId = id, arrowId = null) }
+    fun pickArrows(id: String) = update { it.copy(arrowId = id) }
 
     init {
         viewModelScope.launch {
@@ -1879,7 +1977,8 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
             val member = rounds.group(roundId).first().firstOrNull { it.roundId == roundId }
             _form.value = EditRoundForm(r.shootDate, r.targetCount.toString(), r.archerClass, r.ageGroup, r.bowStyle,
                 r.startTarget?.toString().orEmpty(), r, member?.name,
-                notes = r.notes.orEmpty(), canNote = member == null || member.role == GroupRole.SCORER)
+                notes = r.notes.orEmpty(), canNote = member == null || member.role == GroupRole.SCORER,
+                bowId = r.bowId ?: Equipment.NONE, arrowId = r.arrowId ?: Equipment.NONE)
         }
     }
 
@@ -1892,6 +1991,7 @@ class EditRoundViewModel(private val rounds: RoundRepository, saved: SavedStateH
         viewModelScope.launch {
             rounds.updateDetails(roundId, f.shootDate, count, f.archerClass, f.ageGroup, f.bowStyle, f.startTarget)
             if (f.notesChanged) rounds.setNotes(roundId, f.notes)
+            equipmentChoice.value?.let { c -> rounds.setEquipment(roundId, c.bowId, c.arrowId) }
             onDone()
         }
     }
@@ -2346,6 +2446,7 @@ class ScorecardViewModel(
     /** 3.2.23: to offer adding archers you named in a group as friends. */
     private val friends: FriendsRepository? = null,
     private val names: uk.co.fieldarcheryscoring.data.ArcherNamesStore? = null,
+    equipment: EquipmentRepository? = null,
 ) : ViewModel() {
     /** For the round's handicap points (null until downloaded). */
     val handicapModel: StateFlow<HandicapModel?> = handicap?.model ?: MutableStateFlow(null)
@@ -2354,6 +2455,11 @@ class ScorecardViewModel(
 
     val round: StateFlow<Round?> =
         rounds.round(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** 3.2.24: "Border Hex 7 (45 lb) · Port Orford Cedar (45-50)" for the round's bow and arrows (deleted ones too). */
+    val equipmentLine: StateFlow<String?> = combine(round, equipment?.bows ?: flowOf(emptyList()), equipment?.arrows ?: flowOf(emptyList())) { r, b, a ->
+        r?.let { Equipment.roundLine(it, b, a) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** 3.2.17: the round's weather, once the server has looked it up and it's downloaded. */
     val weather: StateFlow<Weather?> = rounds.weatherFor(roundId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)

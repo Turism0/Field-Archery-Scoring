@@ -132,6 +132,19 @@ object PersonalHandicap {
         return Handicap(bow, (PAR - usual).roundToInt(), usual, best, recent.size)
     }
 
+    /** Your handicap with [bow] straight after a round ([entry] the round it changed on). */
+    data class HistoryPoint(val entry: Entry, val handicap: Int)
+
+    /**
+     * Your handicap over time with [bow] (3.2.24, Pete): what it was after each round, oldest first, from the round that
+     * first gave you one (your [MIN_ROUNDS]rd).
+     */
+    fun history(entries: List<Entry>, bow: BowStyle): List<HistoryPoint> {
+        val mine = entries.filter { it.bowStyle == bow && it.targetCount > 0 }
+            .sortedWith(compareBy<Entry> { it.shootDate }.thenBy { it.order })
+        return mine.mapIndexedNotNull { i, e -> of(mine.subList(0, i + 1), bow)?.let { HistoryPoint(e, it.handicap) } }
+    }
+
     /** A handicap for every bow style with enough rounds, most rounds first. */
     fun all(entries: List<Entry>): List<Handicap> =
         entries.groupBy { it.bowStyle }.entries.sortedByDescending { it.value.size }.mapNotNull { of(entries, it.key) }

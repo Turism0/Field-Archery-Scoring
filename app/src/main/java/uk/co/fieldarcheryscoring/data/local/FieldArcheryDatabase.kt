@@ -311,6 +311,77 @@ abstract class RoundDao {
     }
 }
 
+/**
+ * Equipment (database v9, app 3.2.24): the archer's bows and arrows. Synced like rounds (PENDING until the server has
+ * them; the newest edit wins) and put away with the rounds when the archer signs out.
+ */
+@Dao
+abstract class EquipmentDao {
+    /** Showing bows and arrows, deleted ones too (rounds shot with them still show their names). */
+    @Query("SELECT * FROM bow WHERE hidden_owner IS NULL")
+    abstract fun observeBows(): Flow<List<BowEntity>>
+
+    @Query("SELECT * FROM arrow_set WHERE hidden_owner IS NULL")
+    abstract fun observeArrows(): Flow<List<ArrowSetEntity>>
+
+    @Query("SELECT * FROM bow WHERE id = :id")
+    abstract suspend fun getBow(id: String): BowEntity?
+
+    @Query("SELECT * FROM arrow_set WHERE id = :id")
+    abstract suspend fun getArrows(id: String): ArrowSetEntity?
+
+    @Upsert abstract suspend fun upsertBow(bow: BowEntity)
+    @Upsert abstract suspend fun upsertArrows(arrows: ArrowSetEntity)
+
+    @Query("SELECT * FROM bow WHERE sync_state = 'PENDING' AND hidden_owner IS NULL ORDER BY updated_at")
+    abstract suspend fun pendingBows(): List<BowEntity>
+
+    @Query("SELECT * FROM arrow_set WHERE sync_state = 'PENDING' AND hidden_owner IS NULL ORDER BY updated_at")
+    abstract suspend fun pendingArrows(): List<ArrowSetEntity>
+
+    /** The upload result, unless it's been edited since it was read. */
+    @Query("UPDATE bow SET sync_state = :state WHERE id = :id AND updated_at = :updatedAtMillis")
+    abstract suspend fun markBowSync(id: String, updatedAtMillis: Long, state: String): Int
+
+    @Query("UPDATE arrow_set SET sync_state = :state WHERE id = :id AND updated_at = :updatedAtMillis")
+    abstract suspend fun markArrowsSync(id: String, updatedAtMillis: Long, state: String): Int
+
+    @Query("SELECT COUNT(*) FROM bow WHERE sync_state = 'PENDING' AND hidden_owner IS NULL")
+    abstract suspend fun pendingBowCount(): Int
+
+    @Query("SELECT COUNT(*) FROM arrow_set WHERE sync_state = 'PENDING' AND hidden_owner IS NULL")
+    abstract suspend fun pendingArrowCount(): Int
+
+    // ---- Put away and brought back with the rounds (3.2.09) ----
+
+    @Query("UPDATE bow SET hidden_owner = :owner WHERE hidden_owner IS NULL")
+    abstract suspend fun hideBows(owner: String)
+    @Query("UPDATE arrow_set SET hidden_owner = :owner WHERE hidden_owner IS NULL")
+    abstract suspend fun hideArrows(owner: String)
+    @Query("UPDATE bow SET hidden_owner = NULL WHERE hidden_owner = :owner")
+    abstract suspend fun showBows(owner: String)
+    @Query("UPDATE arrow_set SET hidden_owner = NULL WHERE hidden_owner = :owner")
+    abstract suspend fun showArrows(owner: String)
+    @Query("DELETE FROM bow WHERE hidden_owner IS NULL")
+    abstract suspend fun deleteShowingBows()
+    @Query("DELETE FROM arrow_set WHERE hidden_owner IS NULL")
+    abstract suspend fun deleteShowingArrows()
+    @Query("DELETE FROM bow WHERE hidden_owner IN (:owners)")
+    abstract suspend fun deleteHiddenBows(owners: List<String>)
+    @Query("DELETE FROM arrow_set WHERE hidden_owner IN (:owners)")
+    abstract suspend fun deleteHiddenArrows(owners: List<String>)
+    @Query("UPDATE bow SET sync_state = 'PENDING' WHERE hidden_owner IS NULL")
+    abstract suspend fun markBowsPending()
+    @Query("UPDATE arrow_set SET sync_state = 'PENDING' WHERE hidden_owner IS NULL")
+    abstract suspend fun markArrowsPending()
+
+    @Transaction open suspend fun hideShowing(owner: String) { hideBows(owner); hideArrows(owner) }
+    @Transaction open suspend fun showHidden(owner: String) { showBows(owner); showArrows(owner) }
+    @Transaction open suspend fun deleteShowing() { deleteShowingBows(); deleteShowingArrows() }
+    @Transaction open suspend fun deleteHidden(owners: List<String>) { deleteHiddenBows(owners); deleteHiddenArrows(owners) }
+    @Transaction open suspend fun markOwnPending() { markBowsPending(); markArrowsPending() }
+}
+
 /** A round with the number of rounds in its group (0 when it isn't a group round). */
 data class RoundWithGroupSize(
     @Embedded val round: RoundEntity,
@@ -331,20 +402,43 @@ data class RoundData(
 )
 
 @Database(
-    entities = [ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class, RoundWeatherEntity::class],
-    version = 8,
+    entities = [
+        ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class, RoundWeatherEntity::class,
+        BowEntity::class, ArrowSetEntity::class,
+    ],
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class FieldArcheryDatabase : RoomDatabase() {
     abstract fun profileDao(): ProfileDao
     abstract fun roundDao(): RoundDao
+    abstract fun equipmentDao(): EquipmentDao
 
     companion object {
         fun create(context: Context): FieldArcheryDatabase =
             Room.databaseBuilder(context, FieldArcheryDatabase::class.java, "fieldarchery.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .build()
+
+        /** v9: equipment (app 3.2.24): bows, arrows, and the ones each round was shot with. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN bow_id TEXT")
+                db.execSQL("ALTER TABLE round ADD COLUMN arrow_id TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `bow` (`id` TEXT NOT NULL, `type` TEXT NOT NULL, `make` TEXT, `model` TEXT, " +
+                        "`poundage_lb` REAL, `bow_styles` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, `sync_state` TEXT NOT NULL, " +
+                        "`deleted` INTEGER NOT NULL, `hidden_owner` TEXT, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `arrow_set` (`id` TEXT NOT NULL, `make` TEXT, `model` TEXT, `length_in` REAL, " +
+                        "`arrow_grains` REAL, `spine` TEXT, `fletch_count` INTEGER, `fletch_material` TEXT, `fletch_length_in` REAL, " +
+                        "`fletch_colours` TEXT, `point_grains` REAL, `bow_ids` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, " +
+                        "`sync_state` TEXT NOT NULL, `deleted` INTEGER NOT NULL, `hidden_owner` TEXT, PRIMARY KEY(`id`))",
+                )
+            }
+        }
 
         /** v7: round weather (app 3.2.17), downloaded from the server. */
         /** v8: round notes (app 3.2.21). */

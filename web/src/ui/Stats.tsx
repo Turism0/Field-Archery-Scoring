@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
-import { Bar, Card, Tabs, go, one, today, ukDate, useData } from './common'
+import { Bar, Card, Select, Tabs, go, one, today, ukDate, useData } from './common'
+import { getEquipment, type EquipmentStore } from '../data/equipment'
+import { arrowLabel, bowLabel } from '../domain/equipment'
 import { finished } from '../data/rounds'
 import { getProfile } from '../data/account'
 import {
@@ -8,7 +10,8 @@ import {
 } from '../domain/statsFilter'
 import { ROUND_TYPE_NAMES, bowName, statsTotal, type Round, type RoundStats } from '../domain/round'
 import { MIN_TARGETS_FOR_BEST_AVERAGE, bestAverages, bests, seasons, trend, type TrendPoint } from '../domain/stats'
-import { handicapEntry, personalHandicaps } from '../domain/handicap'
+import { handicapEntry, handicapHistory, personalHandicaps } from '../domain/handicap'
+import { HandicapChart } from './HandicapChart'
 import { Analysis } from './Analysis'
 import type { RoundType } from '../domain/scoring'
 
@@ -29,6 +32,7 @@ function saveFilter(f: StatsFilter) {
  */
 export function Stats() {
   const rounds = useData(finished)
+  const kit = useData(getEquipment)
   const [tab, setTab] = useState(0)
   const [profileBow, setProfileBow] = useState<string | null | undefined>(undefined)
   const [chosen, setChosen] = useState<Partial<StatsFilter> | null>(loadFilter)
@@ -44,7 +48,7 @@ export function Stats() {
       <Tabs tabs={['Bests', 'Trends', 'Seasons', 'Analysis']} value={tab} onChange={setTab} />
       <main>
         {!rounds.length ? <p class="sub" style="text-align:center">Finish a round to see your stats.</p> : <>
-          <FilterBar rounds={rounds} filter={filter} onChange={change} />
+          <FilterBar rounds={rounds} filter={filter} onChange={change} kit={kit} />
           {tab === 0 ? <Bests rounds={shown} all={rounds} /> : tab === 1 ? <Trends rounds={shown} types={filter.types} /> : tab === 2 ? <Seasons rounds={shown} />
             : <Analysis rounds={shown} types={filter.types} />}
         </>}
@@ -54,8 +58,13 @@ export function Stats() {
 }
 
 /** Round types and bow styles (either or both, several) as chips, and the date range. */
-function FilterBar({ rounds, filter, onChange }: { rounds: Round[]; filter: StatsFilter; onChange: (f: StatsFilter) => void }) {
+function FilterBar({ rounds, filter, onChange, kit }: { rounds: Round[]; filter: StatsFilter; onChange: (f: StatsFilter) => void; kit?: EquipmentStore }) {
   const types = availableTypes(rounds), bows = availableBows(rounds)
+  // 3.2.24 (Pete): the bows and arrows these rounds were shot with (only offered with two or more).
+  const inStyles = rounds.filter(r => filter.bows.includes(r.bowStyle))
+  const usedBows = (kit?.bows ?? []).filter(b => inStyles.some(r => r.bowId === b.id)).sort((a, b) => bowLabel(a).localeCompare(bowLabel(b)))
+  const usedArrows = (kit?.arrows ?? []).filter(a => inStyles.some(r => r.arrowId === a.id && (!filter.bowId || r.bowId === filter.bowId)))
+    .sort((a, b) => arrowLabel(a).localeCompare(arrowLabel(b)))
   const now = today()
   const periods = periodOptions()
   const idx = periods.findIndex(p => samePeriod(p, filter.period))
@@ -67,6 +76,10 @@ function FilterBar({ rounds, filter, onChange }: { rounds: Round[]; filter: Stat
       <div class="row">{bows.map(b => (
         <button class={`chip ${filter.bows.includes(b) ? 'on' : ''}`} aria-pressed={filter.bows.includes(b)} title={bowName(b)}
           onClick={() => onChange({ ...filter, bows: toggled(filter.bows, b, bowOrderOf) })}>{bows.length > 3 ? b : `${bowName(b)} (${b})`}</button>))}</div>
+      {(usedBows.length > 1 || filter.bowId) && <Select label="Bow" value={filter.bowId ?? undefined} options={usedBows.map(b => b.id)} none="Any bow"
+        optionLabel={id => bowLabel(usedBows.find(b => b.id === id)!)} onChange={id => onChange({ ...filter, bowId: id ?? null, arrowId: null })} />}
+      {(usedArrows.length > 1 || filter.arrowId) && <Select label="Arrows" value={filter.arrowId ?? undefined} options={usedArrows.map(a => a.id)} none="Any arrows"
+        optionLabel={id => arrowLabel(usedArrows.find(a => a.id === id)!)} onChange={id => onChange({ ...filter, arrowId: id ?? null })} />}
       <label class="field">Dates
         <select value={String(idx)} onChange={e => onChange({ ...filter, period: periods[Number((e.target as HTMLSelectElement).value)] })}>
           {periods.map((p, i) => <option value={String(i)}>{periodLabel(p, now)}</option>)}
@@ -107,11 +120,16 @@ function Bests({ rounds, all }: { rounds: Round[]; all: Round[] }) {
 
 /** Your personal handicap for each bow style (2.9; the details are on Handicaps). */
 function HandicapSummary({ rounds }: { rounds: Round[] }) {
-  const hs = personalHandicaps(rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e))
+  const entries = rounds.map(handicapEntry).filter((e): e is NonNullable<typeof e> => !!e)
+  const hs = personalHandicaps(entries)
   return (
     <Card title="Handicap" cls="hi">
       {!hs.length ? <div>No handicap yet: it needs 3 finished Big Game rounds with every target scored, with the same bow style.</div>
-        : hs.map(h => <div class="row between"><span>{bowName(h.bowStyle)}</span><b class="big">{h.handicap}</b></div>)}
+        : hs.map(h => <>
+          <div class="row between"><span>{bowName(h.bowStyle)}</span><b class="big">{h.handicap}</b></div>
+          {/* 3.2.24 (Pete): how it's changed. */}
+          <HandicapChart points={handicapHistory(entries, h.bowStyle)} />
+        </>)}
       <button class="plain" style="align-self:flex-start;color:inherit;text-decoration:underline" onClick={() => go('/handicap')}>How it works, and the class multipliers ›</button>
     </Card>
   )

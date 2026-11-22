@@ -18,6 +18,8 @@ import { applyMultiplier, handicapEntry, multiplier, net, parFor, personalHandic
 import { MoreStats } from './Stats'
 import { ExportDialog } from './Export'
 import { bowName, type Round, type RoundStats } from '../domain/round'
+import { getEquipment } from '../data/equipment'
+import { roundEquipmentLine } from '../domain/equipment'
 import type { HandicapModel } from '../domain/handicap'
 
 /** A round's scorecard (as the app's): header, PB, location, the group, stats, handicap, and every target. */
@@ -28,6 +30,7 @@ export function Scorecard({ id }: { id: string }) {
   const model = useData(getModel)
   const account = useData(getAccount)
   const weather = useData(async () => (await weatherMap())[id] ?? null, [id])
+  const kit = useData(getEquipment)   // 3.2.24
   // 3.2.23 (Pete): names you give other archers, and offering to add the ones you named as friends.
   const names = useData(getArcherNames) ?? {}
   const known = useData(async () => {
@@ -59,7 +62,7 @@ export function Scorecard({ id }: { id: string }) {
       </Bar>
       <main>
         <div class="split"><div>
-        <CardHeader r={round} />
+        <CardHeader r={round} equipment={kit ? roundEquipmentLine(round, kit.bows, kit.arrows) : null} />
         {beat && <Card title="Personal best" cls="hi">
           <div>Your best average for {ROUND_TYPE_NAMES[round.type]}, {bowName(round.bowStyle)}: {pbAverage(round).toFixed(1)} per {round.type === 'WOODSMAN' ? 'target' : 'animal'}{funPoints(round) ? ' (fun shots left out)' : ''}. It beat {pbAverage(beat).toFixed(1)} ({ukDate(beat.shootDate)}).</div>
         </Card>}

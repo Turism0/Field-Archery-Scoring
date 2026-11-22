@@ -19,6 +19,9 @@ import uk.co.fieldarcheryscoring.ui.screens.FriendScorecardScreen
 import uk.co.fieldarcheryscoring.ui.screens.FriendsScreen
 import uk.co.fieldarcheryscoring.ui.screens.AdminHandicapScreen
 import uk.co.fieldarcheryscoring.ui.screens.HandicapCalculatorScreen
+import uk.co.fieldarcheryscoring.ui.screens.EquipmentScreen
+import uk.co.fieldarcheryscoring.ui.screens.BowEditScreen
+import uk.co.fieldarcheryscoring.ui.screens.ArrowsEditScreen
 import uk.co.fieldarcheryscoring.ui.screens.HistoryScreen
 import uk.co.fieldarcheryscoring.ui.screens.HomeScreen
 import uk.co.fieldarcheryscoring.ui.screens.JoinScreen
@@ -55,6 +58,7 @@ fun FieldArcheryNavHost() {
                 onHistory = { nav.navigate("history") },
                 onStats = { nav.navigate("stats") },
                 onHandicap = { nav.navigate("handicap") },
+                onEquipment = { nav.navigate("equipment") },
                 onFriends = { nav.navigate("friends") },
                 onAdmin = { nav.navigate("admin") },
                 onMap = { nav.navigate("map") },
@@ -75,7 +79,7 @@ fun FieldArcheryNavHost() {
             arguments = listOf(navArgument("roundId") { type = NavType.StringType }),
         ) {
             EditRoundScreen(
-                vm = appViewModel { c, saved -> EditRoundViewModel(c.roundRepository, saved) },
+                vm = appViewModel { c, saved -> EditRoundViewModel(c.roundRepository, saved, c.equipmentRepository) },
                 onBack = { nav.popBackStack() },
             )
         }
@@ -143,6 +147,27 @@ fun FieldArcheryNavHost() {
         composable("adminHandicap") {
             AdminHandicapScreen(
                 vm = appViewModel { c, _ -> AdminHandicapViewModel(c.handicapRepository, c.accountStore) },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        // Equipment (3.2.24): bows and arrows.
+        composable("equipment") {
+            EquipmentScreen(
+                vm = appViewModel { c, _ -> EquipmentViewModel(c.equipmentRepository, c.roundRepository) },
+                onBack = { nav.popBackStack() },
+                onBow = { id -> nav.navigate("bow/$id") },
+                onArrows = { id -> nav.navigate("arrows/$id") },
+            )
+        }
+        composable("bow/{bowId}", arguments = listOf(navArgument("bowId") { type = NavType.StringType })) {
+            BowEditScreen(
+                vm = appViewModel { c, saved -> BowEditViewModel(c.equipmentRepository, saved, c.profileRepository) },
+                onBack = { nav.popBackStack() },
+            )
+        }
+        composable("arrows/{arrowId}", arguments = listOf(navArgument("arrowId") { type = NavType.StringType })) {
+            ArrowsEditScreen(
+                vm = appViewModel { c, saved -> ArrowsEditViewModel(c.equipmentRepository, saved) },
                 onBack = { nav.popBackStack() },
             )
         }
@@ -233,7 +258,7 @@ fun FieldArcheryNavHost() {
         // Live groups (2.1): join with a code or QR → the group's lobby → scoring once the host starts.
         composable("join") {
             JoinScreen(
-                vm = appViewModel { c, _ -> JoinViewModel(c.profileRepository, c.liveGroupRepository) },
+                vm = appViewModel { c, _ -> JoinViewModel(c.profileRepository, c.liveGroupRepository, c.roundRepository, c.equipmentRepository) },
                 onBack = { nav.popBackStack() },
                 onJoined = { id -> nav.navigate("lobby/$id") { popUpTo("home") } },
             )
@@ -258,7 +283,7 @@ fun FieldArcheryNavHost() {
         // Finished rounds only; each opens its scorecard.
         composable("history") {
             HistoryScreen(
-                vm = appViewModel { c, _ -> HistoryViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore) },
+                vm = appViewModel { c, _ -> HistoryViewModel(c.roundRepository, c.accountRepository, c.roundSyncer, c.accountStore, c.equipmentRepository) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { r ->
                     nav.navigate(if (r.status == RoundStatus.COMPLETED) scorecardRoute(r.id) else scoringRoute(r.id))
@@ -268,7 +293,7 @@ fun FieldArcheryNavHost() {
         // Personal bests, trends and seasons; each round opens its scorecard.
         composable("stats") {
             StatsScreen(
-                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository, c.handicapRepository, c.profileRepository, c.statsFilterStore, c.compareRepository) },
+                vm = appViewModel { c, _ -> StatsViewModel(c.roundRepository, c.handicapRepository, c.profileRepository, c.statsFilterStore, c.compareRepository, c.equipmentRepository) },
                 onBack = { nav.popBackStack() },
                 onOpenRound = { id -> nav.navigate(scorecardRoute(id)) },
             )
@@ -293,7 +318,7 @@ fun FieldArcheryNavHost() {
             val roundType = entry.arguments?.getString("roundType")
                 ?.let { name -> RoundType.entries.firstOrNull { it.name == name } } ?: RoundType.BIG_GAME
             NewRoundScreen(
-                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType, c.accountStore, c.liveGroupRepository) },
+                vm = appViewModel { c, _ -> NewRoundViewModel(c.profileRepository, c.roundRepository, c.locationRepository, roundType, c.accountStore, c.liveGroupRepository, c.equipmentRepository) },
                 roundType = roundType,
                 onBack = { nav.popBackStack() },
                 onEditProfile = { nav.navigate("profile") },
@@ -329,7 +354,7 @@ fun FieldArcheryNavHost() {
         ) { entry ->
             val roundId = entry.arguments?.getString("roundId").orEmpty()
             ScorecardScreen(
-                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved, c.handicapRepository, c.friendsRepository, c.archerNamesStore) },
+                vm = appViewModel { c, saved -> ScorecardViewModel(c.roundRepository, saved, c.handicapRepository, c.friendsRepository, c.archerNamesStore, c.equipmentRepository) },
                 locationVm = appViewModel { c, saved -> RoundLocationViewModel(c.locationRepository, c.accountRepository, saved, c.locationPageRepository) },
                 onBack = { nav.popBackStack() },
                 onEdit = { targetNo -> nav.navigate(scoringRoute(roundId, targetNo)) },

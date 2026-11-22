@@ -87,7 +87,7 @@ export function SyncLabel({ r }: { r: Round }) {
 }
 
 /** Scorecard header: FINISHED / IN PROGRESS, the date, round and class, total. */
-export function CardHeader({ r, showLocation }: { r: Round; showLocation?: boolean }) {
+export function CardHeader({ r, showLocation, equipment }: { r: Round; showLocation?: boolean; equipment?: string | null }) {
   const done = r.status === 'COMPLETED'
   return (
     <div class="row between" style="flex-wrap:nowrap;align-items:center">
@@ -97,6 +97,8 @@ export function CardHeader({ r, showLocation }: { r: Round; showLocation?: boole
         <span class="sub">{typeAndClass(r)} · {targetsLine(r)}</span>
         {r.startTarget && <span class="sub">Started at target {r.startTarget}</span>}
         {showLocation && r.locationName && <span class="sub">{r.locationName}</span>}
+        {/* 3.2.24 (Pete): the bow and arrows (own rounds only). */}
+        {equipment && <span class="sub">{equipment}</span>}
         {/* 3.2.21 (Pete): the archer's notes (only ever on their own rounds; friends' rounds come without them). */}
         {r.notes && <span class="notes">{r.notes}</span>}
       </div>

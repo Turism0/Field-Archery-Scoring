@@ -58,6 +58,7 @@ import uk.co.fieldarcheryscoring.ui.components.NumberField
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
 import uk.co.fieldarcheryscoring.ui.components.SegmentedChoice
+import uk.co.fieldarcheryscoring.ui.components.EquipmentPickers
 
 /** Quick picks for the number of targets; any number can still be typed. */
 private val CommonTargetCounts = listOf(18, 20, 36, 40)
@@ -74,6 +75,7 @@ fun NewRoundScreen(
     onLive: (groupId: String) -> Unit = {},
 ) {
     val form by vm.form.collectAsStateWithLifecycle()
+    val equipment by vm.equipmentChoice.collectAsStateWithLifecycle()
     // Add / edit a friend or guest in a group round.
     // 3.2.22 (Pete): live groups hide adding friends / guests until asked, so people don't add someone who'll join on
     // their own phone.
@@ -187,6 +189,34 @@ fun NewRoundScreen(
                 f.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
             }
 
+            // 3.2.24 (Pete): the archer's class, bow style and equipment come before the shoot details.
+            SectionCard(
+                title = if (f.group) "You" else "Archer",
+                subtitle = "Filled in from your profile. Changes here only affect this round.",
+            ) {
+                SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c ->
+                    vm.update { it.copy(archerClass = c) }
+                }
+                OptionDropdown(
+                    label = "Age group",
+                    options = AgeGroup.entries,
+                    selected = f.ageGroup,
+                    optionLabel = { it.displayName },
+                    onSelect = { g -> vm.update { it.copy(ageGroupChoice = g) } },
+                    supportingText = f.ageGroupSource.replaceFirstChar { it.uppercase() },
+                )
+                OptionDropdown(
+                    label = "Bow style",
+                    options = BowStyle.entries,
+                    selected = f.bowStyle,
+                    optionLabel = { it.label },
+                    onSelect = { b -> vm.update { it.copy(bowStyle = b) } },
+                    supportingText = if (f.bowStyle != null && f.bowStyle == f.profile.mainBowStyle) "Your main style" else null,
+                )
+                // 3.2.24 (Pete): your bow and arrows for this bow style (only asked with two or more).
+                EquipmentPickers(equipment, onBow = vm::pickBow, onArrows = vm::pickArrows)
+            }
+
             SectionCard(title = "Shoot") {
                 DateField(
                     label = "Shoot date",
@@ -224,31 +254,6 @@ fun NewRoundScreen(
                     onValue = { v -> vm.update { it.copy(notes = v) } },
                     maxLength = RoundRepository.MAX_NOTES,
                     hint = if (f.group || f.live) "On your card only. Only you can see these." else "Only you can see these.",
-                )
-            }
-
-            SectionCard(
-                title = if (f.group) "You" else "Archer",
-                subtitle = "Filled in from your profile. Changes here only affect this round.",
-            ) {
-                SegmentedChoice(ArcherClass.entries, f.archerClass, { it.displayName }) { c ->
-                    vm.update { it.copy(archerClass = c) }
-                }
-                OptionDropdown(
-                    label = "Age group",
-                    options = AgeGroup.entries,
-                    selected = f.ageGroup,
-                    optionLabel = { it.displayName },
-                    onSelect = { g -> vm.update { it.copy(ageGroupChoice = g) } },
-                    supportingText = f.ageGroupSource.replaceFirstChar { it.uppercase() },
-                )
-                OptionDropdown(
-                    label = "Bow style",
-                    options = BowStyle.entries,
-                    selected = f.bowStyle,
-                    optionLabel = { it.label },
-                    onSelect = { b -> vm.update { it.copy(bowStyle = b) } },
-                    supportingText = if (f.bowStyle != null && f.bowStyle == f.profile.mainBowStyle) "Your main style" else null,
                 )
             }
 

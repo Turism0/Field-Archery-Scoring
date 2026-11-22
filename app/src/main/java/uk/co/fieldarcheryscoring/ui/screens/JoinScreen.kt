@@ -37,6 +37,7 @@ import uk.co.fieldarcheryscoring.domain.ArcherClass
 import uk.co.fieldarcheryscoring.domain.BowStyle
 import uk.co.fieldarcheryscoring.ui.JoinViewModel
 import uk.co.fieldarcheryscoring.ui.components.BottomActionBar
+import uk.co.fieldarcheryscoring.ui.components.EquipmentPickers
 import uk.co.fieldarcheryscoring.ui.components.AskForNearby
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
@@ -52,6 +53,7 @@ fun JoinScreen(
     onJoined: (groupId: String) -> Unit,
 ) {
     val f by vm.form.collectAsStateWithLifecycle()
+    val equipment by vm.equipmentChoice.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var scanProblem by remember { mutableStateOf<String?>(null) }
     // With no signal, joining is phone to phone: that needs Nearby devices.
@@ -129,6 +131,8 @@ fun JoinScreen(
                     optionLabel = { it.label },
                     onSelect = { b -> vm.update { it.copy(bowStyle = b) } },
                 )
+                // 3.2.24 (Pete): your bow and arrows (only asked with two or more).
+                EquipmentPickers(equipment, onBow = vm::pickBow, onArrows = vm::pickArrows)
             }
             if (f.busy) {
                 Text(

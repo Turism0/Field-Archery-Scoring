@@ -14,6 +14,7 @@ import { Scorecard } from './ui/Scorecard'
 import { Join, Lobby } from './ui/Live'
 import { Stats } from './ui/Stats'
 import { Handicaps } from './ui/Handicap'
+import { ArrowsEdit, BowEdit, EquipmentScreen } from './ui/Equipment'
 import { FriendRounds, FriendScorecard, Friends, Offer } from './ui/Friends'
 import { LocationMap, LocationPageScreen } from './ui/Locations'
 import { EditRound } from './ui/EditRound'
@@ -37,6 +38,9 @@ function Screen({ parts, q }: { parts: string[]; q: URLSearchParams }) {
     case 'lobby': return desktop ? <PhoneOnly /> : <Lobby groupId={parts[1]} />
     case 'stats': return <><Stats /></>
     case 'handicap': return <><Handicaps /></>
+    case 'equipment': return <><EquipmentScreen /></>
+    case 'bow': return <><BowEdit key={parts[1]} id={parts[1]} /></>
+    case 'arrows': return <><ArrowsEdit key={parts[1]} id={parts[1]} /></>
     case 'friends': return <><Friends /></>
     case 'friend': return <><FriendRounds id={parts[1]} name={q.get('name') ?? ''} /></>
     case 'friendcard': return <><FriendScorecard id={parts[1]} roundId={parts[2]} name={q.get('name') ?? ''} /></>

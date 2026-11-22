@@ -176,7 +176,7 @@ describe('home layout', () => {
   })
   it('new tiles go in at their usual place', () => {
     const l = normalised({ order: ['SCORE', 'JOIN' as never, 'STATS', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN', 'OLD' as never], hidden: ['SCORE'] })
-    expect(l.order).toEqual(['SCORE', 'STATS', 'HANDICAP', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN'])
+    expect(l.order).toEqual(['SCORE', 'STATS', 'HANDICAP', 'EQUIPMENT', 'HISTORY', 'FRIENDS', 'LOCATIONS', 'ADMIN'])
     expect(l.hidden).toEqual([])
   })
 })

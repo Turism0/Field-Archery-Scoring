@@ -36,6 +36,7 @@ import uk.co.fieldarcheryscoring.ui.EditRoundViewModel
 import uk.co.fieldarcheryscoring.ui.components.BottomActionBar
 import uk.co.fieldarcheryscoring.ui.components.DateField
 import uk.co.fieldarcheryscoring.ui.components.NotesField
+import uk.co.fieldarcheryscoring.ui.components.EquipmentPickers
 import uk.co.fieldarcheryscoring.ui.components.NumberField
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
@@ -50,6 +51,7 @@ import uk.co.fieldarcheryscoring.ui.components.SegmentedChoice
 @Composable
 fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
     val form by vm.form.collectAsStateWithLifecycle()
+    val equipment by vm.equipmentChoice.collectAsStateWithLifecycle()
     var confirmRemove by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -70,7 +72,9 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
         },
         bottomBar = {
             val f = form
-            BottomActionBar(text = "Save", enabled = f != null && f.targetCount != null && f.changed && !f.startTargetError) {
+            // 3.2.24: a different bow or arrows counts as a change too.
+            val kitChanged = f != null && equipment != null && (equipment?.bowId != f.original.bowId || equipment?.arrowId != f.original.arrowId)
+            BottomActionBar(text = "Save", enabled = f != null && f.targetCount != null && (f.changed || kitChanged) && !f.startTargetError) {
                 if (f != null && f.scoredRemoved.isNotEmpty()) confirmRemove = true else vm.save(onBack)
             }
         },
@@ -147,6 +151,8 @@ fun EditRoundScreen(vm: EditRoundViewModel, onBack: () -> Unit) {
                     optionLabel = { it.label },
                     onSelect = { b -> if (b != null) vm.update { it.copy(bowStyle = b) } },
                 )
+                // 3.2.24 (Pete): the bow and arrows, on your own round (shown with even one, to set it on older rounds).
+                EquipmentPickers(equipment, onBow = vm::pickBow, onArrows = vm::pickArrows, always = true)
             }
 
             Text(

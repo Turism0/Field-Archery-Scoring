@@ -36,7 +36,9 @@ class AppContainer(app: Application) {
 
     val syncScheduler = SyncScheduler(app, accountStore)
     val locationRepository = LocationRepository(app, db.roundDao(), api, accountStore, onChanged = { syncScheduler.request() })
-    val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore, locationRepository)
+    /** 3.2.24: bows and arrows. */
+    val equipmentRepository = uk.co.fieldarcheryscoring.data.EquipmentRepository(db.equipmentDao(), onChanged = { syncScheduler.request() })
+    val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore, locationRepository, equipmentRepository)
 
     val profileRepository = ProfileRepository(db.profileDao())
     /** 3.2.23: names you've given other archers (this phone only). */
@@ -62,7 +64,7 @@ class AppContainer(app: Application) {
     }
 
     /** Whose rounds are on this phone (3.2.02). */
-    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository, archerNamesStore)
+    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository, archerNamesStore, db.equipmentDao())
     val accountRepository = AccountRepository(api, accountStore, profileRepository, deviceData, onSignedIn = { syncScheduler.request() })
 }
 

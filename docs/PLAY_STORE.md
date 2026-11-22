@@ -45,7 +45,7 @@ Check the Play Console for anything that's changed since.
 |---|---|
 | Personal info → **User IDs** | Username (Account management). |
 | Location → **Precise location** | **Collected, not ephemeral** (3.2.05 correction): when an archer names a new shoot location, its position is stored with the location and who named it. Optional; purpose App functionality. (The position sent when a round starts, to find the location, isn't stored.) |
-| App activity → **Other user-generated content** | Rounds and scores, friends, live groups, names of shoot locations and of guests in a group. |
+| App activity → **Other user-generated content** | Rounds and scores (with notes, and the bow and arrows used: 3.2.24), friends, live groups, names of shoot locations and of guests in a group, equipment (bows and arrows). |
 | App info and performance | Not collected. |
 | Device or other IDs | Not collected (the server notes each phone's make and model for the "signed-in phones" list; Google's categories don't include this). |
 

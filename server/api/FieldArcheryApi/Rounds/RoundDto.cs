@@ -23,7 +23,10 @@ public sealed record RoundDto(
     // The target the archer started on (schema v9, 2.7): just noted on the scorecard; targets keep their numbers.
     int? StartTarget = null,
     // The archer's notes (schema v13, 3.2.21): "" = none. Null = not sent (older apps): what's stored is kept.
-    string? Notes = null);
+    string? Notes = null,
+    // The bow and arrows it was shot with (schema v15, 3.2.24): Guid.Empty = none. Null = not sent (older apps): kept.
+    Guid? BowId = null,
+    Guid? ArrowId = null);
 
 public sealed record TargetDto(
     int TargetNo,
@@ -61,4 +64,7 @@ public sealed record StoredRoundDto(
     string RoundType,
     int? StartTarget = null,
     // Only for the archer who owns the round (3.2.21); null for friends and Admins.
-    string? Notes = null);
+    string? Notes = null,
+    // The bow and arrows (3.2.24): only for the archer who owns the round, like notes.
+    Guid? BowId = null,
+    Guid? ArrowId = null);

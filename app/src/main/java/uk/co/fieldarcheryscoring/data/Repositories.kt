@@ -96,6 +96,9 @@ data class RoundSummary(
     val bowStyle: BowStyle? = null,
     /** The archer's notes (3.2.21), shown as a one-line preview. */
     val notes: String? = null,
+    /** The bow and arrows it was shot with (3.2.24), for the history filters. */
+    val bowId: String? = null,
+    val arrowId: String? = null,
 )
 
 /** Someone being added to a group round on this phone: a friend (account) or a guest (name only). */
@@ -154,6 +157,8 @@ class RoundRepository(
                 roundType = it.type(),
                 bowStyle = it.bowStyle,
                 notes = it.notes,
+                bowId = it.bowId,
+                arrowId = it.arrowId,
                 groupSize = row.groupSize,
                 targetsLine = if (it.type() == RoundType.WOODSMAN) targetsDescription(it.targetCount, it.targetCount, 0, 0)
                 else targetsDescription(it.targetCount, row.animalCount, row.predatorPreyCount, row.fanCount),
@@ -195,6 +200,9 @@ class RoundRepository(
         startTarget: Int? = null,
         /** The archer's notes (3.2.21), or null. */
         notes: String? = null,
+        /** The bow and arrows (3.2.24), or null. */
+        bowId: String? = null,
+        arrowId: String? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         val now = Instant.now(clock)
@@ -214,6 +222,8 @@ class RoundRepository(
                 roundType = type.takeIf { it != RoundType.BIG_GAME }?.name,
                 startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
                 notes = cleanNotes(notes),
+                bowId = bowId,
+                arrowId = arrowId?.takeIf { bowId != null },
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
@@ -241,6 +251,9 @@ class RoundRepository(
         startTarget: Int? = null,
         /** The scorer's notes (3.2.21): on their own card only. */
         notes: String? = null,
+        /** The scorer's bow and arrows (3.2.24): on their own card only. */
+        bowId: String? = null,
+        arrowId: String? = null,
     ): String {
         require(targetCount in 1..MAX_TARGETS) { "Targets must be 1 to $MAX_TARGETS" }
         require(live || others.isNotEmpty()) { "A group needs someone else" }
@@ -272,7 +285,7 @@ class RoundRepository(
             )
         }
         val mine = make(0, GroupRole.SCORER, null, null, archerClass, ageGroup, bowStyle)
-            .let { it.copy(round = it.round.copy(notes = cleanNotes(notes))) }
+            .let { it.copy(round = it.round.copy(notes = cleanNotes(notes), bowId = bowId, arrowId = arrowId?.takeIf { bowId != null })) }
         val rest = others.mapIndexed { i, m -> make(i + 1, m.role, m.name.trim(), m.archerId, m.archerClass, m.ageGroup, m.bowStyle) }
         dao.createRounds(listOf(mine) + rest)
         return mine.round.id
@@ -303,6 +316,7 @@ class RoundRepository(
         if (dao.getRound(id) != null) return
         val now = Instant.now(clock)
         val targets = (1..targetCount).map { newTarget(type, it) }
+        val kit = if (role == GroupRole.SCORER) groupEquipment.remove(groupId) else null
         dao.createRound(
             round = RoundEntity(
                 id = id,
@@ -324,10 +338,22 @@ class RoundRepository(
                 locationName = locationName,
                 locationState = if (locationId != null) uk.co.fieldarcheryscoring.data.local.LocationState.SET else null,
                 startTarget = startTarget?.takeIf { it in 1..MAX_START_TARGET },
+                bowId = kit?.first,
+                arrowId = kit?.second,
             ),
             targets = targets.map { it.toEntity(id, now) },
             animals = targets.flatMap { it.toAnimalEntities(id) },
         )
+    }
+
+    /** 3.2.24: the bow and arrows picked when joining a live group, for this archer's round once it's made. */
+    private val groupEquipment = java.util.concurrent.ConcurrentHashMap<String, Pair<String?, String?>>()
+
+    /** Joining a live group (3.2.24): your bow and arrows go on your round in it, now or when it's made. */
+    suspend fun useEquipmentInGroup(groupId: String, bowId: String?, arrowId: String?) {
+        if (bowId == null) return
+        val mine = dao.getGroup(groupId).firstOrNull { it.groupRole == GroupRole.SCORER }
+        if (mine != null) setEquipment(mine.id, bowId, arrowId) else groupEquipment[groupId] = bowId to arrowId
     }
 
     /** Live groups: a member's role, name or order changed on the server. */
@@ -498,6 +524,13 @@ class RoundRepository(
         if (dao.getRound(roundId)?.notes != clean) touch(roundId) { it.copy(notes = clean) }
     }
 
+    /** The bow and arrows a round was shot with (3.2.24); your own round only, not the rest of a group. */
+    suspend fun setEquipment(roundId: String, bowId: String?, arrowId: String?) {
+        val r = dao.getRound(roundId) ?: return
+        val arrows = arrowId?.takeIf { bowId != null }
+        if (r.bowId != bowId || r.arrowId != arrows) touch(roundId) { it.copy(bowId = bowId, arrowId = arrows) }
+    }
+
     /** Live groups (2.7): the host's start target for every card in the group on this phone (only where it differs). */
     suspend fun setGroupStartTarget(groupId: String, startTarget: Int?) {
         for (r in dao.getGroup(groupId)) {
@@ -554,6 +587,8 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
         createdAtMillis = createdAt.toEpochMilli(),
         startTarget = startTarget,
         notes = notes,
+        bowId = bowId,
+        arrowId = arrowId,
         location = RoundLocation(
             status = when (locationState) {
                 null -> LocationStatus.NONE

@@ -31,7 +31,7 @@ class HomeLayoutTest {
         val l = HomeLayout().move(HomeTileId.LOCATIONS, 1, shown)
         assertEquals(HomeLayout(), l)
         val up = HomeLayout().move(HomeTileId.ADMIN, -1)
-        assertEquals(HomeTileId.ADMIN, up.order[5])
+        assertEquals(HomeTileId.ADMIN, up.order[6])   // before Shoot locations (Equipment, 3.2.24, made it one longer)
     }
 
     @Test
@@ -51,10 +51,12 @@ class HomeLayoutTest {
 
     @Test
     fun newTilesGoInAtTheirUsualPlace() {
-        // Saved by an older version without Handicap calculator (and an unknown name): it goes back after Stats.
+        // Saved by an older version without Handicap calculator (and an unknown name): it goes back after Stats, and
+        // Equipment (3.2.24) after it.
         val l = HomeLayout.decode("SCORE,STATS,HISTORY,FRIENDS,LOCATIONS,ADMIN,OLD_TILE|SCORE")
         assertEquals(
-            listOf(HomeTileId.SCORE, HomeTileId.STATS, HomeTileId.HANDICAP, HomeTileId.HISTORY, HomeTileId.FRIENDS, HomeTileId.LOCATIONS, HomeTileId.ADMIN),
+            listOf(HomeTileId.SCORE, HomeTileId.STATS, HomeTileId.HANDICAP, HomeTileId.EQUIPMENT, HomeTileId.HISTORY, HomeTileId.FRIENDS,
+                HomeTileId.LOCATIONS, HomeTileId.ADMIN),
             l.order,
         )
         assertTrue(l.hidden.isEmpty())

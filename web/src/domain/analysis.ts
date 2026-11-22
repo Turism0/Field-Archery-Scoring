@@ -165,6 +165,26 @@ export function thirds(rounds: Round[]): Thirds {
   return { start: a(0), middle: a(1), finish: a(2) }
 }
 
+// ---- By equipment (3.2.24) ----
+
+export interface EquipmentSummary { id: string; rounds: number; average: number; best: number; bestRound: Round; killRate: number | null }
+
+/** Each bow's (key = r => r.bowId) or arrows' (r => r.arrowId) rounds, average, best and kill rate. Most rounds first. */
+export function byEquipment(rounds: Round[], key: (r: Round) => string | null | undefined): EquipmentSummary[] {
+  const groups = new Map<string, Round[]>()
+  for (const r of rounds) { const k = key(r); if (k) groups.set(k, [...(groups.get(k) ?? []), r]) }
+  const out: EquipmentSummary[] = []
+  for (const [id, list] of groups) {
+    const avgs = roundAverages(list)
+    if (!avgs.length) continue
+    const best = avgs.reduce((b, x) => (x.average > b.average ? x : b))
+    const hits = hitCounts(list.filter(r => r.type === 'BIG_GAME'))
+    out.push({ id, rounds: avgs.length, average: avgs.reduce((s, x) => s + x.average, 0) / avgs.length, best: best.average,
+      bestRound: best.round, killRate: hits.total ? (hits.innerKill + hits.kill) / hits.total : null })
+  }
+  return out.sort((a, b) => b.rounds - a.rounds || b.average - a.average || a.id.localeCompare(b.id))
+}
+
 // ---- 8. By location ----
 
 export interface LocationSummary { name: string; rounds: number; average: number; best: number; bestRound: Round }

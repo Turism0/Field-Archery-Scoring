@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
@@ -88,6 +89,8 @@ fun HomeScreen(
     onStats: () -> Unit,
     onFriends: () -> Unit,
     onHandicap: () -> Unit,
+    /** 3.2.24: bows and arrows. */
+    onEquipment: () -> Unit = {},
     onAdmin: () -> Unit,
     onMap: () -> Unit,
 ) {
@@ -212,6 +215,12 @@ fun HomeScreen(
                                 subtitle = if (handicaps.isEmpty()) "Your personal handicap, and the class multipliers for handicap competitions"
                                 else "Your handicap: " + handicaps.joinToString(" · ") { "${it.bowStyle.code} ${it.handicap}" } + " · class multipliers",
                                 onClick = onHandicap,
+                            )
+                            HomeTileId.EQUIPMENT -> HomeTile(
+                                icon = Icons.Filled.Build,
+                                title = "Equipment",
+                                subtitle = "Your bows and arrows, to pick when you start a round and compare in Stats",
+                                onClick = onEquipment,
                             )
                             HomeTileId.FRIENDS -> HomeTile(
                                 icon = Icons.Filled.Face,

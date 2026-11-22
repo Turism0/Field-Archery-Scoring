@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
+import { HandicapChart } from './HandicapChart'
 import { Bar, Card, Field, Select, Seg, Tabs, go, today, ukDate, useData } from './common'
 import { getProfile } from '../data/account'
 import { getModel, refreshModel } from '../data/handicap'
 import { finished } from '../data/rounds'
 import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, ageGroupFor, bowName, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import {
-  CLASS_COLUMNS, MAX_ROUNDS, MIN_ROUNDS, PAR, PAR_TARGETS, applyMultiplier, convert, handicapEntry, multiplier, personalHandicaps, scaled,
+  CLASS_COLUMNS, MAX_ROUNDS, MIN_ROUNDS, PAR, PAR_TARGETS, applyMultiplier, convert, handicapEntry, handicapHistory, multiplier, personalHandicaps, scaled,
   type HArcher, type HandicapModel,
 } from '../domain/handicap'
 
@@ -62,6 +63,8 @@ export function MyHandicap({ rounds }: { rounds: Round[] }) {
         <div class="row between" style="flex-wrap:nowrap"><div>
           <div style="color:inherit">Usual score {Math.round(h.usual)} off {PAR_TARGETS} targets: the best {h.counted.length} of your last {h.considered} {h.bowStyle} round{h.considered === 1 ? '' : 's'}.</div></div>
           <span style="text-align:center"><span class="huge">{h.handicap}</span><span class="sub" style="display:block;color:inherit">handicap</span></span></div>
+        {/* 3.2.24 (Pete): your handicap over time with this bow style. */}
+        <HandicapChart points={handicapHistory(entries, h.bowStyle)} />
         {h.counted.map(e => {
           const r = byId.get(e.order + e.shootDate + e.bowStyle)
           return <button class="row between plain small" onClick={() => r && go(`/card/${r.id}`)}>

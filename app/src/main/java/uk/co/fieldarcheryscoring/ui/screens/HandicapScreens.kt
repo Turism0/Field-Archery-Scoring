@@ -68,6 +68,7 @@ import uk.co.fieldarcheryscoring.domain.HandicapModel
 import uk.co.fieldarcheryscoring.ui.AdminHandicapViewModel
 import uk.co.fieldarcheryscoring.ui.HandicapCalculatorViewModel
 import uk.co.fieldarcheryscoring.ui.Load
+import uk.co.fieldarcheryscoring.ui.components.HandicapChart
 import uk.co.fieldarcheryscoring.ui.components.NumberField
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
@@ -173,6 +174,9 @@ private fun MyHandicapTab(vm: HandicapCalculatorViewModel, onOpenRound: (String)
                         Text("handicap", style = MaterialTheme.typography.labelSmall)
                     }
                 }
+                // 3.2.24 (Pete): your handicap over time with this bow style.
+                val history = remember(entries, h.bowStyle) { PersonalHandicap.history(entries, h.bowStyle) }
+                HandicapChart(history)
                 HorizontalDivider()
                 h.counted.forEach { e ->
                     val round = finished.firstOrNull { it.shootDate == e.shootDate && it.createdAtMillis == e.order && it.bowStyle == e.bowStyle }

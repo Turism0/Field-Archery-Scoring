@@ -58,6 +58,7 @@ export function Home() {
       case 'STATS': return <Tile icon="★" title="Stats" sub={done?.length === 0 ? 'Personal bests, trends and seasons once you finish a round' : 'Personal bests, trends and season summaries'} onClick={() => go('/stats')} />
       case 'HANDICAP': return <Tile icon="ⓘ" title="Handicaps" onClick={() => go('/handicap')}
         sub={hs.length ? `Your handicap: ${hs.map(h => `${h.bowStyle} ${h.handicap}`).join(' · ')} · class multipliers` : 'Your personal handicap, and the class multipliers for handicap competitions'} />
+      case 'EQUIPMENT': return <Tile icon="🏹" title="Equipment" sub="Your bows and arrows, to pick when you start a round and compare in Stats" onClick={() => go('/equipment')} />
       case 'FRIENDS': return <Tile icon="☺" title="Friends" badge={signedIn ? offers : 0}
         sub={!signedIn ? "Sign in to see friends' scorecards" : offers > 0 ? `${offers} round${offers === 1 ? '' : 's'} scored for you to accept` : "Friends' scorecards and stats, requests"} onClick={() => go('/friends')} />
       case 'LOCATIONS': return <Tile icon="📍" title="Shoot locations" sub={signedIn ? 'Map of locations, your scorecards and stats at each' : 'Sign in to see the map of shoot locations'} onClick={() => go('/map')} />

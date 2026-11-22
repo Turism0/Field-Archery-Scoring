@@ -15,6 +15,7 @@ using FieldArcheryApi;
 using FieldArcheryApi.Admin;
 using FieldArcheryApi.Auth;
 using FieldArcheryApi.Data;
+using FieldArcheryApi.Equipment;
 using FieldArcheryApi.Friends;
 using FieldArcheryApi.Groups;
 using FieldArcheryApi.Handicap;
@@ -192,6 +193,7 @@ app.MapOfferEndpoints();
 app.MapHandicapEndpoints();
 app.MapWeatherEndpoints();   // 3.2.17
 app.MapCompareEndpoints();   // 3.2.17
+app.MapEquipmentEndpoints();   // 3.2.24
 app.MapAccountDeletion();   // API 2.4.02: POST /api/me/delete, /delete-account and /privacy pages
 app.MapFallbackToFile("/app/{*path:nonfile}", "app/index.html");   // the web app's own pages (2.5)
 
@@ -200,5 +202,5 @@ app.Run();
 // 3.2.15: every API change must keep older apps working; see docs/API_COMPATIBILITY.md and run server/tests/Test-OldApps.ps1.
 static class ApiInfo
 {
-    public const string Version = "3.2.23";
+    public const string Version = "3.2.24";
 }

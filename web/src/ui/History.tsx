@@ -1,4 +1,6 @@
 import { getAccount } from '../data/account'
+import { getEquipment } from '../data/equipment'
+import { arrowLabel, bowLabel } from '../domain/equipment'
 import { allRounds, getKv } from '../data/db'
 import { RoundCard } from './Parts'
 import { useState } from 'preact/hooks'
@@ -11,13 +13,14 @@ import { HISTORY_SORTS, bowOrder, inPeriod, periodLabel, personalBestIds, sortHi
 import { type RoundType } from '../domain/scoring'
 import { notesMatch } from '../domain/roundNotes'
 
-interface Filter { type?: RoundType; bow?: string; location?: string; period: Period; search: string }
+interface Filter { type?: RoundType; bow?: string; location?: string; period: Period; search: string; bowId?: string; arrowId?: string }
 const NONE: Filter = { period: { kind: 'all' }, search: '' }
 
 /** Finished rounds with filters, a sort order (3.2.01) and PB marks; tap for the scorecard. */
 export function History() {
   const rounds = useData(finished)
   const weather = useData(weatherMap)
+  const kit = useData(getEquipment)   // 3.2.24
   const account = useData(getAccount)
   const lastSync = useData(() => getKv<string>('lastSync'))
   const sizes = useData(async () => {
@@ -36,11 +39,15 @@ export function History() {
   // 3.1.09 (Pete): no handicap or net score on the tiles; they're on the scorecard.
   const now = today()
   const list = sortHistory(rounds.filter(r => (!f.type || r.type === f.type) && (!f.bow || r.bowStyle === f.bow) &&
+    (!f.bowId || r.bowId === f.bowId) && (!f.arrowId || r.arrowId === f.arrowId) &&
     (!f.location || r.locationName === f.location) && inPeriod(f.period, r.shootDate, now) && notesMatch(r.notes, f.search)), sort)
   const types = [...new Set(rounds.map(r => r.type))]
   const bows = [...new Set(rounds.map(r => r.bowStyle))].sort((a, b) => bowOrder(a) - bowOrder(b))
   const locations = [...new Set(rounds.map(r => r.locationName).filter((x): x is string => !!x))].sort()
-  const active = f.type || f.bow || f.location || f.period.kind !== 'all' || !!f.search.trim()
+  // 3.2.24 (Pete): the bows and arrows your rounds were shot with (only offered with two or more).
+  const usedBows = (kit?.bows ?? []).filter(b => rounds.some(r => r.bowId === b.id)).sort((a, b) => bowLabel(a).localeCompare(bowLabel(b)))
+  const usedArrows = (kit?.arrows ?? []).filter(a => rounds.some(r => r.arrowId === a.id)).sort((a, b) => arrowLabel(a).localeCompare(arrowLabel(b)))
+  const active = f.type || f.bow || f.bowId || f.arrowId || f.location || f.period.kind !== 'all' || !!f.search.trim()
   const hasNotes = rounds.some(r => r.notes)
   const periodValue = f.period.kind === 'all' ? '' : f.period.kind === 'year' ? `y${f.period.year}` : f.period.kind === '12m' ? '12m' : 'dates'
   const fmt = (p: { from?: string; to?: string }) =>
@@ -61,7 +68,11 @@ export function History() {
             {(types.length > 1 || f.type) && <select class={f.type ? 'on' : ''} value={f.type ?? ''} onChange={e => setF({ ...f, type: ((e.target as HTMLSelectElement).value || undefined) as RoundType | undefined })}>
               <option value="">Type: All</option>{types.map(t => <option value={t}>{ROUND_TYPE_NAMES[t]}</option>)}</select>}
             <select class={f.bow ? 'on' : ''} value={f.bow ?? ''} onChange={e => setF({ ...f, bow: (e.target as HTMLSelectElement).value || undefined })}>
-              <option value="">Bow: All</option>{bows.map(b => <option value={b}>{bowName(b)} ({b})</option>)}</select>
+              <option value="">Bow style: All</option>{bows.map(b => <option value={b}>{bowName(b)} ({b})</option>)}</select>
+            {(usedBows.length > 1 || f.bowId) && <select class={f.bowId ? 'on' : ''} value={f.bowId ?? ''} onChange={e => setF({ ...f, bowId: (e.target as HTMLSelectElement).value || undefined })}>
+              <option value="">Bow: All</option>{usedBows.map(b => <option value={b.id}>{bowLabel(b)}</option>)}</select>}
+            {(usedArrows.length > 1 || f.arrowId) && <select class={f.arrowId ? 'on' : ''} value={f.arrowId ?? ''} onChange={e => setF({ ...f, arrowId: (e.target as HTMLSelectElement).value || undefined })}>
+              <option value="">Arrows: All</option>{usedArrows.map(a => <option value={a.id}>{arrowLabel(a)}</option>)}</select>}
             {(locations.length > 0 || f.location) && <select class={f.location ? 'on' : ''} value={f.location ?? ''} onChange={e => setF({ ...f, location: (e.target as HTMLSelectElement).value || undefined })}>
               <option value="">Location: All</option>{locations.map(l => <option value={l}>{l}</option>)}</select>}
             <select class={f.period.kind !== 'all' ? 'on' : ''} value={periodValue} onChange={e => {

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { EquipmentPickers, equipmentChoice, useKit } from './Equipment'
+import { useEquipmentInGroup } from '../data/rounds'
 import qrcode from 'qrcode-generator'
 import { Bar, Card, Dialog, NameArcherDialog, Seg, Select, errorText, go, replace, today, toast, useData } from './common'
 import { getArcherNames, setArcherName } from '../data/archerNames'
@@ -17,6 +19,10 @@ export function Join({ code: startCode }: { code: string }) {
   const [cls, setCls] = useState<ArcherClass>()
   const [age, setAge] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
+  const [bowId, setBowId] = useState<string | null>(null)       // 3.2.24
+  const [arrowId, setArrowId] = useState<string | null>(null)
+  const kit = useKit()
+  const choice = equipmentChoice(kit, bow, bowId, arrowId)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -30,7 +36,11 @@ export function Join({ code: startCode }: { code: string }) {
 
   async function join() {
     setBusy(true); setError(null)
-    try { replace(`/lobby/${await live.join(code, cls!, age!, bow!)}`) } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
+    try {
+      const gid = await live.join(code, cls!, age!, bow!)
+      await useEquipmentInGroup(gid, choice?.bowId ?? null, choice?.arrowId ?? null)   // 3.2.24
+      replace(`/lobby/${gid}`)
+    } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
   }
 
   return (
@@ -52,6 +62,8 @@ export function Join({ code: startCode }: { code: string }) {
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />
           <Select<AgeGroup> label="Age group" value={age} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]} onChange={setAge} />
           <Select label="Bow style" value={bow} options={BOW_STYLES.map(b => b.code)} optionLabel={c => `${BOW_STYLES.find(b => b.code === c)!.name} (${c})`} onChange={setBow} />
+          {/* 3.2.24 (Pete): your bow and arrows (only asked with two or more). */}
+          <EquipmentPickers choice={choice} onBow={id => { setBowId(id); setArrowId(null) }} onArrows={setArrowId} />
         </Card>
         {error && <div class="card err">{error}</div>}
         <button class="filled wide" disabled={!valid || busy} onClick={join}>{busy ? 'Joining…' : 'Join'}</button>

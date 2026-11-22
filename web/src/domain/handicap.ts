@@ -85,6 +85,16 @@ export function personalHandicap(entries: HEntry[], bow: string, before?: HEntry
   return { bowStyle: bow, handicap: Math.round(PAR - usual), usual, counted: best, considered: recent.length }
 }
 
+/** 3.2.24 (Pete): your handicap with this bow style straight after each round, oldest first, from the first with one. */
+export interface HistoryPoint { entry: HEntry; handicap: number }
+export function handicapHistory(entries: HEntry[], bow: string): HistoryPoint[] {
+  const mine = entries.filter(e => e.bowStyle === bow && e.targetCount > 0)
+    .sort((a, b) => a.shootDate.localeCompare(b.shootDate) || a.order.localeCompare(b.order))
+  const out: HistoryPoint[] = []
+  mine.forEach((e, i) => { const h = personalHandicap(mine.slice(0, i + 1), bow); if (h) out.push({ entry: e, handicap: h.handicap }) })
+  return out
+}
+
 /** A handicap for every bow style with enough rounds, most rounds first. */
 export function personalHandicaps(entries: HEntry[]): PersonalH[] {
   const counts = new Map<string, number>()

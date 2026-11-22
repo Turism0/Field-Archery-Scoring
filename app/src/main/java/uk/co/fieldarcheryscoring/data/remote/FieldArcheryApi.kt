@@ -120,6 +120,14 @@ class FieldArcheryApi(
     suspend fun compareStats(token: String, groups: org.json.JSONArray): JSONObject =
         request("POST", "/api/stats/compare", JSONObject().put("groups", groups), token)
 
+    /** 3.2.24: every bow and arrow set on this account, deleted ones too. */
+    suspend fun equipment(token: String): JSONObject = request("GET", "/api/equipment", body = null, token = token)
+
+    suspend fun putBow(token: String, bowId: String, bow: JSONObject): JSONObject = request("PUT", "/api/equipment/bows/$bowId", bow, token)
+
+    suspend fun putArrows(token: String, arrowId: String, arrows: JSONObject): JSONObject =
+        request("PUT", "/api/equipment/arrows/$arrowId", arrows, token)
+
     suspend fun roundIds(token: String): Set<String> {
         val ids = request("GET", "/api/rounds/ids", body = null, token = token).getJSONArray("ids")
         return (0 until ids.length()).map { ids.getString(it) }.toSet()

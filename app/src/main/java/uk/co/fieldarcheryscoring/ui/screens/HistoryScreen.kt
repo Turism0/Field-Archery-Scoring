@@ -1,5 +1,6 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import uk.co.fieldarcheryscoring.domain.Equipment
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -211,7 +212,14 @@ private fun HistoryFilters(
         if (c.types.size > 1 || f.type != null) {
             FilterMenuChip("Type", "All", c.types, f.type, { it.displayName }, { t -> onChange { it.copy(type = t) } })
         }
-        FilterMenuChip("Bow", "All", c.bowStyles, f.bowStyle, { it.label }, { b -> onChange { it.copy(bowStyle = b) } })
+        FilterMenuChip("Bow style", "All", c.bowStyles, f.bowStyle, { it.label }, { b -> onChange { it.copy(bowStyle = b) } })
+        // 3.2.24 (Pete): the bow and arrows used (only with two or more to choose from).
+        if (c.bows.size > 1 || f.bowId != null) {
+            FilterMenuChip("Bow", "All", c.bows, c.bows.firstOrNull { it.id == f.bowId }, { Equipment.label(it) }, { b -> onChange { it.copy(bowId = b?.id) } })
+        }
+        if (c.arrows.size > 1 || f.arrowId != null) {
+            FilterMenuChip("Arrows", "All", c.arrows, c.arrows.firstOrNull { it.id == f.arrowId }, { Equipment.label(it) }, { a -> onChange { it.copy(arrowId = a?.id) } })
+        }
         if (c.locations.isNotEmpty() || f.location != null) {
             FilterMenuChip("Location", "All", c.locations, f.location, { it }, { l -> onChange { it.copy(location = l) } })
         }

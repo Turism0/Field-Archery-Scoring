@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Bar, Card, Dialog, Field, NotesField, Select, Seg, back } from './common'
 import { getRound } from '../data/db'
-import { setNotes, updateDetails } from '../data/rounds'
+import { setEquipment, setNotes, updateDetails } from '../data/rounds'
+import { EquipmentPickers, equipmentChoice, useKit } from './Equipment'
+import { NONE } from '../domain/equipment'
 import { AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_NOTES, MAX_START_TARGET, cleanNotes, MAX_TARGETS, startTargetOk, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { isComplete } from '../domain/scoring'
 
@@ -19,10 +21,14 @@ export function EditRound({ id }: { id: string }) {
   const [start, setStart] = useState('')
   const [notes, setNotesText] = useState('')   // 3.2.21 (Pete)
   const [confirm, setConfirm] = useState(false)
+  const [bowId, setBowId] = useState<string | null>(null)     // 3.2.24: NONE = none
+  const [arrowId, setArrowId] = useState<string | null>(null)
+  const kit = useKit()
   useEffect(() => {
     getRound(id).then(x => {
       if (!x) return
       setR(x); setDate(x.shootDate); setCount(String(x.targetCount)); setCls(x.archerClass); setAge(x.ageGroup); setBow(x.bowStyle); setStart(x.startTarget ? String(x.startTarget) : ''); setNotesText(x.notes ?? '')
+      setBowId(x.bowId ?? NONE); setArrowId(x.arrowId ?? NONE)
     })
   }, [id])
   if (!r) return <Bar title="Round details" />
@@ -37,8 +43,16 @@ export function EditRound({ id }: { id: string }) {
   // 3.2.21: notes on the archer's own round only (not a friend's, a guest's or another phone's card).
   const canNote = !r.groupRole || r.groupRole === 'SCORER'
   const notesChanged = canNote && cleanNotes(notes) !== (r.notes ?? null)
-  const changed = detailsChanged || notesChanged
-  const save = async () => { if (detailsChanged) await updateDetails(r.id, date, n, cls, age, bow, startN); if (notesChanged) await setNotes(r.id, notes); back() }
+  // 3.2.24: the bow and arrows, on your own round (shown with even one, to set it on older rounds).
+  const choice = canNote ? equipmentChoice(kit, bow, bowId, arrowId, r.id) : null
+  const kitChanged = !!choice && ((choice.bowId ?? null) !== (r.bowId ?? null) || (choice.arrowId ?? null) !== (r.arrowId ?? null))
+  const changed = detailsChanged || notesChanged || kitChanged
+  const save = async () => {
+    if (detailsChanged) await updateDetails(r.id, date, n, cls, age, bow, startN)
+    if (notesChanged) await setNotes(r.id, notes)
+    if (kitChanged) await setEquipment(r.id, choice!.bowId, choice!.arrowId)
+    back()
+  }
   return (
     <>
       <Bar title={name ? `Round details · ${name}` : 'Round details'}>
@@ -61,6 +75,7 @@ export function EditRound({ id }: { id: string }) {
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />
           <Select<AgeGroup> label="Age group" value={age} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]} onChange={a => a && setAge(a)} />
           <Select label="Bow style" value={bow} options={BOW_STYLES.map(b => b.code)} optionLabel={c => `${BOW_STYLES.find(b => b.code === c)!.name} (${c})`} onChange={b => b && setBow(b)} />
+          <EquipmentPickers choice={choice} always onBow={id => { setBowId(id); setArrowId(null) }} onArrows={setArrowId} />
         </Card>
         <div class="sub">Scores aren't changed. A finished round uploads again with the new details.</div>
       </main>

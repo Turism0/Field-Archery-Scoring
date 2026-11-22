@@ -42,6 +42,8 @@ class RoundSyncer(
     private val api: FieldArcheryApi,
     private val accounts: AccountStore,
     private val locations: LocationRepository,
+    /** 3.2.24: bows and arrows, synced before rounds so rounds go up after the equipment they name. */
+    private val equipment: uk.co.fieldarcheryscoring.data.EquipmentRepository? = null,
 ) {
     enum class Outcome { DONE, NOT_SIGNED_IN, RETRY_LATER, SIGNED_OUT, FAILED }
 
@@ -66,6 +68,7 @@ class RoundSyncer(
             } catch (e: ApiException) {
                 if (e.isNetwork || e.status == 401) throw e   // anything else: rounds still sync
             }
+            equipment?.sync(api, account.token) { stillSignedIn(account.token) }
             upload(account.token)
             uploadOffers(account.token)
             val skipped = download(account.token)
@@ -267,8 +270,9 @@ class RoundSyncer(
                 locationState = data.round.locationState ?: local.locationState,
             )
         } else data.round
-        // 3.2.21: an API from before notes doesn't send them: keep this phone's.
-        val withNotes = if (!json.has("notes") && local != null) withFix.copy(notes = local.notes) else withFix
+        // 3.2.21: an API from before notes doesn't send them: keep this phone's. 3.2.24: the same for the bow and arrows.
+        val withNotes = (if (!json.has("notes") && local != null) withFix.copy(notes = local.notes) else withFix)
+            .let { if (!json.has("bowId") && local != null) it.copy(bowId = local.bowId, arrowId = local.arrowId) else it }
         // And its place in a group scored on this phone (the server doesn't send it back).
         val merged = if (local?.groupId != null) {
             withNotes.copy(
@@ -330,6 +334,9 @@ internal fun RoundData.toJson(): JSONObject {
         .put("startTarget", round.startTarget ?: JSONObject.NULL)
         // 3.2.21: the archer's own notes ("" = none); a round scored for a friend never carries the scorer's notes.
         .put("notes", if (round.groupRole == null || round.groupRole == GroupRole.SCORER) round.notes.orEmpty() else "")
+        // 3.2.24: the archer's own bow and arrows (the empty id = none); never on a round scored for someone else.
+        .put("bowId", (if (round.groupRole == null || round.groupRole == GroupRole.SCORER) round.bowId else null) ?: NO_ID)
+        .put("arrowId", (if (round.groupRole == null || round.groupRole == GroupRole.SCORER) round.arrowId else null) ?: NO_ID)
         .put("targets", targetArray)
 }
 
@@ -357,6 +364,8 @@ internal fun JSONObject.toRoundData(): RoundData {
         roundType = optStringOrNull("roundType")?.takeIf { it != "BIG_GAME" },
         startTarget = if (has("startTarget") && !isNull("startTarget")) getInt("startTarget") else null,
         notes = optStringOrNull("notes")?.takeIf { it.isNotBlank() },
+        bowId = optStringOrNull("bowId")?.takeIf { it.isNotBlank() && it != NO_ID },
+        arrowId = optStringOrNull("arrowId")?.takeIf { it.isNotBlank() && it != NO_ID },
     )
     val targets = mutableListOf<TargetEntity>()
     val animals = mutableListOf<AnimalEntity>()
@@ -390,6 +399,9 @@ internal fun JSONObject.toRoundData(): RoundData {
     }
     return RoundData(round, targets, animals)
 }
+
+/** 3.2.24: "no bow / no arrows" to the API (an id left out means "not sent", which keeps what the server has). */
+private const val NO_ID = "00000000-0000-0000-0000-000000000000"
 
 /** Null for a missing or JSON-null field (older servers don't send newer fields). */
 private fun JSONObject.optStringOrNull(name: String): String? = if (isNull(name)) null else optString(name)

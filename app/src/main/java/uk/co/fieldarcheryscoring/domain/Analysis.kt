@@ -35,6 +35,9 @@ data class Thirds(val start: Double?, val middle: Double?, val finish: Double?)
 
 data class LocationSummary(val name: String, val rounds: Int, val average: Double, val best: Double, val bestRound: Round)
 
+/** One bow or set of arrows (3.2.24): its rounds, average, best and how often it kills (Big Game). */
+data class EquipmentSummary(val id: String, val rounds: Int, val average: Double, val best: Double, val bestRound: Round, val killRate: Double?)
+
 data class SplitSide(val rounds: Int, val average: Double?)
 
 /** Two sides of a weather comparison. */
@@ -173,6 +176,17 @@ object Analysis {
                 LocationSummary(list.first().location.name!!.trim(), avgs.size, avgs.map { it.second }.average(), best.second, best.first)
             }
             .sortedWith(compareBy<LocationSummary>({ -it.rounds }, { -it.average }, { it.name }))
+
+    /** Each bow's rounds ([key] = Round::bowId) or arrows' (Round::arrowId), most rounds first. */
+    fun byEquipment(rounds: List<Round>, key: (Round) -> String?): List<EquipmentSummary> =
+        rounds.filter { key(it) != null }.groupBy { key(it)!! }.mapNotNull { (id, list) ->
+            val avgs = roundAverages(list)
+            if (avgs.isEmpty()) return@mapNotNull null
+            val best = avgs.maxBy { it.second }
+            val hits = hitCounts(list.filter { it.type == RoundType.BIG_GAME })
+            val kills = if (hits.total == 0) null else (hits.innerKill + hits.kill).toDouble() / hits.total
+            EquipmentSummary(id, avgs.size, avgs.map { it.second }.average(), best.second, best.first, kills)
+        }.sortedWith(compareBy<EquipmentSummary>({ -it.rounds }, { -it.average }, { it.id }))
 
     fun weatherSplits(rounds: List<Round>, weatherOf: (Round) -> Weather?): List<WeatherSplit> {
         val withWeather = roundAverages(rounds).mapNotNull { (r, avg) -> weatherOf(r)?.let { Triple(r, avg, it) } }

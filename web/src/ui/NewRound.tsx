@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
+import { EquipmentPickers, equipmentChoice, useKit } from './Equipment'
 import { NotesField, Bar, Card, Dialog, Field, Select, Seg, errorText, go, replace, today, useData } from './common'
 import { cachedFriends, getAccount, getProfile, type Friend } from '../data/account'
 import { startRound, deleteRound, type MemberDraft } from '../data/rounds'
@@ -28,6 +29,10 @@ export function NewRound({ type }: { type: RoundType }) {
   const [cls, setCls] = useState<ArcherClass>()
   const [ageChoice, setAgeChoice] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
+  const [bowId, setBowId] = useState<string | null>(null)       // 3.2.24: null = the last used or only one
+  const [arrowId, setArrowId] = useState<string | null>(null)
+  const kit = useKit()
+  const choice = equipmentChoice(kit, bow, bowId, arrowId)
   const [profile, setProfile] = useState<{ dob?: string; manual?: AgeGroup; bow?: string }>({})
   const [members, setMembers] = useState<(MemberDraft & { key: number })[]>([])
   const [dialog, setDialog] = useState<{ role: 'FRIEND' | 'GUEST'; existing?: MemberDraft & { key: number } } | null>(null)
@@ -65,7 +70,7 @@ export function NewRound({ type }: { type: RoundType }) {
     try {
       const id = await startRound({ shootDate: date, targetCount: count, archerClass: cls!, ageGroup: age!, bowStyle: bow!, type,
         members: group ? members.map(({ key: _, ...m }) => m) : [], groupId: isLive ? crypto.randomUUID() : undefined,
-        startTarget: startText ? startN : null, notes })
+        startTarget: startText ? startN : null, notes, bowId: choice?.bowId ?? null, arrowId: choice?.arrowId ?? null })
       captureFor(id)   // shoot location: one GPS position, looked up when there's signal
       if (isLive) {
         const r = (await getRound(id))!
@@ -105,16 +110,7 @@ export function NewRound({ type }: { type: RoundType }) {
             {METHODS.find(m => m.code === method)?.checked && <div class="sub">Go through the group archer by archer: they call their score and both their scorers enter it. Everyone moves on once the two match.</div>}
           </>}
         </Card>
-        <Card title="Shoot">
-          <Field label="Shoot date"><input type="date" value={date} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
-          <Field label="Number of targets" help={targets && !countOk ? `1 to ${MAX_TARGETS}` : undefined}>
-            <input inputMode="numeric" value={targets} onInput={e => setTargets((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></Field>
-          <div class="row">{COMMON_COUNTS.map(n => <button class={`chip ${count === n ? 'on' : ''}`} onClick={() => setTargets(String(n))}>{n}</button>)}</div>
-          <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : 'The course\'s number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36-target course). Just noted on the scorecard: scoring starts at 1.'}>
-            <input inputMode="numeric" value={startText} onInput={e => setStartText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
-          </Field>
-          <NotesField value={notes} onChange={setNotes} max={MAX_NOTES} help={group ? 'On your card only. Only you can see these.' : undefined} />
-        </Card>
+        {/* 3.2.24 (Pete): the archer's class, bow style and equipment come before the shoot details. */}
         <Card title={group ? 'You' : 'Archer'} sub="Filled in from your profile. Changes here only affect this round.">
           <Seg<ArcherClass> options={['GENTS', 'LADIES']} value={cls} label={c => CLASS_NAMES[c]} onChange={setCls} />
           <Field label="Age group" help={ageSource}>
@@ -129,6 +125,18 @@ export function NewRound({ type }: { type: RoundType }) {
               {BOW_STYLES.map(b => <option value={b.code}>{bowLabel(b.code)}</option>)}
             </select>
           </Field>
+          {/* 3.2.24 (Pete): your bow and arrows for this bow style (only asked with two or more). */}
+          <EquipmentPickers choice={choice} onBow={id => { setBowId(id); setArrowId(null) }} onArrows={setArrowId} />
+        </Card>
+        <Card title="Shoot">
+          <Field label="Shoot date"><input type="date" value={date} onInput={e => setDate((e.target as HTMLInputElement).value)} /></Field>
+          <Field label="Number of targets" help={targets && !countOk ? `1 to ${MAX_TARGETS}` : undefined}>
+            <input inputMode="numeric" value={targets} onInput={e => setTargets((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} /></Field>
+          <div class="row">{COMMON_COUNTS.map(n => <button class={`chip ${count === n ? 'on' : ''}`} onClick={() => setTargets(String(n))}>{n}</button>)}</div>
+          <Field label="Starting target (optional)" help={!startOk ? `1 to ${MAX_START_TARGET}` : 'The course\'s number on the first target you shoot, if not 1 (e.g. 19 for the second half of a 36-target course). Just noted on the scorecard: scoring starts at 1.'}>
+            <input inputMode="numeric" value={startText} onInput={e => setStartText((e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 3))} />
+          </Field>
+          <NotesField value={notes} onChange={setNotes} max={MAX_NOTES} help={group ? 'On your card only. Only you can see these.' : undefined} />
         </Card>
         {isLive && !onThisPhone && !members.length && (
           <Card title="Someone without a phone?">

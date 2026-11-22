@@ -17,7 +17,7 @@ public static class RoundValidator
 
     private static readonly HashSet<string> Classes = ["L", "G"];
     private static readonly HashSet<string> AgeGroups = ["ADULT", "JUNIOR", "CUB"];
-    private static readonly HashSet<string> BowStyles = ["AFB", "BB", "BH", "CL", "XB", "TXB", "FS", "HT", "LB", "PV", "TD", "TB", "UL"];
+    internal static readonly HashSet<string> BowStyles = ["AFB", "BB", "BH", "CL", "XB", "TXB", "FS", "HT", "LB", "PV", "TD", "TB", "UL"];
     private static readonly HashSet<string> Statuses = ["IN_PROGRESS", "COMPLETED"];
     public const string BigGame = "BIG_GAME";
     public const string Woodsman = "WOODSMAN";

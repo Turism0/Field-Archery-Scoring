@@ -304,3 +304,19 @@ label.field textarea { font: inherit; padding: 10px 12px; border: 1px solid var(
 
 /* 3.2.23: "Add a name" / "Change name" links for names you give other archers */
 .link { color: var(--primary); font-size: calc(13 * var(--k)); display: inline-block; padding: 2px 0; cursor: pointer; }
+
+/* 3.2.24: equipment */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+label.check { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+label.check input { width: 20px; height: 20px; flex: none; }
+.tile.kit { padding: 12px 14px; background: var(--surface-high, var(--surface-c)); }
+.tile.kit b { font-size: calc(16 * var(--k)); }
+.tile.kit .grow { display: flex; flex-direction: column; gap: 2px; }
+.tile.kit .kitavg { display: flex; flex-direction: column; align-items: center; }
+.tile.kit .kitavg b { font-size: calc(22 * var(--k)); }
+.hchart { width: 100%; height: auto; max-height: 220px; display: block; }
+.hchart .line { fill: none; stroke: var(--primary); stroke-width: 2.5; }
+.hchart .dot { fill: var(--primary); }
+.hchart .grid { stroke: var(--outline-v); stroke-dasharray: 4 4; stroke-width: 1; }
+.hchart text { fill: var(--muted); font-size: 11px; }

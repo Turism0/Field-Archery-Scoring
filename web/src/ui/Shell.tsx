@@ -14,6 +14,7 @@ const ROUTES: Record<TileId, { path: string; icon: string; match: string[] }> = 
   HISTORY: { path: '/history', icon: '☰', match: ['history', 'card', 'edit'] },
   STATS: { path: '/stats', icon: '★', match: ['stats'] },
   HANDICAP: { path: '/handicap', icon: 'ⓘ', match: ['handicap'] },
+  EQUIPMENT: { path: '/equipment', icon: '🏹', match: ['equipment', 'bow', 'arrows'] },
   FRIENDS: { path: '/friends', icon: '☺', match: ['friends', 'friend', 'friendcard', 'offer'] },
   LOCATIONS: { path: '/map', icon: '📍', match: ['map', 'location'] },
   ADMIN: { path: '/admin', icon: '⚙', match: ['admin'] },

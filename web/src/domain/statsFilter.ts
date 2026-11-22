@@ -6,7 +6,11 @@ import type { RoundType } from './scoring'
 /** ALL time; the last N CALENDAR years including this one (1 = this year so far); or the last N years ROLLING to today. */
 export type PeriodKind = 'ALL' | 'CALENDAR' | 'ROLLING'
 export interface StatsPeriod { kind: PeriodKind; years: number }
-export interface StatsFilter { types: RoundType[]; bows: string[]; period: StatsPeriod }
+export interface StatsFilter {
+  types: RoundType[]; bows: string[]; period: StatsPeriod
+  /** 3.2.24: only rounds shot with this bow / these arrows; null = any. */
+  bowId?: string | null; arrowId?: string | null
+}
 
 /** The numbers of years offered. */
 export const PERIOD_YEARS = [1, 2, 3, 5, 10]
@@ -47,7 +51,8 @@ export function inStatsPeriod(p: StatsPeriod, shootDate: string, today: string):
 }
 
 export const matchesFilter = (f: StatsFilter, r: Round, today: string) =>
-  f.types.includes(r.type) && f.bows.includes(r.bowStyle) && inStatsPeriod(f.period, r.shootDate, today)
+  f.types.includes(r.type) && f.bows.includes(r.bowStyle) && inStatsPeriod(f.period, r.shootDate, today) &&
+  (!f.bowId || r.bowId === f.bowId) && (!f.arrowId || r.arrowId === f.arrowId)
 
 /** Round types and bow styles you have finished rounds with (the only ones offered). */
 export function availableTypes(rounds: Round[]): RoundType[] {
@@ -77,6 +82,9 @@ export function resolveFilter(saved: Partial<StatsFilter> | null, rounds: Round[
     types: keptTypes.length ? keptTypes : types,
     bows: keptBows.length ? keptBows : defaultBow ? [defaultBow] : [],
     period,
+    // 3.2.24: a bow or arrows only while you still have rounds with them.
+    ...(saved?.bowId && rounds.some(r => r.bowId === saved.bowId) ? { bowId: saved.bowId } : {}),
+    ...(saved?.arrowId && rounds.some(r => r.arrowId === saved.arrowId) ? { arrowId: saved.arrowId } : {}),
   }
 }
 

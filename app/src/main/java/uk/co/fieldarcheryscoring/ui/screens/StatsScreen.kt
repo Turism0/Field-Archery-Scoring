@@ -60,8 +60,10 @@ import uk.co.fieldarcheryscoring.domain.Round
 import uk.co.fieldarcheryscoring.domain.RoundType
 import uk.co.fieldarcheryscoring.domain.BowStyle
 import uk.co.fieldarcheryscoring.domain.PersonalHandicap
+import uk.co.fieldarcheryscoring.domain.Equipment
 import uk.co.fieldarcheryscoring.ui.StatsViewModel
 import uk.co.fieldarcheryscoring.ui.components.FilterMenuChip
+import uk.co.fieldarcheryscoring.ui.components.HandicapChart
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
 import uk.co.fieldarcheryscoring.ui.components.UkDate
 import java.time.temporal.ChronoUnit
@@ -98,7 +100,8 @@ fun StatsScreen(vm: StatsViewModel, onBack: () -> Unit, onOpenRound: (roundId: S
         Column(Modifier.fillMaxSize().padding(padding)) {
             val f = filter
             // 3.2 (Pete): round types, bow styles and dates, for every tab; remembered for next time.
-            if (!list.isNullOrEmpty() && f != null) StatsFilterBar(list, f) { vm.setFilter(it) }
+            val kit by vm.equipment.collectAsStateWithLifecycle()
+            if (!list.isNullOrEmpty() && f != null) StatsFilterBar(list, f, kit.first, kit.second) { vm.setFilter(it) }
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 when {
                     list == null || (list.isNotEmpty() && f == null) -> CircularProgressIndicator(Modifier.align(Alignment.Center))
@@ -123,10 +126,20 @@ fun StatsScreen(vm: StatsViewModel, onBack: () -> Unit, onOpenRound: (roundId: S
 
 /** Round types and bow styles (several of each, never none) and the dates, as chips that open menus. */
 @Composable
-private fun StatsFilterBar(rounds: List<Round>, filter: StatsFilter, onChange: (StatsFilter) -> Unit) {
+private fun StatsFilterBar(
+    rounds: List<Round>, filter: StatsFilter,
+    allBows: List<uk.co.fieldarcheryscoring.domain.Bow> = emptyList(),
+    allArrows: List<uk.co.fieldarcheryscoring.domain.ArrowSet> = emptyList(),
+    onChange: (StatsFilter) -> Unit,
+) {
     val today = LocalDate.now()
     val types = StatsFilter.availableTypes(rounds)
     val bows = StatsFilter.availableBows(rounds)
+    // 3.2.24 (Pete): the bows and arrows these rounds were shot with (only offered with two or more).
+    val inStyles = rounds.filter { it.bowStyle in filter.bows }
+    val usedBows = allBows.filter { b -> inStyles.any { it.bowId == b.id } }.sortedBy { Equipment.label(it).lowercase() }
+    val usedArrows = allArrows.filter { a -> inStyles.any { it.arrowId == a.id && (filter.bowId == null || it.bowId == filter.bowId) } }
+        .sortedBy { Equipment.label(it).lowercase() }
     Row(
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,6 +152,14 @@ private fun StatsFilterBar(rounds: List<Round>, filter: StatsFilter, onChange: (
             text = filter.bows.sortedBy { it.ordinal }.let { b -> if (b.size == 1) b.first().displayName else b.joinToString(", ") { it.code } },
             options = bows, selected = filter.bows, optionLabel = { "${it.displayName} (${it.code})" },
         ) { onChange(filter.copy(bows = filter.bows.toggled(it))) }
+        if (usedBows.size > 1 || filter.bowId != null) FilterMenuChip(
+            title = "Bow", anyLabel = "Any bow", options = usedBows, selected = usedBows.firstOrNull { it.id == filter.bowId },
+            optionLabel = { Equipment.label(it) }, onSelect = { b -> onChange(filter.copy(bowId = b?.id, arrowId = null)) },
+        )
+        if (usedArrows.size > 1 || filter.arrowId != null) FilterMenuChip(
+            title = "Arrows", anyLabel = "Any arrows", options = usedArrows, selected = usedArrows.firstOrNull { it.id == filter.arrowId },
+            optionLabel = { Equipment.label(it) }, onSelect = { a -> onChange(filter.copy(arrowId = a?.id)) },
+        )
         FilterMenuChip(
             title = "Dates", anyLabel = StatsFilter.PERIODS.last().label(today),
             options = StatsFilter.PERIODS.dropLast(1), selected = filter.period.takeIf { it.kind != StatsFilter.PeriodKind.ALL },
@@ -157,9 +178,10 @@ private fun BestsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     // One card per round type and bow style.
     val groups = bests.groupBy { it.key.type to it.key.bowStyle }
     val handicaps by vm.handicaps.collectAsStateWithLifecycle()
+    val history by vm.handicapHistory.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // The handicap always uses your last 20 rounds, whatever the filters.
-        item(key = "handicap") { HandicapSummary(handicaps) }
+        item(key = "handicap") { HandicapSummary(handicaps, history) }
         item(key = "about") {
             Text(
                 "Best totals for each round type, bow style and number of targets in these dates, from fully scored rounds. " +
@@ -217,7 +239,7 @@ private fun BestsCard(type: RoundType, bow: BowStyle, list: List<PersonalBest>, 
 
 /** Your personal handicap for each bow style (2.9); how it works and the class multipliers are on Handicaps. */
 @Composable
-private fun HandicapSummary(handicaps: List<PersonalHandicap.Handicap>) {
+private fun HandicapSummary(handicaps: List<PersonalHandicap.Handicap>, history: Map<BowStyle, List<PersonalHandicap.HistoryPoint>> = emptyMap()) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Handicap", style = MaterialTheme.typography.titleMedium)
@@ -232,6 +254,8 @@ private fun HandicapSummary(handicaps: List<PersonalHandicap.Handicap>) {
                     Text(h.bowStyle.displayName, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                     Text("${h.handicap}", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
+                // 3.2.24 (Pete): how it's changed.
+                history[h.bowStyle]?.let { HandicapChart(it) }
             }
             Text("How it works, and the class multipliers: Handicaps on Home.", style = MaterialTheme.typography.bodySmall)
         }

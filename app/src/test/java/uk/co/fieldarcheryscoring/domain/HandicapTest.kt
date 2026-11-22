@@ -149,4 +149,12 @@ class HandicapTest {
         assertEquals(324, PersonalHandicap.allowance(360, 36))
         assertEquals(864, PersonalHandicap.parFor(36))
     }
+
+    @Test
+    fun handicapOverTime() {
+        // 3.2.24: what it was after each round, from the 3rd (the first with a handicap); other bow styles left out.
+        val es = listOf(e(4, 900), e(1, 600), e(2, 700), e(3, 800), e(5, 100, bow = BowStyle.UNLIMITED))
+        assertEquals(listOf(3 to 260, 4 to 160), PersonalHandicap.history(es, BowStyle.LONGBOW).map { it.entry.shootDate.dayOfMonth - 1 to it.handicap })
+        assertEquals(emptyList<PersonalHandicap.HistoryPoint>(), PersonalHandicap.history(es, BowStyle.UNLIMITED))
+    }
 }

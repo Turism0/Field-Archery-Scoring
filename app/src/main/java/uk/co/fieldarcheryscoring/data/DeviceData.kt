@@ -26,6 +26,8 @@ class DeviceData(
     private val liveGroups: LiveGroupRepository,
     /** 3.2.23: names you've given other archers, put away and brought back like the Stats filters. */
     private val archerNames: ArcherNamesStore? = null,
+    /** 3.2.24: bows and arrows, put away, brought back, kept or removed with the rounds. */
+    private val equipment: uk.co.fieldarcheryscoring.data.local.EquipmentDao? = null,
 ) {
     /** Kept apart from the account's own file, which is cleared whenever the sign-in ends. Backed up with the rounds. */
     private val prefs = context.getSharedPreferences("device_data", Context.MODE_PRIVATE)
@@ -49,7 +51,8 @@ class DeviceData(
 
     /** What removing the showing rounds would lose: changes not yet sent, and rounds still in progress. */
     suspend fun signOutLoss(): Pair<Int, Int> =
-        (rounds.pendingUploadIds().size + rounds.pendingOfferIds().size) to rounds.inProgressCount()
+        (rounds.pendingUploadIds().size + rounds.pendingOfferIds().size + (equipment?.let { it.pendingBowCount() + it.pendingArrowCount() } ?: 0)) to
+            rounds.inProgressCount()
 
     /** Signing out (or the server ending the sign-in): [who]'s rounds, profile and Stats filters are put away here. */
     suspend fun putAway(who: String) {
@@ -57,6 +60,7 @@ class DeviceData(
         statsFilter.current()?.let { prefs.edit().putString(K_FILTER + who, it).apply() }
         archerNames?.current()?.let { prefs.edit().putString(K_NAMES + who, it).apply() }
         rounds.hideShowing(who)
+        equipment?.hideShowing(who)
         clearSession()
         if (owner == who) owner = null
     }
@@ -64,6 +68,7 @@ class DeviceData(
     /** Signing in: [who]'s rounds, profile and Stats filters come back. */
     suspend fun bringBack(who: String) {
         rounds.showHidden(who)
+        equipment?.showHidden(who)
         prefs.getString(K_PROFILE + who, null)?.let { profile.upsert(profileFromJson(it)) }
         prefs.getString(K_FILTER + who, null)?.let { statsFilter.restore(it) }
         prefs.getString(K_NAMES + who, null)?.let { archerNames?.restore(it) }
@@ -79,13 +84,16 @@ class DeviceData(
         if (keep) {
             for (id in earlier) {
                 rounds.showHidden(id)
+                equipment?.showHidden(id)
                 if (!prefs.contains(K_PROFILE + archerId)) prefs.getString(K_PROFILE + id, null)?.let { prefs.edit().putString(K_PROFILE + archerId, it).apply() }
                 if (!prefs.contains(K_FILTER + archerId)) prefs.getString(K_FILTER + id, null)?.let { prefs.edit().putString(K_FILTER + archerId, it).apply() }
             }
             rounds.markOwnPending()   // before this account's own rounds come back, so only these go up again
+            equipment?.markOwnPending()
         } else {
             rounds.deleteShowing()
-            if (earlier.isNotEmpty()) rounds.deleteHidden(earlier)
+            equipment?.deleteShowing()
+            if (earlier.isNotEmpty()) { rounds.deleteHidden(earlier); equipment?.deleteHidden(earlier) }
         }
         prefs.edit().apply { earlier.forEach { remove(K_PROFILE + it); remove(K_FILTER + it); remove(K_NAME + it); remove(K_NAMES + it) } }.apply()
     }
@@ -93,6 +101,7 @@ class DeviceData(
     /** Signing out with "Also remove my rounds from this phone": the showing rounds and this account's things go. */
     suspend fun removeShowing(who: String) {
         rounds.deleteShowing()
+        equipment?.deleteShowing()
         prefs.edit().remove(K_PROFILE + who).remove(K_FILTER + who).remove(K_NAMES + who).apply()
         clearSession()
         if (owner == who) owner = null

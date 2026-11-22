@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
+import { EquipmentPickers, equipmentChoice, useKit } from './Equipment'
+import { NONE } from '../domain/equipment'
 import { Bar, Card, Dialog, Field, Select, Seg, back, errorText, replace, toast, today, useData } from './common'
 import { getAccount, getProfile } from '../data/account'
 import { getRound } from '../data/db'
@@ -33,6 +35,10 @@ export function PaperEntry({ id }: { id?: string }) {
   const [cls, setCls] = useState<ArcherClass>()
   const [age, setAge] = useState<AgeGroup>()
   const [bow, setBow] = useState<string>()
+  // 3.2.24: the bow and arrows (new rounds: the last used or only one; editing: the round's own, NONE = none).
+  const [bowId, setBowId] = useState<string | null>(null)
+  const [arrowId, setArrowId] = useState<string | null>(null)
+  const kit = useKit()
   const [locId, setLocId] = useState<string>('')
   const [start, setStart] = useState('')
   // 3.0: a new name-only location (no map pin) typed here, made when the round is saved.
@@ -46,7 +52,7 @@ export function PaperEntry({ id }: { id?: string }) {
     if (id) getRound(id).then(r => {
       if (!r) return
       setExisting(r); setType(r.type); setDate(r.shootDate); setCount(String(r.targetCount)); setCls(r.archerClass); setAge(r.ageGroup)
-      setBow(r.bowStyle); setLocId(r.locationId ?? ''); setStart(r.startTarget ? String(r.startTarget) : '')
+      setBow(r.bowStyle); setBowId(r.bowId ?? NONE); setArrowId(r.arrowId ?? NONE); setLocId(r.locationId ?? ''); setStart(r.startTarget ? String(r.startTarget) : '')
       setRows(Array.from({ length: r.targetCount }, (_, i) => { const t = r.targets.find(x => x.targetNo === i + 1); return t ? targetToRow(t) : emptyRow(r.type) }))
       if (r.locationId && r.locationName) setKnown(k => k.some(x => x.id === r.locationId) ? k : [...k, { id: r.locationId!, name: r.locationName!, latitude: null, longitude: null, isPrivate: false, myRounds: 0, rounds: 0 }])
     })
@@ -58,6 +64,8 @@ export function PaperEntry({ id }: { id?: string }) {
   useEffect(() => { if (account) knownLocations().then(l => setKnown(k => [...l, ...k.filter(x => !l.some(y => y.id === x.id))]), () => {}) }, [account?.token])
 
   const n = Number(count)
+  const ownCard = !existing || existing.groupRole == null || existing.groupRole === 'SCORER'
+  const choice = ownCard ? equipmentChoice(kit, bow, bowId, arrowId, existing?.id) : null
   const countOk = Number.isInteger(n) && n >= 1 && n <= MAX_TARGETS
   // Rows follow the number of targets (and the round type for a new round).
   useEffect(() => {
@@ -103,6 +111,7 @@ export function PaperEntry({ id }: { id?: string }) {
         id: existing?.id, type, shootDate: date, targetCount: n, archerClass: cls!, ageGroup: age!, bowStyle: bow!,
         targets: targets as TargetScore[],
         finished, startTarget: start ? Number(start) : null, location: loc ? { id: loc.id, name: loc.name } : locId === '' ? null : undefined,
+        ...(choice ? { bowId: choice.bowId, arrowId: choice.arrowId } : {}),
       })
       toast(existing ? 'Saved.' : finished ? 'Round added.' : 'Saved as in progress.')
       existing ? back() : replace(`/card/${rid}`)
@@ -132,6 +141,7 @@ export function PaperEntry({ id }: { id?: string }) {
             <div class="row" style="flex-wrap:nowrap">
               <Select<AgeGroup> label="Age group" value={age} options={['ADULT', 'JUNIOR', 'CUB']} optionLabel={a => AGE_NAMES[a]} onChange={setAge} />
               <Select label="Bow style" value={bow} options={BOW_STYLES.map(b => b.code)} optionLabel={c => `${BOW_STYLES.find(b => b.code === c)!.name} (${c})`} onChange={setBow} />
+              <EquipmentPickers choice={choice} always={!!existing} onBow={x => { setBowId(x); setArrowId(null) }} onArrows={setArrowId} />
             </div>
             <label class="field">Shoot location
               <select value={locId} onChange={e => setLocId((e.target as HTMLSelectElement).value)} disabled={!account}>

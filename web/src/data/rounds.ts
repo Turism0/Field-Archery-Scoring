@@ -10,6 +10,7 @@ import {
 import { isComplete, newTarget, totalPoints, type RoundType, type TargetScore } from '../domain/scoring'
 import { missingOnServer } from '../domain/deviceData'
 import { downloadWeather } from './weather'
+import { syncEquipment } from './equipment'
 
 // ---- on this device ----
 
@@ -43,9 +44,10 @@ export interface MemberDraft {
 export async function startRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
   members?: MemberDraft[]; groupId?: string; startTarget?: number | null; notes?: string | null
+  bowId?: string | null; arrowId?: string | null
 }): Promise<string> {
   const groupId = p.members?.length || p.groupId ? (p.groupId ?? crypto.randomUUID()) : null
-  // Notes (3.2.21) go on your own card only.
+  // Notes (3.2.21) and equipment (3.2.24) go on your own card only.
   const mine = newRound({ ...p, groupId, groupRole: groupId ? 'SCORER' : null, groupOrder: groupId ? 0 : null })
   const others = (p.members ?? []).map((m, i) => newRound({
     shootDate: p.shootDate, targetCount: p.targetCount, type: p.type, archerClass: m.archerClass, ageGroup: m.ageGroup,
@@ -161,6 +163,8 @@ async function doSync(): Promise<SyncReport> {
     if (me.roundOffers != null) await setKv('offerCount', me.roundOffers)
     // Shoot locations before uploading, so finished rounds go up with theirs.
     try { await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
+    // 3.2.24: bows and arrows before rounds.
+    await syncEquipment(token, () => stillSignedIn(token))
     await upload(token)
     await download(token)
     // 3.2.09: once a day, finished rounds the server is missing (it lost data, or was restored from a backup) go up again.
@@ -279,6 +283,8 @@ async function applyRemote(j: any) {
   if (local?.fixLat != null) merged = { ...merged, fixLat: local.fixLat, fixLon: local.fixLon, locationState: merged.locationId ? null : local.locationState }
   // 3.2.21: an API from before notes doesn't send them: keep this device's.
   if (local && !('notes' in j)) merged = { ...merged, notes: local.notes ?? null }
+  // 3.2.24: the same for the bow and arrows.
+  if (local && !('bowId' in j)) merged = { ...merged, bowId: local.bowId ?? null, arrowId: local.arrowId ?? null }
   await putRound(merged, false)
 }
 
@@ -320,6 +326,8 @@ export async function updateDetails(id: string, shootDate: string, targetCount: 
 export async function saveTypedRound(p: {
   id?: string; type: RoundType; shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string
   targets: TargetScore[]; finished: boolean; location?: { id: string; name: string } | null; startTarget?: number | null
+  /** 3.2.24: the bow and arrows (left out: unchanged). */
+  bowId?: string | null; arrowId?: string | null
 }): Promise<string> {
   const base = p.id ? await getRound(p.id) : undefined
   const r: Round = base ?? newRound({ shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle, type: p.type })
@@ -329,6 +337,7 @@ export async function saveTypedRound(p: {
     ...r, ...loc, shootDate: p.shootDate, targetCount: p.targetCount, archerClass: p.archerClass, ageGroup: p.ageGroup, bowStyle: p.bowStyle,
     targets: p.targets, status: p.finished ? 'COMPLETED' : 'IN_PROGRESS', updatedUtc: nowUtc(), pending: true, failed: false,
     startTarget: startTargetOk(p.startTarget) ? p.startTarget : null,
+    ...(p.bowId !== undefined ? { bowId: p.bowId, arrowId: p.bowId ? (p.arrowId ?? null) : null } : {}),
   })
   if (p.finished) syncNow()
   return r.id
@@ -340,6 +349,21 @@ export async function setNotes(id: string, notes: string | null) {
   const clean = cleanNotes(notes)
   if (!r || (r.notes ?? null) === clean) return
   await putRound({ ...r, notes: clean, updatedUtc: nowUtc(), pending: true, failed: false })
+}
+
+/** The bow and arrows a round was shot with (3.2.24); your own round only, not the rest of a group. */
+export async function setEquipment(id: string, bowId: string | null, arrowId: string | null) {
+  const r = await getRound(id)
+  const arrows = bowId ? arrowId : null
+  if (!r || ((r.bowId ?? null) === bowId && (r.arrowId ?? null) === arrows)) return
+  await putRound({ ...r, bowId, arrowId: arrows, updatedUtc: nowUtc(), pending: true, failed: false })
+}
+
+/** Joining a live group (3.2.24): your bow and arrows go on your round in it. */
+export async function useEquipmentInGroup(groupId: string, bowId: string | null, arrowId: string | null) {
+  if (!bowId) return
+  const mine = (await groupRounds(groupId)).find(r => r.groupRole === 'SCORER')
+  if (mine) await setEquipment(mine.id, bowId, arrowId)
 }
 
 /** Live groups (2.7): the host's start target on every card in the group here (only where it differs). */

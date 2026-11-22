@@ -6,7 +6,14 @@ import java.time.LocalDate
  * The Stats screen's filters (3.2, Pete): round types and bow styles (any number of each, never none) and a date range.
  * The same rules as the web app's domain/statsFilter.ts.
  */
-data class StatsFilter(val types: Set<RoundType>, val bows: Set<BowStyle>, val period: Period) {
+data class StatsFilter(
+    val types: Set<RoundType>,
+    val bows: Set<BowStyle>,
+    val period: Period,
+    /** 3.2.24: only rounds shot with this bow / these arrows; null = any. */
+    val bowId: String? = null,
+    val arrowId: String? = null,
+) {
 
     /** ALL time; the last [years] CALENDAR years including this one (1 = this year so far); or the last [years] ROLLING to today. */
     enum class PeriodKind { ALL, CALENDAR, ROLLING }
@@ -26,11 +33,13 @@ data class StatsFilter(val types: Set<RoundType>, val bows: Set<BowStyle>, val p
         }
     }
 
-    fun matches(r: Round, today: LocalDate): Boolean = r.type in types && r.bowStyle in bows && period.contains(r.shootDate, today)
+    fun matches(r: Round, today: LocalDate): Boolean = r.type in types && r.bowStyle in bows && period.contains(r.shootDate, today) &&
+        (bowId == null || r.bowId == bowId) && (arrowId == null || r.arrowId == arrowId)
 
     /** For saving on the phone: "types=BIG_GAME,WOODSMAN;bows=CL,AFB;period=ROLLING:1". */
     fun encode(): String =
-        "types=${types.joinToString(",") { it.name }};bows=${bows.joinToString(",") { it.code }};period=${period.kind.name}:${period.years}"
+        "types=${types.joinToString(",") { it.name }};bows=${bows.joinToString(",") { it.code }};period=${period.kind.name}:${period.years}" +
+            (bowId?.let { ";bow=$it" } ?: "") + (arrowId?.let { ";arrow=$it" } ?: "")
 
     companion object {
         val YEARS = listOf(1, 2, 3, 5, 10)
@@ -51,7 +60,7 @@ data class StatsFilter(val types: Set<RoundType>, val bows: Set<BowStyle>, val p
                 val years = p.getOrNull(1)?.toIntOrNull() ?: 0
                 kind?.let { Period(it, if (it == PeriodKind.ALL) 0 else years) }
             }?.takeIf { it in PERIODS }
-            return Saved(types, bows, period)
+            return Saved(types, bows, period, parts["bow"]?.takeIf { it.isNotBlank() }, parts["arrow"]?.takeIf { it.isNotBlank() })
         }
 
         /** Round types you have finished rounds of, in order. */
@@ -77,12 +86,17 @@ data class StatsFilter(val types: Set<RoundType>, val bows: Set<BowStyle>, val p
                 types = keptTypes.ifEmpty { types.toSet() },
                 bows = keptBows.ifEmpty { setOfNotNull(defaultBow) },
                 period = saved?.period ?: DEFAULT_PERIOD,
+                bowId = saved?.bowId?.takeIf { id -> rounds.any { it.bowId == id } },
+                arrowId = saved?.arrowId?.takeIf { id -> rounds.any { it.arrowId == id } },
             )
         }
     }
 
     /** A saved choice, each part null when it wasn't saved. */
-    data class Saved(val types: Set<RoundType>?, val bows: Set<BowStyle>?, val period: Period?)
+    data class Saved(
+        val types: Set<RoundType>?, val bows: Set<BowStyle>?, val period: Period?,
+        val bowId: String? = null, val arrowId: String? = null,
+    )
 }
 
 /** Adds or removes [value], never leaving the set empty. */

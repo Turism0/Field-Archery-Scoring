@@ -6,6 +6,8 @@ enum class HomeTileId(val title: String) {
     HISTORY("Score history"),
     STATS("Stats"),
     HANDICAP("Handicaps"),
+    /** 3.2.24 (Pete): bows and arrows. */
+    EQUIPMENT("Equipment"),
     FRIENDS("Friends"),
     LOCATIONS("Shoot locations"),
     ADMIN("Admin"),

@@ -4,6 +4,17 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.24
+
+- **3.2.24 (app, web app and API; run `server/sql/019_equipment.sql` first): equipment profiles and handicap over time (Pete).**
+  - **Equipment (new Home tile):** your **bows** (type from a list, make, model, poundage, and the bow styles you shoot each in) and **arrows** (make, model, length, arrow weight, spine, point weight, fletches: how many, material, length, colours; and the bows you use them with). The spine is tidied as you type it into the usual style: carbon 500 ("0.500" → 500), wood 45-50 ("45/50#" → 45-50), aluminium 2213 ("22-13" → 2213). Synced with your account (`dbo.Bow`, `dbo.ArrowSet`, schema 15; `GET /api/equipment`, `PUT /api/equipment/bows|arrows/{id}`) and private: only ever returned to you. Deleting keeps them, flagged, so rounds shot with them still show their names. Put away and brought back with the account at sign-out and sign-in, like rounds.
+  - **New round, Join a live group, Add a round (desktop):** Bow and Arrows under Bow style, offering only the bows for the bow style picked and the arrows for the bow picked. Each starts on the last one used with that bow style, and is hidden when there are fewer than two to choose from (the only one is used). The Archer card (class, age group, bow style, equipment) now comes before Shoot. Own card only in groups.
+  - **Rounds:** `Round.BowId` / `ArrowId` (owner only, like notes; older apps keep what's stored); scorecards show the bow and arrows; Round details can change them (shown with even one bow, so older rounds can be given it).
+  - **Comparing:** Score history and Stats filter by bow and arrows (when you've used two or more); Stats → Analysis → **By equipment** compares each bow and set of arrows (rounds, average, best, kill rate); the Equipment page shows the same for each.
+  - **Handicap over time:** a chart of your handicap after each round for each bow style, on Stats (under Handicap) and on Handicaps → My handicap.
+  - Privacy policy: equipment added to what the server keeps (private to you).
+  - Phone database v9 (`bow`, `arrow_set`, `round.bow_id/arrow_id`). New `domain/Equipment.kt` / `domain/equipment.ts` with tests (Kotlin 130, web 124); server test `server/tests/Test-Equipment.ps1` (in Run-AllTests). Web app checked in a browser. App versionCode 86, versionName 3.2.24.
+
 ## Version 3.2.23
 
 - **3.2.23 (app, web app and API; run `server/sql/018_group_member_app.sql` first): names you give other archers; Bluetooth and web app wording in live groups (Pete).**

@@ -1,11 +1,13 @@
 // Stats → Analysis (3.2.17, Pete): form and consistency, arrows, hits (with a chart over time), target types, start and
 // finish, compared with others, by location and by weather. The same sections as the app's Analysis tab.
+import { getEquipment, type EquipmentStore } from '../data/equipment'
+import { arrowLabel, bowLabel } from '../domain/equipment'
 import { Card, go, one, useData } from './common'
 import { ROUND_TYPE_NAMES, bowName, CLASS_NAMES, AGE_NAMES, type Round } from '../domain/round'
 import { TARGET_TYPE_NAMES, type RoundType } from '../domain/scoring'
 import {
-  arrowCounts, byLocation, byTargetType, comparedText, consistency, form, hitCounts, hitsOverTime, recentRounds, roundAverages, streak, thirds,
-  weatherSplits, type ArrowCounts, type HitCounts,
+  arrowCounts, byEquipment, byLocation, byTargetType, comparedText, consistency, form, hitCounts, hitsOverTime, recentRounds, roundAverages, streak, thirds,
+  weatherSplits, type ArrowCounts, type EquipmentSummary, type HitCounts,
 } from '../domain/analysis'
 import { compareKey, compareWithOthers, weatherMap } from '../data/weather'
 import { getAccount } from '../data/account'
@@ -18,17 +20,18 @@ const HIT_COLOURS = { innerKill: '#2f6b3c', kill: '#7fb88a', wound: '#d9a441', m
 
 export function Analysis({ rounds, types }: { rounds: Round[]; types: RoundType[] }) {
   const weather = useData(weatherMap)
+  const kit = useData(getEquipment)
   return <>{types.map(t => {
     const list = rounds.filter(r => r.type === t)
     return <>
       {types.length > 1 && <h3 class="section">{ROUND_TYPE_NAMES[t]}</h3>}
       {!list.length ? <p class="sub">No finished {ROUND_TYPE_NAMES[t]} rounds match these filters.</p>
-        : <TypeAnalysis rounds={list} type={t} weather={weather ?? {}} />}
+        : <TypeAnalysis rounds={list} type={t} weather={weather ?? {}} kit={kit} />}
     </>
   })}</>
 }
 
-function TypeAnalysis({ rounds, type, weather }: { rounds: Round[]; type: RoundType; weather: Record<string, any> }) {
+function TypeAnalysis({ rounds, type, weather, kit }: { rounds: Round[]; type: RoundType; weather: Record<string, any>; kit?: EquipmentStore }) {
   const arrows = arrowCounts(rounds)
   const all = hitCounts(rounds), recent = hitCounts(recentRounds(rounds, 10))
   const overTime = hitsOverTime(rounds)
@@ -90,6 +93,9 @@ function TypeAnalysis({ rounds, type, weather }: { rounds: Round[]; type: RoundT
         : locs.map(l => <button class="row between plain" onClick={() => go(`/card/${l.bestRound.id}`)}>
           <span><b>{l.name}</b><div class="sub">{l.rounds} round{l.rounds === 1 ? '' : 's'} · best {one(l.best)}</div></span><b>{one(l.average)}</b></button>)}
     </Card>
+
+    {/* 3.2.24 (Pete): your bows and arrows compared (once you've used more than one). */}
+    <EquipmentCard rounds={rounds} type={type} kit={kit} />
 
     <Card title="Weather" sub={`Your average ${per(type)} in different weather. ${withWeather} of these ${rounds.length} rounds have weather (rounds at a location with a map pin). Weather data by Open-Meteo.com.`}>
       {withWeather < 2 ? <div>Not enough rounds with weather yet.</div>
@@ -160,4 +166,23 @@ function Compared({ rounds, type }: { rounds: Round[]; type: RoundType }) {
           <span class="sub" style="text-align:right">{text ?? 'Not enough rounds from other archers yet'}</span></div>
       })}
   </Card>
+}
+
+function EquipmentCard({ rounds, type, kit }: { rounds: Round[]; type: RoundType; kit?: EquipmentStore }) {
+  const byBow = byEquipment(rounds, r => r.bowId), byArrows = byEquipment(rounds, r => r.arrowId)
+  if (byBow.length < 2 && byArrows.length < 2) return null
+  const bowLabelOf = (id: string) => { const b = kit?.bows.find(x => x.id === id); return b ? bowLabel(b) : 'Unknown bow' }
+  const arrowLabelOf = (id: string) => { const a = kit?.arrows.find(x => x.id === id); return a ? arrowLabel(a) : 'Unknown arrows' }
+  const rows = (title: string, list: EquipmentSummary[], name: (id: string) => string) => list.length < 2 ? null : <>
+    <h3 class="small">{title}</h3>
+    {list.map(e => <button class="row between plain" onClick={() => go(`/card/${e.bestRound.id}`)}>
+      <span><b>{name(e.id)}</b><div class="sub">{e.rounds} round{e.rounds === 1 ? '' : 's'} · best {one(e.best)}{e.killRate != null ? ` · kills ${Math.round(e.killRate * 100)}%` : ''}</div></span>
+      <b>{one(e.average)}</b></button>)}
+  </>
+  return (
+    <Card title="By equipment" sub={`Average and best ${per(type)} with each bow and set of arrows.`}>
+      {rows('Bows', byBow, bowLabelOf)}
+      {rows('Arrows', byArrows, arrowLabelOf)}
+    </Card>
+  )
 }

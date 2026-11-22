@@ -81,6 +81,9 @@ export interface Round {
   startTarget?: number | null
   /** The archer's notes (3.2.21): their own rounds only; synced, but only ever shown to them. */
   notes?: string | null
+  /** The bow and arrows it was shot with (3.2.24): their own rounds only; synced, but only ever shown to them. */
+  bowId?: string | null
+  arrowId?: string | null
 }
 
 export function target(r: Round, n: number): TargetScore {
@@ -214,7 +217,7 @@ export function newRound(p: {
   shootDate: string; targetCount: number; archerClass: ArcherClass; ageGroup: AgeGroup; bowStyle: string; type: RoundType
   id?: string; groupId?: string | null; groupRole?: GroupRole | null; groupName?: string | null; groupArcherId?: string | null
   groupOrder?: number | null; locationId?: string | null; locationName?: string | null; startTarget?: number | null
-  notes?: string | null
+  notes?: string | null; bowId?: string | null; arrowId?: string | null
 }): Round {
   const now = nowUtc()
   return {
@@ -226,6 +229,7 @@ export function newRound(p: {
     locationId: p.locationId ?? null, locationName: p.locationName ?? null,
     startTarget: startTargetOk(p.startTarget) ? p.startTarget : null,
     notes: cleanNotes(p.notes),
+    bowId: p.bowId ?? null, arrowId: p.bowId ? (p.arrowId ?? null) : null,
   }
 }
 
@@ -260,6 +264,9 @@ export function roundToJson(r: Round): Record<string, unknown> {
     roundType: r.type, groupId: r.groupId ?? null, startTarget: r.startTarget ?? null,
     // 3.2.21: the archer's own notes ("" = none); a round scored for a friend never carries the scorer's notes.
     notes: !r.groupRole || r.groupRole === 'SCORER' ? (r.notes ?? '') : '',
+    // 3.2.24: the archer's own bow and arrows (the empty id = none); never on a round scored for someone else.
+    bowId: (!r.groupRole || r.groupRole === 'SCORER' ? r.bowId : null) || NO_ID,
+    arrowId: (!r.groupRole || r.groupRole === 'SCORER' ? r.arrowId : null) || NO_ID,
     targets: [...r.targets].sort((a, b) => a.targetNo - b.targetNo).map(targetToJson),
   }
 }
@@ -272,8 +279,12 @@ export function roundFromJson(j: any): Round {
     targets: (j.targets ?? []).map(targetFromJson), createdUtc: j.clientCreatedUtc, updatedUtc: j.clientUpdatedUtc,
     pending: false, locationId: j.locationId ?? null, locationName: j.locationName ?? null, startTarget: j.startTarget ?? null,
     notes: j.notes || null,
+    bowId: j.bowId && j.bowId !== NO_ID ? j.bowId : null, arrowId: j.arrowId && j.arrowId !== NO_ID ? j.arrowId : null,
   }
 }
+
+/** 3.2.24: "no bow / no arrows" to the API (an id left out means "not sent", which keeps what the server has). */
+export const NO_ID = '00000000-0000-0000-0000-000000000000'
 
 /** Share of the maximum, for checks. */
 export const shareOfMax = (t: TargetScore) => maxPoints(t) ? totalPoints(t) / maxPoints(t) : 0

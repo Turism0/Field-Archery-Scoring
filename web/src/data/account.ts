@@ -1,5 +1,6 @@
 // Signing in and the archer's profile. Like the app: the token stays on this device, never the password.
 // Real name and date of birth stay here and are never sent.
+import { mergeEquipment, markEquipmentPending, type EquipmentStore } from './equipment'
 import { allRounds, clearSession, everyRoundEvenDeleted, getKv, hiddenCounts, hideShowing, markShowingPending, removeRounds, setKv, showHidden } from './db'
 import { needsAsking, ownRoundCount, signInPlan, signOutLoss, type SignInPlan, type SignOutLoss } from '../domain/deviceData'
 import { ApiError, request } from './api'
@@ -31,13 +32,20 @@ function deviceName(): string {
 // 'dataOwner' = the account the showing rounds belong to (none: nobody was signed in); 'owners' = each account's
 // username; 'stash:<id>' = a put-away account's profile and Stats filters.
 
-interface Stash { profile?: Profile; statsFilter?: string | null; archerNames?: Record<string, string> | null }
+interface Stash {
+  profile?: Profile; statsFilter?: string | null; archerNames?: Record<string, string> | null
+  /** 3.2.24: bows and arrows. */
+  equipment?: EquipmentStore | null
+}
 
 /** Signing out (or the server ending the sign-in): [owner]'s rounds, profile and Stats filters are put away here. */
 async function putAway(owner: string) {
   let statsFilter: string | null = null
   try { statsFilter = localStorage.getItem('statsFilter') } catch { /* not kept */ }
-  await setKv(`stash:${owner}`, { profile: await getProfile(), statsFilter, archerNames: (await getKv<Record<string, string>>('archerNames')) ?? null } satisfies Stash)
+  await setKv(`stash:${owner}`, {
+    profile: await getProfile(), statsFilter, archerNames: (await getKv<Record<string, string>>('archerNames')) ?? null,
+    equipment: (await getKv<EquipmentStore>('equipment')) ?? null,
+  } satisfies Stash)
   await hideShowing(owner)
   await clearSession()
 }
@@ -50,6 +58,8 @@ async function bringBack(owner: string) {
     if (s.profile) await saveProfile(s.profile)
     try { if (s.statsFilter) localStorage.setItem('statsFilter', s.statsFilter) } catch { /* not kept */ }
     if (s.archerNames) await setKv('archerNames', s.archerNames)   // 3.2.23
+    // 3.2.24: joins anything added here while signed out.
+    if (s.equipment) await setKv('equipment', mergeEquipment(await getKv<EquipmentStore>('equipment'), s.equipment))
     await setKv(`stash:${owner}`, null)
   }
 }
@@ -84,8 +94,10 @@ export async function finishSignIn(p: PendingSignIn, keep: boolean) {
       if (s && !(await getKv<Stash>(`stash:${p.result.archerId}`))) await setKv(`stash:${p.result.archerId}`, s)
     }
     await markShowingPending()   // before this account's own rounds come back, so only these go up again
+    await markEquipmentPending()
   } else {
     await removeRounds('showing')
+    await setKv('equipment', null)
     await removeRounds(p.plan.earlier)
   }
   for (const id of p.plan.earlier) await setKv(`stash:${id}`, null)
