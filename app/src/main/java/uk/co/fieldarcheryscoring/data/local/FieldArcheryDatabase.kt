@@ -285,12 +285,20 @@ abstract class RoundDao {
     @Query("UPDATE round SET location_state = 'NEEDS_NAME' WHERE id = :id AND location_state = 'PENDING_LOOKUP'")
     abstract suspend fun markNeedsName(id: String)
 
+    /** 3.2.25: a location named with no signal ([state] PENDING_NAME), or the server's suggestions for it (CHECK_NAME). Not an edit. */
+    @Query("UPDATE round SET pending_location = :json, location_state = :state WHERE id = :id")
+    abstract suspend fun setPendingLocation(id: String, json: String, state: String)
+
+    /** 3.2.25: rounds with a location named with no signal, waiting to be made on the server. */
+    @Query("SELECT * FROM round WHERE location_state = 'PENDING_NAME' AND pending_location IS NOT NULL AND deleted = 0 AND hidden_owner IS NULL")
+    abstract suspend fun pendingNames(): List<RoundEntity>
+
     /**
      * Sets the round's location as an edit, so a finished round goes up to the server again. In a group, everyone's
      * round gets it (they're all at the same shoot).
      */
     @Query(
-        "UPDATE round SET location_id = :locationId, location_name = :name, location_state = 'SET', " +
+        "UPDATE round SET location_id = :locationId, location_name = :name, location_state = 'SET', pending_location = NULL, " +
             "updated_at = :nowMillis, sync_state = 'PENDING' " +
             "WHERE id = :id OR (group_id IS NOT NULL AND group_id = (SELECT group_id FROM round WHERE id = :id))",
     )
@@ -406,7 +414,7 @@ data class RoundData(
         ProfileEntity::class, RoundEntity::class, TargetEntity::class, AnimalEntity::class, RoundWeatherEntity::class,
         BowEntity::class, ArrowSetEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -418,8 +426,15 @@ abstract class FieldArcheryDatabase : RoomDatabase() {
     companion object {
         fun create(context: Context): FieldArcheryDatabase =
             Room.databaseBuilder(context, FieldArcheryDatabase::class.java, "fieldarchery.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .build()
+
+        /** v10: a location named with no signal, waiting for the server (app 3.2.25). */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE round ADD COLUMN pending_location TEXT")
+            }
+        }
 
         /** v9: equipment (app 3.2.24): bows, arrows, and the ones each round was shot with. */
         val MIGRATION_8_9 = object : Migration(8, 9) {

@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.25
+
+- **3.2.25 (app, web app and API; no SQL): fewer duplicate shoot locations, and locations with no signal (Pete).**
+  - **Suggest instead of a duplicate:** naming a new location (location sheet, Choose on map, map → New, desktop Add a round) first asks whether it's one already known: a public location (or your own private one) with the **same or a similar name** anywhere (the Admin duplicate rules: ignoring words like Archers, Bowmen, Club; small typos), or **within 300 m**. "Is it one of these?" → **Use** it, or **No, it's a new place**. API: `POST /api/locations` with `checkSimilar: true` → 409 `similar_exists { matches }` (older apps don't send it and are unchanged).
+  - **No signal:** every location you can use (public and your own private, with or without a pin) is kept on the phone / in the browser and refreshed on each sync (`PlaceCache` / kv `placeCache`, cleared at sign-out). With no signal a new round is matched to the nearest known location within the catchment, Nearby and Known locations work from the copy ("No signal: using the locations saved…"), and a new name is checked against the copy, then kept on the round ("… (added when there's signal)") and made on the next sync. If the server then knows locations that might be the same one, the round asks: **"…: already known?"** → Use one, or keep your name.
+  - Phone database v10 (`round.pending_location`, phone only). New `domain/LocationMatch.kt` / `domain/locationMatch.ts` with tests (Kotlin 137, web 131); server test `server/tests/Test-SimilarLocations.ps1` (in Run-AllTests). Web app checked in a browser (offline matching, the copy, queued names, the server's suggestions). App versionCode 87, versionName 3.2.25.
+
 ## Version 3.2.24
 
 - **3.2.24 (app, web app and API; run `server/sql/019_equipment.sql` first): equipment profiles and handicap over time (Pete).**
@@ -14,6 +21,7 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
   - **Handicap over time:** a chart of your handicap after each round for each bow style, on Stats (under Handicap) and on Handicaps → My handicap.
   - Privacy policy: equipment added to what the server keeps (private to you).
   - Phone database v9 (`bow`, `arrow_set`, `round.bow_id/arrow_id`). New `domain/Equipment.kt` / `domain/equipment.ts` with tests (Kotlin 130, web 124); server test `server/tests/Test-Equipment.ps1` (in Run-AllTests). Web app checked in a browser. App versionCode 86, versionName 3.2.24.
+  - **Test-Equipment fix:** the script stored the downloaded bow and arrows in `$b` and `$a`, and PowerShell variable names ignore case, so they overwrote the test accounts `$A` and `$B`; every call after that went without a token (401). The API was fine; the script now uses other names and two checks that passed with nothing to check now check the reply first.
 
 ## Version 3.2.23
 

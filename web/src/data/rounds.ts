@@ -2,7 +2,7 @@
 import { allRounds, everyRoundEvenDeleted, getKv, getRound, getRoundEvenDeleted, groupRounds, putRound, putRounds, setKv } from './db'
 import { ApiError, request } from './api'
 import { refreshModelIfStale } from './handicap'
-import { lookUpPending, refreshNames } from './locations'
+import { createPending, lookUpPending, refreshNames, refreshPlaceCache } from './locations'
 import { claimDeviceData, getAccount, signedOutByServer, type Friend } from './account'
 import {
   cleanNotes, newRound, nowUtc, roundFromJson, roundToJson, startTargetOk, target, type AgeGroup, type ArcherClass, type GroupRole, type Round,
@@ -162,7 +162,9 @@ async function doSync(): Promise<SyncReport> {
     await setKv('duplicateLocations', me.duplicateLocations ?? 0)
     if (me.roundOffers != null) await setKv('offerCount', me.roundOffers)
     // Shoot locations before uploading, so finished rounds go up with theirs.
-    try { await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
+    try { await createPending(); await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
+    // 3.2.25: this device's copy of the locations, for no signal (best effort).
+    try { await refreshPlaceCache() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
     // 3.2.24: bows and arrows before rounds.
     await syncEquipment(token, () => stillSignedIn(token))
     await upload(token)
@@ -283,6 +285,8 @@ async function applyRemote(j: any) {
   if (local?.fixLat != null) merged = { ...merged, fixLat: local.fixLat, fixLon: local.fixLon, locationState: merged.locationId ? null : local.locationState }
   // 3.2.21: an API from before notes doesn't send them: keep this device's.
   if (local && !('notes' in j)) merged = { ...merged, notes: local.notes ?? null }
+  // 3.2.25: a location named here with no signal is still waiting (unless the server copy has one now).
+  if (local?.pendingLocation && !merged.locationId) merged = { ...merged, pendingLocation: local.pendingLocation, locationState: local.locationState }
   // 3.2.24: the same for the bow and arrows.
   if (local && !('bowId' in j)) merged = { ...merged, bowId: local.bowId ?? null, arrowId: local.arrowId ?? null }
   await putRound(merged, false)

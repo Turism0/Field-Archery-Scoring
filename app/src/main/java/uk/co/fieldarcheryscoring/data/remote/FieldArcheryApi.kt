@@ -195,15 +195,21 @@ class FieldArcheryApi(
     }
 
     /** 201 { locationId, name }; 409 name_taken with { existing: { locationId, name } } in [ApiException.body]. */
-    suspend fun createLocation(token: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false): JSONObject =
+    suspend fun createLocation(token: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false, checkSimilar: Boolean = false): JSONObject =
         request(
             "POST", "/api/locations",
-            JSONObject().put("name", name).put("latitude", lat).put("longitude", lon).put("isPrivate", isPrivate), token,
+            JSONObject().put("name", name).put("latitude", lat).put("longitude", lon).put("isPrivate", isPrivate)
+                .apply { if (checkSimilar) put("checkSimilar", true) },   // 3.2.25: 409 similar_exists with the matches
+            token,
         )
 
     /** 3.0: a name-only location (no map pin). 201 { locationId, name, noPin }; 409 name_taken as [createLocation]. */
-    suspend fun createNamedLocation(token: String, name: String, isPrivate: Boolean = false): JSONObject =
-        request("POST", "/api/locations", JSONObject().put("name", name).put("noPin", true).put("isPrivate", isPrivate), token)
+    suspend fun createNamedLocation(token: String, name: String, isPrivate: Boolean = false, checkSimilar: Boolean = false): JSONObject =
+        request(
+            "POST", "/api/locations",
+            JSONObject().put("name", name).put("noPin", true).put("isPrivate", isPrivate).apply { if (checkSimilar) put("checkSimilar", true) },
+            token,
+        )
 
     /** 3.0: { locations: [ { locationId, name, isPrivate, myRounds, rounds } ] } name-only locations you can see. */
     suspend fun namedLocations(token: String): JSONObject = request("GET", "/api/locations/named", body = null, token = token)

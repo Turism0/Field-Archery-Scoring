@@ -63,10 +63,17 @@ class RoundSyncer(
             accounts.setRoundOffers(me.optInt("roundOffers"))
             // Shoot locations before uploading, so finished rounds go up with theirs.
             try {
+                locations.createPending()   // 3.2.25: locations named with no signal
                 locations.lookUpPending()
                 locations.refreshNames()
             } catch (e: ApiException) {
                 if (e.isNetwork || e.status == 401) throw e   // anything else: rounds still sync
+            }
+            // 3.2.25: the phone's copy of the locations, for no signal (best effort).
+            try {
+                locations.refreshCache()
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401) throw e
             }
             equipment?.sync(api, account.token) { stillSignedIn(account.token) }
             upload(account.token)
@@ -270,8 +277,12 @@ class RoundSyncer(
                 locationState = data.round.locationState ?: local.locationState,
             )
         } else data.round
+        // 3.2.25: a location named here with no signal is still waiting (unless the server copy has one now).
+        val withPending = if (local?.pendingLocation != null && withFix.locationId == null) {
+            withFix.copy(pendingLocation = local.pendingLocation, locationState = local.locationState)
+        } else withFix
         // 3.2.21: an API from before notes doesn't send them: keep this phone's. 3.2.24: the same for the bow and arrows.
-        val withNotes = (if (!json.has("notes") && local != null) withFix.copy(notes = local.notes) else withFix)
+        val withNotes = (if (!json.has("notes") && local != null) withPending.copy(notes = local.notes) else withPending)
             .let { if (!json.has("bowId") && local != null) it.copy(bowId = local.bowId, arrowId = local.arrowId) else it }
         // And its place in a group scored on this phone (the server doesn't send it back).
         val merged = if (local?.groupId != null) {

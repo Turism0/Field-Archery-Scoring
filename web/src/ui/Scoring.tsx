@@ -93,7 +93,8 @@ export function Scoring({ id, target: startTarget }: { id: string; target?: numb
   const own = group.find(m => m.groupRole == null || m.groupRole === 'SCORER') ?? round
   // Nothing known nearby: ask for the location's name once (the location line works any time).
   useEffect(() => {
-    if (own && locationStatus(own) === 'NEEDS_NAME' && !askedName && account) { setAskedName(true); setLocOpen(true) }
+    // 3.2.25: and once if a name given with no signal might be a location already known.
+    if (own && (locationStatus(own) === 'NEEDS_NAME' || locationStatus(own) === 'CHECK') && !askedName && account) { setAskedName(true); setLocOpen(true) }
   }, [own?.locationState, !!account])
 
   const isLive = !!info

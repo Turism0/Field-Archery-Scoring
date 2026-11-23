@@ -595,8 +595,11 @@ private fun RoundEntity.toDomain(targets: List<TargetEntity>, animals: List<Anim
                 LocationState.PENDING_LOOKUP -> LocationStatus.LOOKING
                 LocationState.NEEDS_NAME -> LocationStatus.NEEDS_NAME
                 LocationState.SET -> LocationStatus.SET
+                LocationState.PENDING_NAME -> LocationStatus.QUEUED
+                LocationState.CHECK_NAME -> LocationStatus.CHECK
             },
             name = locationName,
+            pending = PendingPlaceJson.decode(pendingLocation),
         ),
         targets = targets.map { t ->
             TargetScore(

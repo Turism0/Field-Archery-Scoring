@@ -85,7 +85,12 @@ data class LocationPage(
 )
 
 /** Map and location pages, straight from the server (nothing stored on the phone). Needs signal. */
-class LocationPageRepository(private val api: FieldArcheryApi, private val accounts: AccountStore) {
+class LocationPageRepository(
+    private val api: FieldArcheryApi,
+    private val accounts: AccountStore,
+    /** 3.2.25: the phone's copy of the locations you can use, for Known locations with no signal. */
+    private val cache: PlaceCache? = null,
+) {
 
     private val _changes = MutableStateFlow(0)
     /**
@@ -99,8 +104,18 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
      * A new location at a point picked on the map (not tied to a round). If the name is already used,
      * the [ApiException] (409 name_taken) says so.
      */
-    suspend fun create(name: String, lat: Double, lon: Double, isPrivate: Boolean) {
-        call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
+    suspend fun create(name: String, lat: Double, lon: Double, isPrivate: Boolean, check: Boolean = true) {
+        // 3.2.25: [check] first asks about locations that might be the same one (LocationRepository.SimilarExists).
+        val j = try {
+            call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate, checkSimilar = check) }
+        } catch (e: ApiException) {
+            if (e.code == "similar_exists") {
+                val all = e.body?.optJSONArray("matches")?.let { a -> (0 until a.length()).map { PendingPlaceJson.matchFrom(a.getJSONObject(it)) } }.orEmpty()
+                throw LocationRepository.SimilarExists(all, offline = false)
+            }
+            throw e
+        }
+        cache?.add(uk.co.fieldarcheryscoring.domain.KnownPlace(j.getString("locationId"), j.getString("name"), lat, lon, isPrivate))
         changed()
     }
 
@@ -120,6 +135,20 @@ class LocationPageRepository(private val api: FieldArcheryApi, private val accou
 
     /** Every location you can pick for a round, by name: on the map and name-only. */
     suspend fun known(): List<MapLocation> = (map() + named()).sortedBy { it.name.lowercase() }
+
+    /**
+     * 3.2.25: [known], and the phone's copy refreshed from it; with no signal, the phone's copy. Second: whether it's the
+     * copy.
+     */
+    suspend fun knownOrCached(): Pair<List<MapLocation>, Boolean> = try {
+        val list = known()
+        cache?.replace(list.map { uk.co.fieldarcheryscoring.domain.KnownPlace(it.id, it.name, it.latitude, it.longitude, it.isPrivate) })
+        list to false
+    } catch (e: ApiException) {
+        val c = cache?.places?.value.orEmpty()
+        if (!e.isNetwork || c.isEmpty()) throw e
+        c.map { MapLocation(it.id, it.name, it.latitude, it.longitude, it.isPrivate, 0, 0) }.sortedBy { it.name.lowercase() } to true
+    }
 
     /** A new name-only location (3.0). 409 name_taken as [create]. Returns its id and name. */
     suspend fun createNamed(name: String, isPrivate: Boolean): Pair<String, String> = call { token ->

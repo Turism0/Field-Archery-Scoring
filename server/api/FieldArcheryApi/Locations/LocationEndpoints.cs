@@ -14,6 +14,9 @@ namespace FieldArcheryApi.Locations;
 ///   GET  /api/locations/nearby?lat=&amp;lon=&amp;radius=   → { locations: [{ locationId, name, distanceMetres }] } nearest first;
 ///                                                    radius in metres, default the catchment (about a quarter mile), max 10 km
 ///   POST /api/locations          { name, latitude, longitude, isPrivate? } → 201 { locationId, name }; 409 name_taken with the existing one
+///                                (API 3.2.25: with checkSimilar: true, 409 similar_exists { matches: [{ locationId, name, isPrivate,
+///                                distanceMetres, reasons: [same_name|similar_name|nearby] }] } when a location you can use has the
+///                                same or a similar name or is within 300 m; send again without it to make the new one anyway)
 ///                                (API 3.0: { name, noPin: true, isPrivate? } makes a name-only location: no map pin)
 ///   GET  /api/locations/named    (API 3.0) → { locations: [{ locationId, name, isPrivate, myRounds, rounds }] } name-only locations
 ///                                you can see (public, and your own private ones), by name: for choosing one for a round
@@ -46,7 +49,11 @@ public static class LocationEndpoints
     public const int MaxName = 60;
     private const int MaxRadius = 10_000;
 
-    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null, bool? NoPin = null);
+    public sealed record NewLocation(string? Name, double? Latitude, double? Longitude, bool? IsPrivate = null, bool? NoPin = null,
+        bool? CheckSimilar = null);
+
+    /// <summary>3.2.25 (Pete): a new location this close to an existing one is suggested to be that one instead.</summary>
+    public const int SimilarMetres = 300;
     public sealed record PositionRequest(double? Latitude, double? Longitude, bool? Move = null);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
     public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
@@ -137,6 +144,23 @@ public static class LocationEndpoints
         if (NameProblem(name) is { } badName) return badName;
 
         await using var conn = await db.OpenAsync(ct);
+        // 3.2.25 (Pete): people were making duplicates. Apps that ask (checkSimilar) are told about public locations (and
+        // their own private ones) with the same or a similar name, or within 300 m, so they can use one of those instead;
+        // the archer can still go ahead (sent again without checkSimilar).
+        if (req.CheckSimilar == true)
+        {
+            var matches = await SimilarAsync(conn, name, noPin ? null : req.Latitude, noPin ? null : req.Longitude, user.ArcherId(), ct);
+            if (matches.Count > 0)
+            {
+                return Results.Json(new
+                {
+                    error = "similar_exists",
+                    message = matches.Count == 1 ? $"There's already a location that might be this one: {matches[0].name}."
+                        : "There are already locations that might be this one.",
+                    matches,
+                }, statusCode: StatusCodes.Status409Conflict);
+            }
+        }
         try
         {
             var id = await conn.QuerySingleAsync<Guid>(new CommandDefinition("""
@@ -557,6 +581,37 @@ public static class LocationEndpoints
             current = next;
         }
         return null;
+    }
+
+    public sealed record SimilarMatch(Guid locationId, string name, bool isPrivate, int? distanceMetres, IReadOnlyList<string> reasons);
+
+    private sealed record SimilarRow(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate);
+
+    /// <summary>
+    /// 3.2.25: live locations you can use (public, and your own private ones) that might be the one being named: the same
+    /// or a similar name (the Admin duplicate rules), or within [SimilarMetres] of its pin. Best matches first, at most 5.
+    /// </summary>
+    public static async Task<List<SimilarMatch>> SimilarAsync(SqlConnection conn, string name, double? lat, double? lon, Guid me, CancellationToken ct)
+    {
+        var rows = await conn.QueryAsync<SimilarRow>(new CommandDefinition("""
+            SELECT LocationId, Name, Latitude, Longitude, IsPrivate
+            FROM dbo.ShootLocation
+            WHERE MergedIntoId IS NULL AND (IsPrivate = 0 OR CreatedById = @me);
+            """, new { me }, cancellationToken: ct));
+        var key = DuplicateFinder.Key(name);
+        var found = new List<SimilarMatch>();
+        foreach (var r in rows)
+        {
+            int? metres = lat is { } la && lon is { } lo && r.Latitude is { } rLat && r.Longitude is { } rLon
+                ? (int)Math.Round(Metres(la, lo, (double)rLat, (double)rLon)) : null;
+            var reasons = new List<string>();
+            var k = DuplicateFinder.Key(r.Name);
+            if (k == key) reasons.Add("same_name");
+            else if (DuplicateFinder.Similar(k, key)) reasons.Add("similar_name");
+            if (metres <= SimilarMetres) reasons.Add("nearby");
+            if (reasons.Count > 0) found.Add(new SimilarMatch(r.LocationId, r.Name, r.IsPrivate, metres, reasons));
+        }
+        return found.OrderByDescending(m => m.reasons.Count).ThenBy(m => m.distanceMetres ?? int.MaxValue).ThenBy(m => m.name).Take(5).ToList();
     }
 
     private static async Task<IResult> NameTaken(SqlConnection conn, string name, CancellationToken ct)

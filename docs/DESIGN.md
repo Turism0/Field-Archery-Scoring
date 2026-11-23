@@ -76,6 +76,10 @@
 
 Bows (type, make, model, poundage, bow styles) and arrow sets (make, model, length, weights, spine, fletches, bows they're used with), made on the phone (UUID), synced with the account (`dbo.Bow`, `dbo.ArrowSet`, schema 15; newest edit wins; deleted kept flagged) and private. `Round.BowId` / `ArrowId` are returned only to the round's owner. New round, Join and Add a round offer the bows for the bow style picked and the arrows for that bow, each starting on the last used with that bow style and hidden with fewer than two (the only one is used). Rules in `domain/Equipment.kt` and `web/src/domain/equipment.ts` (spine tidied to carbon 500 / wood 45-50 / aluminium 2213).
 
+## Duplicate locations and no signal (3.2.25, Pete)
+
+A new location name is checked for ones you can use with the same or a similar name (DuplicateFinder rules, any distance) or within 300 m: the apps send `checkSimilar: true` and offer the 409 `similar_exists` matches ("Use" / "It's a new place"). Each phone and browser keeps a copy of every location you can use (map + named lists), refreshed on each sync, for matching rounds, Nearby and Known locations with no signal; a name given with no signal is checked against the copy, kept on the round (`pending_location`, phone only) and made on the next sync, asking the archer if the server then suggests others.
+
 ## Architecture
 
 ```

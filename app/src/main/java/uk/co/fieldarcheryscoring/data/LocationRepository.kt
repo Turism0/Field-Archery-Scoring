@@ -18,10 +18,16 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONArray
 import uk.co.fieldarcheryscoring.data.local.RoundDao
 import uk.co.fieldarcheryscoring.data.remote.ApiException
 import uk.co.fieldarcheryscoring.data.remote.FieldArcheryApi
+import uk.co.fieldarcheryscoring.data.local.LocationState
+import uk.co.fieldarcheryscoring.domain.KnownPlace
+import uk.co.fieldarcheryscoring.domain.LocationMatch
 import uk.co.fieldarcheryscoring.domain.NearbyLocation
+import uk.co.fieldarcheryscoring.domain.PendingPlace
+import uk.co.fieldarcheryscoring.domain.PlaceMatch
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.Executors
@@ -34,6 +40,10 @@ import kotlin.coroutines.resume
  *    found → the round gets that location; none → the archer is asked to name it (once).
  *  - No signal: the fix waits and is looked up on the next sync.
  * The phone's own position is never uploaded with a round; it's only sent to ask what's nearby.
+ * 3.2.25 (Pete): a copy of every location you can use is kept on the phone ([PlaceCache]), so with no signal the round is
+ * still matched, Nearby and Known locations still work, and a new name can be given (made on the server when there's
+ * signal). A new name is first checked for locations that might be the same one (same or similar name, or within 300 m):
+ * [SimilarExists] offers them instead.
  */
 class LocationRepository(
     private val context: Context,
@@ -43,6 +53,8 @@ class LocationRepository(
     /** Called after a change that may need uploading. */
     private val onChanged: () -> Unit = {},
     private val clock: Clock = Clock.systemUTC(),
+    /** 3.2.25: the phone's copy of the locations you can use. */
+    val cache: PlaceCache? = null,
 ) {
     /** Work that must outlive the screen that started it (the fix after "Start round"). */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -72,21 +84,61 @@ class LocationRepository(
     }
 
     /**
-     * Looks up every round whose position hasn't been matched yet. Needs an account and signal;
-     * network problems leave them waiting for next time. Called after a fix and on every sync.
+     * Looks up every round whose position hasn't been matched yet. Needs an account. With signal the server answers;
+     * with none (3.2.25), the phone's copy of the locations: the nearest within the catchment, or none known there (asked
+     * to name it). Called after a fix and on every sync.
      */
     suspend fun lookUpPending() = lookupLock.withLock {
         val token = accounts.account.value?.token ?: return@withLock
+        var offline = false
         for (round in dao.pendingLocationLookups()) {
-            val json = api.nearbyLocations(token, round.fixLat!!, round.fixLon!!)
-            val nearest = json.getJSONArray("locations").optJSONObject(0)
+            val lat = round.fixLat!!
+            val lon = round.fixLon!!
+            if (!offline) {
+                try {
+                    val json = api.nearbyLocations(token, lat, lon)
+                    val nearest = json.getJSONArray("locations").optJSONObject(0)
+                    if (nearest != null) {
+                        dao.setLocation(round.id, nearest.getString("locationId"), nearest.getString("name"), now())
+                        onChanged()
+                    } else {
+                        dao.markNeedsName(round.id)
+                    }
+                    continue
+                } catch (e: ApiException) {
+                    if (!e.isNetwork) throw e
+                    offline = true
+                }
+            }
+            val known = cache?.places?.value.orEmpty()
+            if (known.isEmpty()) continue   // nothing on the phone yet: wait for signal
+            val nearest = LocationMatch.nearby(known, lat, lon, LocationMatch.CATCHMENT_METRES).firstOrNull()
             if (nearest != null) {
-                dao.setLocation(round.id, nearest.getString("locationId"), nearest.getString("name"), now())
+                dao.setLocation(round.id, nearest.id, nearest.name, now())
                 onChanged()
             } else {
                 dao.markNeedsName(round.id)
             }
         }
+    }
+
+    /** 3.2.25: refreshes the phone's copy of the locations you can use (on the map and name-only). Called on every sync. */
+    suspend fun refreshCache() {
+        val c = cache ?: return
+        val token = accounts.account.value?.token ?: return
+        fun JSONArray.places() = (0 until length()).map { getJSONObject(it) }.map { o ->
+            KnownPlace(o.getString("locationId"), o.getString("name"),
+                if (!o.has("latitude") || o.isNull("latitude")) null else o.getDouble("latitude"),
+                if (!o.has("longitude") || o.isNull("longitude")) null else o.getDouble("longitude"),
+                o.optBoolean("isPrivate"))
+        }
+        val pinned = api.locationMap(token).getJSONArray("locations").places().filter { it.hasPin }
+        val named = try {
+            api.namedLocations(token).getJSONArray("locations").places()
+        } catch (e: ApiException) {
+            if (e.status == 404) emptyList() else throw e
+        }
+        if (accounts.account.value?.token == token) c.replace((pinned + named).distinctBy { it.id })
     }
 
     /** Picks up renamed and merged locations for every round on the phone. */
@@ -102,15 +154,24 @@ class LocationRepository(
     }
 
     /** "Not here?": locations within [radiusMetres] of the round's position, nearest first. */
-    suspend fun nearby(roundId: String, radiusMetres: Int = NOT_HERE_RADIUS): List<NearbyLocation> {
-        val round = dao.getRound(roundId) ?: return emptyList()
-        val lat = round.fixLat ?: return emptyList()
-        val lon = round.fixLon ?: return emptyList()
-        val json = call { token -> api.nearbyLocations(token, lat, lon, radiusMetres) }
-        val list = json.getJSONArray("locations")
-        return (0 until list.length()).map { i ->
-            val l = list.getJSONObject(i)
-            NearbyLocation(l.getString("locationId"), l.getString("name"), l.getInt("distanceMetres"))
+    suspend fun nearby(roundId: String, radiusMetres: Int = NOT_HERE_RADIUS): List<NearbyLocation> = nearbyOrCached(roundId, radiusMetres).first
+
+    /** The same, and whether it came from the phone's copy (no signal, 3.2.25). */
+    suspend fun nearbyOrCached(roundId: String, radiusMetres: Int = NOT_HERE_RADIUS): Pair<List<NearbyLocation>, Boolean> {
+        val round = dao.getRound(roundId) ?: return emptyList<NearbyLocation>() to false
+        val lat = round.fixLat ?: return emptyList<NearbyLocation>() to false
+        val lon = round.fixLon ?: return emptyList<NearbyLocation>() to false
+        return try {
+            val json = call { token -> api.nearbyLocations(token, lat, lon, radiusMetres) }
+            val list = json.getJSONArray("locations")
+            (0 until list.length()).map { i ->
+                val l = list.getJSONObject(i)
+                NearbyLocation(l.getString("locationId"), l.getString("name"), l.getInt("distanceMetres"))
+            } to false
+        } catch (e: ApiException) {
+            val known = cache?.places?.value.orEmpty()
+            if (!e.isNetwork || known.isEmpty()) throw e
+            LocationMatch.nearby(known, lat, lon, radiusMetres) to true
         }
     }
 
@@ -123,49 +184,122 @@ class LocationRepository(
     }
 
     /**
-     * Names a new location at the round's position. If that name is already taken, throws
-     * [NameTaken] with the existing location so the archer can use it instead.
+     * Names a new location at the round's position. [check] (3.2.25): first asks whether it might be a location already
+     * known (throws [SimilarExists]); false once the archer has said it's a new place ([skip]: the ones they turned down).
+     * A name already used throws [NameTaken]. With no signal it's checked against the phone's copy, then kept on the round
+     * and made when there's signal.
      */
-    suspend fun name(roundId: String, name: String, isPrivate: Boolean = false) {
+    suspend fun name(roundId: String, name: String, isPrivate: Boolean = false, check: Boolean = true, skip: Set<String> = emptySet()) {
         val round = dao.getRound(roundId) ?: return
         val lat = round.fixLat ?: throw ApiException(400, "no_position", "This round has no GPS position.")
-        nameAt(roundId, name, lat, round.fixLon!!, isPrivate)
+        create(roundId, PendingPlace(name.trim(), isPrivate, false, lat, round.fixLon!!, skip), check)
     }
 
-    /** Names a new location at a point picked on the map, and gives it to the round. Same [NameTaken] rule. */
-    suspend fun nameAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false) {
-        val json = try {
-            call { token -> api.createLocation(token, name.trim(), lat, lon, isPrivate) }
+    /** Names a new location at a point picked on the map, and gives it to the round. Same rules as [name]. */
+    suspend fun nameAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean = false, check: Boolean = true,
+        skip: Set<String> = emptySet()) =
+        create(roundId, PendingPlace(name.trim(), isPrivate, false, lat, lon, skip), check)
+
+    /**
+     * 3.0: names a new location with no map pin (a shoot you can't place, e.g. a Nationals years ago) and gives it to
+     * the round. Same rules as [name] (checked by name only).
+     */
+    suspend fun nameOnly(roundId: String, name: String, isPrivate: Boolean = false, check: Boolean = true, skip: Set<String> = emptySet()) =
+        create(roundId, PendingPlace(name.trim(), isPrivate, true, null, null, skip), check)
+
+    /** Makes [p] on the server and gives it to the round, or (no signal) keeps it on the round for later. */
+    private suspend fun create(roundId: String, p: PendingPlace, check: Boolean) {
+        val made = try {
+            send(p, check)
         } catch (e: ApiException) {
-            val existing = e.body?.optJSONObject("existing")
-            if (e.code == "name_taken" && existing != null) {
-                throw NameTaken(NearbyLocation(existing.getString("locationId"), existing.getString("name"), -1), e.message)
+            if (!e.isNetwork) throw e
+            // No signal (3.2.25): check the phone's copy, then keep the name on the round until there's signal.
+            if (check) {
+                val local = LocationMatch.matches(p.name, p.latitude, p.longitude, cache?.places?.value.orEmpty(), p.skip)
+                if (local.isNotEmpty()) throw SimilarExists(local, offline = true)
             }
-            throw e
+            dao.setPendingLocation(roundId, PendingPlaceJson.encode(p.copy(matches = emptyList())), LocationState.PENDING_NAME.name)
+            return
         }
-        dao.setLocation(roundId, json.getString("locationId"), json.getString("name"), now())
+        dao.setLocation(roundId, made.id, made.name, now())
         onChanged()
     }
 
     /**
-     * 3.0: names a new location with no map pin (a shoot you can't place, e.g. a Nationals years ago) and gives it to
-     * the round. Same [NameTaken] rule.
+     * Sends [p] to the server: [check] asks about similar locations first (ones in [PendingPlace.skip] don't count). The
+     * made location, or [SimilarExists] / [NameTaken]; network problems are thrown as they are.
      */
-    suspend fun nameOnly(roundId: String, name: String, isPrivate: Boolean = false) {
+    private suspend fun send(p: PendingPlace, check: Boolean): KnownPlace {
         val json = try {
-            call { token -> api.createNamedLocation(token, name.trim(), isPrivate) }
+            call { token ->
+                if (p.noPin) api.createNamedLocation(token, p.name, p.isPrivate, checkSimilar = check)
+                else api.createLocation(token, p.name, p.latitude!!, p.longitude!!, p.isPrivate, checkSimilar = check)
+            }
         } catch (e: ApiException) {
             val existing = e.body?.optJSONObject("existing")
             if (e.code == "name_taken" && existing != null) {
                 throw NameTaken(NearbyLocation(existing.getString("locationId"), existing.getString("name"), -1), e.message)
             }
+            if (e.code == "similar_exists") {
+                val all = e.body?.optJSONArray("matches")?.let { a -> (0 until a.length()).map { PendingPlaceJson.matchFrom(a.getJSONObject(it)) } }.orEmpty()
+                val left = all.filter { it.id !in p.skip }
+                // Only ones already turned down: go ahead.
+                if (left.isEmpty()) return send(p, check = false)
+                throw SimilarExists(left, offline = false)
+            }
             throw e
         }
-        dao.setLocation(roundId, json.getString("locationId"), json.getString("name"), now())
-        onChanged()
+        val made = KnownPlace(json.getString("locationId"), json.getString("name"), p.latitude, p.longitude, p.isPrivate)
+        cache?.add(made)
+        return made
+    }
+
+    /**
+     * 3.2.25: locations named with no signal are made now (on each sync). If the server knows locations that might be the
+     * same one, the round waits for the archer to pick ([LocationState.CHECK_NAME]).
+     */
+    suspend fun createPending() {
+        accounts.account.value?.token ?: return
+        for (round in dao.pendingNames()) {
+            val p = PendingPlaceJson.decode(round.pendingLocation) ?: continue
+            try {
+                val made = send(p, check = true)
+                dao.setLocation(round.id, made.id, made.name, now())
+                onChanged()
+            } catch (e: SimilarExists) {
+                dao.setPendingLocation(round.id, PendingPlaceJson.encode(p.copy(matches = e.matches)), LocationState.CHECK_NAME.name)
+            } catch (e: NameTaken) {
+                val m = PlaceMatch(e.existing.id, e.existing.name, false, null, listOf("same_name"))
+                dao.setPendingLocation(round.id, PendingPlaceJson.encode(p.copy(matches = listOf(m))), LocationState.CHECK_NAME.name)
+            } catch (e: ApiException) {
+                if (e.isNetwork || e.status == 401 || e.status == 429 || e.status >= 500) throw e
+                // Refused (e.g. the name isn't allowed): ask again.
+                dao.setPendingLocation(round.id, PendingPlaceJson.encode(p.copy(matches = emptyList())), LocationState.NEEDS_NAME.name)
+            }
+        }
+    }
+
+    /**
+     * 3.2.25: the archer's answer for a location named with no signal: [use] one of the suggestions, or null to keep their
+     * own name (made now if there's signal; the suggestions aren't offered again).
+     */
+    suspend fun settlePending(roundId: String, use: PlaceMatch?) {
+        val round = dao.getRound(roundId) ?: return
+        val p = PendingPlaceJson.decode(round.pendingLocation) ?: return
+        if (use != null) {
+            dao.setLocation(roundId, use.id, use.name, now())
+            onChanged()
+            return
+        }
+        val kept = p.copy(skip = p.skip + p.matches.map { it.id }, matches = emptyList())
+        dao.setPendingLocation(roundId, PendingPlaceJson.encode(kept), LocationState.PENDING_NAME.name)
+        runCatching { createPending() }
     }
 
     class NameTaken(val existing: NearbyLocation, message: String) : Exception(message)
+
+    /** 3.2.25: locations that might be the one being named; [offline]: from the phone's copy (no signal). */
+    class SimilarExists(val matches: List<PlaceMatch>, val offline: Boolean) : Exception("This might be a location that's already known.")
 
     private suspend fun <T> call(block: suspend (String) -> T): T {
         val token = accounts.account.value?.token

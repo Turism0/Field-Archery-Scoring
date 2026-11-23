@@ -29,8 +29,12 @@ enum class AnimalState { PENDING, MISSED, SCORED }
  */
 enum class GroupRole { SCORER, FRIEND, GUEST, MIRROR }
 
-/** Phone-side progress of a round's shoot location (null = no position). */
-enum class LocationState { PENDING_LOOKUP, NEEDS_NAME, SET }
+/**
+ * Phone-side progress of a round's shoot location (null = no position). 3.2.25: PENDING_NAME = named with no signal,
+ * made on the server when there's signal (round.pending_location); CHECK_NAME = when it was sent, the server knew
+ * locations that might be the same one: the archer picks one or keeps theirs.
+ */
+enum class LocationState { PENDING_LOOKUP, NEEDS_NAME, SET, PENDING_NAME, CHECK_NAME }
 
 /**
  * The archer's profile. PHONE ONLY — never synced.
@@ -105,6 +109,11 @@ data class RoundEntity(
     /** The bow and arrows it was shot with (database v9, app 3.2.24): own rounds only; synced, only shown to the archer. */
     @ColumnInfo(name = "bow_id") val bowId: String? = null,
     @ColumnInfo(name = "arrow_id") val arrowId: String? = null,
+    /**
+     * 3.2.25: a location named with no signal, waiting to be made on the server (JSON: name, private, noPin, the
+     * position, locations the archer said it isn't, and the server's suggestions). PHONE ONLY — never sent with the round.
+     */
+    @ColumnInfo(name = "pending_location") val pendingLocation: String? = null,
 )
 
 @Entity(

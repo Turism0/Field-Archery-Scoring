@@ -1,4 +1,5 @@
 // Rounds, archers and round JSON (the API's shape, as the Android app sends it).
+import type { PlaceMatch } from './locationMatch'
 import {
   type RoundType, type TargetScore, type TargetType, type AnimalResult, type Hit,
   newTarget, isComplete, isFun, totalPoints, maxPoints, remainingPoints, animalPoints, calculatedPoints, MAX_PER_ANIMAL, WOODSMAN_MAX,
@@ -71,7 +72,13 @@ export interface Round {
   fixLat?: number | null
   fixLon?: number | null
   /** PENDING_LOOKUP: position waiting to be looked up; NEEDS_NAME: nothing known nearby. */
-  locationState?: 'PENDING_LOOKUP' | 'NEEDS_NAME' | null
+  /**
+   * 3.2.25: PENDING_NAME = a location named with no signal, made on the server when there's signal (pendingLocation);
+   * CHECK_NAME = the server knows locations that might be the same one: the archer picks.
+   */
+  locationState?: 'PENDING_LOOKUP' | 'NEEDS_NAME' | 'PENDING_NAME' | 'CHECK_NAME' | null
+  /** 3.2.25: that location (this device only). */
+  pendingLocation?: PendingPlace | null
   groupId?: string | null
   groupRole?: GroupRole | null
   groupName?: string | null      // someone else's name in a group
@@ -283,16 +290,26 @@ export function roundFromJson(j: any): Round {
   }
 }
 
+/**
+ * 3.2.25: a location named with no signal, waiting for the server: its name, private or not, no pin (name only) or the
+ * position, the locations the archer has said it isn't (skip), and the server's suggestions once asked (matches).
+ */
+export interface PendingPlace {
+  name: string; isPrivate: boolean; noPin: boolean; latitude: number | null; longitude: number | null; skip: string[]; matches: PlaceMatch[]
+}
+
 /** 3.2.24: "no bow / no arrows" to the API (an id left out means "not sent", which keeps what the server has). */
 export const NO_ID = '00000000-0000-0000-0000-000000000000'
 
 /** Share of the maximum, for checks. */
 export const shareOfMax = (t: TargetScore) => maxPoints(t) ? totalPoints(t) / maxPoints(t) : 0
 
-export type LocationStatus = 'NONE' | 'LOOKING' | 'NEEDS_NAME' | 'SET'
+export type LocationStatus = 'NONE' | 'LOOKING' | 'NEEDS_NAME' | 'SET' | 'QUEUED' | 'CHECK'
 export function locationStatus(r: Round): LocationStatus {
   if (r.locationId) return 'SET'
   if (r.locationState === 'NEEDS_NAME') return 'NEEDS_NAME'
+  if (r.locationState === 'PENDING_NAME' && r.pendingLocation) return 'QUEUED'
+  if (r.locationState === 'CHECK_NAME' && r.pendingLocation) return 'CHECK'
   if (r.locationState === 'PENDING_LOOKUP' && r.fixLat != null) return 'LOOKING'
   return 'NONE'
 }

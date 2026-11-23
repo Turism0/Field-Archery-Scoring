@@ -5,7 +5,8 @@ import { Bar, Card, Dialog, Field, Select, Seg, back, errorText, replace, toast,
 import { getAccount, getProfile } from '../data/account'
 import { getRound } from '../data/db'
 import { saveTypedRound } from '../data/rounds'
-import { NameTaken, createNamed, knownLabel, knownLocations, type MapLocation } from '../data/locations'
+import { NameTaken, SimilarExists, createNamed, knownLabel, knownLocations, type MapLocation } from '../data/locations'
+import { whyMatch, type PlaceMatch } from '../domain/locationMatch'
 import {
   AGE_NAMES, BOW_STYLES, CLASS_NAMES, MAX_START_TARGET, MAX_TARGETS, ROUND_TYPE_HELP, ROUND_TYPE_NAMES, ageGroupFor, startTargetOk, type AgeGroup, type ArcherClass, type Round,
 } from '../domain/round'
@@ -43,6 +44,8 @@ export function PaperEntry({ id }: { id?: string }) {
   const [start, setStart] = useState('')
   // 3.0: a new name-only location (no map pin) typed here, made when the round is saved.
   const [newName, setNewName] = useState('')
+  const [similar, setSimilar] = useState<PlaceMatch[] | null>(null)   // 3.2.25
+  const [similarFinished, setSimilarFinished] = useState(false)
   const [known, setKnown] = useState<MapLocation[]>([])
   const [rows, setRows] = useState<RowEntry[]>([])
   const [busy, setBusy] = useState(false)
@@ -97,12 +100,15 @@ export function PaperEntry({ id }: { id?: string }) {
     all[i + 1]?.focus(); all[i + 1]?.select()
   }
 
-  async function save(finished: boolean) {
-    setAsk(null); setBusy(true)
+  /** use / anyway (3.2.25): the answer to "Is it one of these?" for a new name-only location. */
+  async function save(finished: boolean, o: { use?: PlaceMatch; anyway?: boolean } = {}) {
+    setAsk(null); setBusy(true); setSimilar(null)
     try {
-      let loc: { id: string; name: string } | undefined = known.find(k => k.id === locId)
-      if (locId === NEW_NAME) {
-        try { loc = await createNamed(newName, false) } catch (e) {
+      let loc: { id: string; name: string } | undefined = o.use ? { id: o.use.id, name: o.use.name } : known.find(k => k.id === locId)
+      if (locId === NEW_NAME && !o.use) {
+        try { loc = await createNamed(newName, false, !o.anyway, o.anyway ? (similar ?? []).map(m => m.id) : []) } catch (e) {
+          // 3.2.25: it might be a location already known: ask first.
+          if (e instanceof SimilarExists) { setSimilar(e.matches); setSimilarFinished(finished); return }
           if (!(e instanceof NameTaken)) throw e
           loc = e.existing; toast(`Used the existing location "${e.existing.name}".`)
         }
@@ -202,6 +208,15 @@ export function PaperEntry({ id }: { id?: string }) {
           )}
         </div></div>
       </main>
+      <Dialog open={!!similar?.length} title="Already known?" onClose={() => setSimilar(null)}
+        actions={<><button onClick={() => setSimilar(null)}>Cancel</button>
+          <button onClick={() => save(similarFinished, { anyway: true })}>No, it's a new place</button></>}>
+        <div class="col">
+          <div>Is "{newName.trim()}" one of these? They're already known.</div>
+          {(similar ?? []).map(m => <div class="row between" style="flex-wrap:nowrap"><span><b>{m.name}</b><div class="sub">{whyMatch(m)}</div></span>
+            <button class="tonal" onClick={() => save(similarFinished, { use: m })}>Use</button></div>)}
+        </div>
+      </Dialog>
       <Dialog open={ask === 'unfinished'} title="Not every target is scored" onClose={() => setAsk(null)}
         actions={<><button onClick={() => setAsk(null)}>Keep typing</button><button onClick={() => save(false)}>Save as in progress</button>
           <button onClick={() => save(true)}>Save as finished</button></>}>

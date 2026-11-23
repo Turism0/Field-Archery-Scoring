@@ -197,7 +197,8 @@ fun ScoringScreen(
     LaunchedEffect(r?.targetCount) { if (r != null) vm.ensureTargetSelected(r) }
     // Nothing known nearby: ask for the location's name once (they can also tap the location line later).
     LaunchedEffect(r?.location?.status) {
-        if (r?.location?.status == LocationStatus.NEEDS_NAME && !askedForName) {
+        // 3.2.25: and once if a name given with no signal might be a location already known.
+        if ((r?.location?.status == LocationStatus.NEEDS_NAME || r?.location?.status == LocationStatus.CHECK) && !askedForName) {
             askedForName = true
             showLocation = true
         }

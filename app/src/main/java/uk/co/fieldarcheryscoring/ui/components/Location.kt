@@ -66,10 +66,13 @@ import java.util.Locale
 @Composable
 fun LocationChip(location: RoundLocation, signedIn: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
-    val needsName = location.status == LocationStatus.NEEDS_NAME
+    val needsName = location.status == LocationStatus.NEEDS_NAME || location.status == LocationStatus.CHECK
     val (text, action) = when (location.status) {
         LocationStatus.SET -> (location.name ?: "Location set") to "Not here?"
         LocationStatus.NEEDS_NAME -> "New location" to "Name it"
+        // 3.2.25: named with no signal.
+        LocationStatus.QUEUED -> "${location.pending?.name ?: "New location"} (added when there's signal)" to "Change"
+        LocationStatus.CHECK -> "${location.pending?.name ?: "New location"}: already known?" to "Check"
         LocationStatus.LOOKING -> (if (signedIn) "Finding location… (needs signal)" else "Position saved – sign in to find the location") to null
         LocationStatus.NONE -> "No location" to if (signedIn) "Add" else null
     }
@@ -111,6 +114,8 @@ fun LocationSheet(
     val busy by vm.busy.collectAsStateWithLifecycle()
     val taken by vm.taken.collectAsStateWithLifecycle()
     val known by vm.known.collectAsStateWithLifecycle()
+    val similar by vm.similar.collectAsStateWithLifecycle()
+    val offline by vm.offline.collectAsStateWithLifecycle()
     var name by rememberSaveable { mutableStateOf("") }
     var private by rememberSaveable { mutableStateOf(false) }
     // 3.0: naming a location with no map pin (a shoot you can't place, e.g. a Nationals years ago).
@@ -134,6 +139,32 @@ fun LocationSheet(
             if (current.status == LocationStatus.SET) {
                 Text("Now: ${current.name}", style = MaterialTheme.typography.bodyLarge)
             }
+            // 3.2.25: a location named with no signal: the server knows ones that might be the same.
+            val pending = current.pending
+            if (current.status == LocationStatus.CHECK && pending != null) {
+                Surface(color = MaterialTheme.colorScheme.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("You named this \"${pending.name}\" with no signal. These are already known – is it one of them?")
+                        pending.matches.forEach { m ->
+                            MatchRow(m, enabled = !busy) { vm.settlePending(m, onDismiss) }
+                        }
+                        OutlinedButton(onClick = { vm.settlePending(null, onDismiss) }, enabled = !busy) { Text("No, keep \"${pending.name}\"") }
+                    }
+                }
+            } else if (current.status == LocationStatus.QUEUED && pending != null) {
+                Text(
+                    "\"${pending.name}\" is added as a new location when you have signal. To use a known location instead, pick it below.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (offline) {
+                Text(
+                    "No signal: using the locations saved on your phone at your last sync.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             OutlinedButton(
                 onClick = { onDismiss(); onPickOnMap() },
                 enabled = !busy,
@@ -175,6 +206,7 @@ fun LocationSheet(
                         }
                     }
                 }
+                similar?.takeIf { it.noPin }?.let { sim -> SimilarPanel(sim, busy, onUse = { vm.useMatch(it, onDismiss) }, onAnyway = { vm.nameAnyway(onDismiss) }) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Private", style = MaterialTheme.typography.bodyLarge)
@@ -260,6 +292,7 @@ fun LocationSheet(
                     }
                 }
             }
+            similar?.takeIf { !it.noPin }?.let { sim -> SimilarPanel(sim, busy, onUse = { vm.useMatch(it, onDismiss) }, onAnyway = { vm.nameAnyway(onDismiss) }) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Private", style = MaterialTheme.typography.bodyLarge)
@@ -312,6 +345,32 @@ private fun KnownLocationsDropdown(known: List<MapLocation>, enabled: Boolean, o
     }
 }
 
+/** A suggested location: its name, why it's suggested, and Use. */
+@Composable
+private fun MatchRow(m: uk.co.fieldarcheryscoring.domain.PlaceMatch, enabled: Boolean, onUse: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(m.name, style = MaterialTheme.typography.bodyLarge)
+            Text(uk.co.fieldarcheryscoring.domain.LocationMatch.why(m), style = MaterialTheme.typography.bodySmall)
+        }
+        TextButton(onClick = onUse, enabled = enabled) { Text("Use") }
+    }
+}
+
+/** 3.2.25: the name typed might be a location already known: use one of those, or go ahead with the new one. */
+@Composable
+private fun SimilarPanel(s: RoundLocationViewModel.Similar, busy: Boolean, onUse: (uk.co.fieldarcheryscoring.domain.PlaceMatch) -> Unit, onAnyway: () -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Is \"${s.name}\" one of these? They're already known.", style = MaterialTheme.typography.titleSmall)
+            s.matches.forEach { m -> MatchRow(m, enabled = !busy) { onUse(m) } }
+            OutlinedButton(onClick = onAnyway, enabled = !busy) {
+                Text(if (s.offline) "It's a new place (added when there's signal)" else "No, it's a new place")
+            }
+        }
+    }
+}
+
 private fun distance(metres: Int): String =
     if (metres < 1000) "$metres m away"
     else String.format(Locale.UK, "%.1f km away", metres / 1000.0)
@@ -320,5 +379,6 @@ private fun distance(metres: Int): String =
 fun RoundLocation.label(): String? = when (status) {
     LocationStatus.SET -> name
     LocationStatus.NEEDS_NAME -> "New location (not named yet)"
+    LocationStatus.QUEUED, LocationStatus.CHECK -> pending?.name?.let { "$it (new, not added yet)" }
     else -> null
 }

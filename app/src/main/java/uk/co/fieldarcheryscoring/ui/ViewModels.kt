@@ -82,6 +82,7 @@ import uk.co.fieldarcheryscoring.domain.AnimalResult
 import uk.co.fieldarcheryscoring.domain.ArcherClass
 import uk.co.fieldarcheryscoring.domain.BowStyle
 import uk.co.fieldarcheryscoring.domain.NearbyLocation
+import uk.co.fieldarcheryscoring.domain.PlaceMatch
 import uk.co.fieldarcheryscoring.domain.HandicapModel
 import uk.co.fieldarcheryscoring.domain.PersonalHandicap
 import uk.co.fieldarcheryscoring.domain.handicapEntry
@@ -731,16 +732,23 @@ class LocationMapViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     fun messageShown() { _message.value = null }
-    fun clearTaken() { _taken.value = null }
+    fun clearTaken() { _taken.value = null; _similar.value = null }
 
-    /** "New location" on the map screen: a location at a tapped point, then the map reloads. */
-    fun createNew(name: String, lat: Double, lon: Double, isPrivate: Boolean, onDone: () -> Unit) {
+    private val _similar = MutableStateFlow<List<PlaceMatch>?>(null)
+    /** 3.2.25: the new name might be a location already known: these are offered instead ("Add anyway" goes ahead). */
+    val similar: StateFlow<List<PlaceMatch>?> = _similar.asStateFlow()
+
+    /** "New location" on the map screen: a location at a tapped point, then the map reloads. [check] false: "Add anyway". */
+    fun createNew(name: String, lat: Double, lon: Double, isPrivate: Boolean, check: Boolean = true, onDone: () -> Unit) {
         viewModelScope.launch {
             try {
-                repo.create(name, lat, lon, isPrivate)
+                repo.create(name, lat, lon, isPrivate, check)
+                _similar.value = null
                 _message.value = "${name.trim()} added" + if (isPrivate) " (private)." else "."
                 onDone()
                 load()
+            } catch (e: LocationRepository.SimilarExists) {
+                _similar.value = e.matches
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _message.value = e.friendlyMessage()
@@ -749,14 +757,17 @@ class LocationMapViewModel(
     }
 
     /** Pick mode: a new location at a point tapped on the map, given to [roundId]. */
-    fun createAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean, onDone: () -> Unit) {
+    fun createAt(roundId: String, name: String, lat: Double, lon: Double, isPrivate: Boolean, check: Boolean = true, onDone: () -> Unit) {
         val repo = locationsRepo ?: return
         viewModelScope.launch {
             try {
-                repo.nameAt(roundId, name, lat, lon, isPrivate)
+                repo.nameAt(roundId, name, lat, lon, isPrivate, check, skip = _similar.value.orEmpty().map { it.id }.toSet())
+                _similar.value = null
                 onDone()
             } catch (e: LocationRepository.NameTaken) {
                 _taken.value = e.existing
+            } catch (e: LocationRepository.SimilarExists) {
+                _similar.value = e.matches
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _message.value = e.friendlyMessage()
@@ -1841,12 +1852,26 @@ class RoundLocationViewModel(
 
     val hasPermission: Boolean get() = locations.hasPermission()
 
+    /**
+     * 3.2.25: a new name that might be a location already known: the suggestions, and what was being named (to go ahead
+     * with "It's a new place").
+     */
+    data class Similar(val matches: List<PlaceMatch>, val offline: Boolean, val name: String, val isPrivate: Boolean, val noPin: Boolean)
+
+    private val _similar = MutableStateFlow<Similar?>(null)
+    val similar: StateFlow<Similar?> = _similar.asStateFlow()
+
+    private val _offline = MutableStateFlow(false)
+    /** 3.2.25: Nearby / Known locations came from the phone's copy (no signal). */
+    val offline: StateFlow<Boolean> = _offline.asStateFlow()
+
     /** Called when the sheet opens. */
     fun load() {
         _taken.value = null
+        _similar.value = null
         pages?.let { repo ->
             viewModelScope.launch {
-                runCatching { repo.known() }.onSuccess { list -> _known.value = list }
+                runCatching { repo.knownOrCached() }.onSuccess { (list, cached) -> _known.value = list; if (cached) _offline.value = true }
             }
         }
         viewModelScope.launch {
@@ -1854,13 +1879,41 @@ class RoundLocationViewModel(
             if (!_hasFix.value) { _nearby.value = Load.Ready(emptyList()); return@launch }
             _nearby.value = Load.Loading
             _nearby.value = try {
-                Load.Ready(locations.nearby(roundId))
+                val (list, cached) = locations.nearbyOrCached(roundId)
+                _offline.value = cached
+                Load.Ready(list)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Load.Failed(e.friendlyMessage())
             }
         }
     }
+
+    /** 3.2.25: "It's a new place": makes the new location after all (or keeps it for when there's signal). */
+    fun nameAnyway(onDone: () -> Unit) {
+        val s = _similar.value ?: return
+        val skip = s.matches.map { it.id }.toSet()
+        act {
+            _similar.value = null
+            if (s.noPin) locations.nameOnly(roundId, s.name, s.isPrivate, check = false, skip = skip)
+            else locations.name(roundId, s.name, s.isPrivate, check = false, skip = skip)
+            onDone()
+        }
+    }
+
+    /** 3.2.25: use a suggested location instead. */
+    fun useMatch(m: PlaceMatch, onDone: () -> Unit) {
+        _similar.value = null
+        choose(NearbyLocation(m.id, m.name, m.distanceMetres ?: -1), onDone)
+    }
+
+    /** 3.2.25: the archer's answer for a location they named with no signal ([use] null: keep their own). */
+    fun settlePending(use: PlaceMatch?, onDone: () -> Unit) = act {
+        locations.settlePending(roundId, use)
+        onDone()
+    }
+
+    fun clearSimilar() { _similar.value = null }
 
     fun captureNow() = act {
         if (locations.captureNow(roundId)) load()
@@ -1878,6 +1931,8 @@ class RoundLocationViewModel(
             onDone()
         } catch (e: LocationRepository.NameTaken) {
             _taken.value = e.existing
+        } catch (e: LocationRepository.SimilarExists) {
+            _similar.value = Similar(e.matches, e.offline, name.trim(), isPrivate, noPin = false)
         }
     }
 
@@ -1888,6 +1943,8 @@ class RoundLocationViewModel(
             onDone()
         } catch (e: LocationRepository.NameTaken) {
             _taken.value = e.existing
+        } catch (e: LocationRepository.SimilarExists) {
+            _similar.value = Similar(e.matches, e.offline, name.trim(), isPrivate, noPin = true)
         }
     }
 

@@ -8,6 +8,111 @@ import { authed, getAccount } from './account'
 import { allRounds, getRound, groupRounds, putRound, putRounds } from './db'
 import { AGE_NAMES, CLASS_NAMES, nowUtc, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { classLineOf, targetsLineOf, type RoundSummary } from './friends'
+import { getKv, setKv } from './db'
+import { CATCHMENT_METRES, nearbyPlaces, placeMatches, type KnownPlace, type PlaceMatch } from '../domain/locationMatch'
+import type { PendingPlace } from '../domain/round'
+
+// ---- 3.2.25 (Pete): this device's copy of the locations you can use, for no signal ----
+// kv 'placeCache': public locations and your own private ones, with or without a pin. Refreshed on each sync and whenever
+// the list is fetched; cleared with the account's other things at sign-out (it isn't kept through clearSession).
+
+export const getPlaceCache = async (): Promise<KnownPlace[]> => (await getKv<KnownPlace[]>('placeCache')) ?? []
+const toKnown = (l: MapLocation): KnownPlace => ({ id: l.id, name: l.name, latitude: l.latitude, longitude: l.longitude, isPrivate: l.isPrivate })
+async function addToCache(p: KnownPlace) { await setKv('placeCache', [...(await getPlaceCache()).filter(x => x.id !== p.id), p]) }
+
+/** Refreshes this device's copy (called on every sync). */
+export async function refreshPlaceCache() {
+  if (!(await getAccount())) return
+  const list = await knownLocations()
+  if (await getAccount()) await setKv('placeCache', list.map(toKnown))
+}
+
+/** Known locations, and this device's copy refreshed from them; with no signal, the copy. cached: it's the copy. */
+export async function knownOrCached(): Promise<{ list: MapLocation[]; cached: boolean }> {
+  try {
+    const list = await knownLocations()
+    await setKv('placeCache', list.map(toKnown))
+    return { list, cached: false }
+  } catch (e) {
+    const c = await getPlaceCache()
+    if (!(e instanceof ApiError && e.isNetwork) || !c.length) throw e
+    return { list: c.map(p => ({ ...p, myRounds: 0, rounds: 0 })).sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })), cached: true }
+  }
+}
+
+/** 3.2.25: locations that might be the one being named (offline: from this device's copy). */
+export class SimilarExists extends Error {
+  constructor(public matches: PlaceMatch[], public offline: boolean) { super("This might be a location that's already known.") }
+}
+
+const matchFrom = (m: any): PlaceMatch => ({ id: m.locationId, name: m.name, isPrivate: !!m.isPrivate, distanceMetres: m.distanceMetres ?? null, reasons: m.reasons ?? [] })
+
+/** Sends a new location: check asks about similar ones first (skip: already turned down). The made location. */
+async function send(p: PendingPlace, check: boolean): Promise<KnownPlace> {
+  let j: any
+  try {
+    j = await authed(t => request('POST', '/api/locations', p.noPin
+      ? { name: p.name, noPin: true, isPrivate: p.isPrivate, ...(check ? { checkSimilar: true } : {}) }
+      : { name: p.name, latitude: p.latitude, longitude: p.longitude, isPrivate: p.isPrivate, ...(check ? { checkSimilar: true } : {}) }, t))
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'name_taken' && e.body?.existing) {
+      throw new NameTaken({ id: e.body.existing.locationId, name: e.body.existing.name, distanceMetres: -1 }, e.message)
+    }
+    if (e instanceof ApiError && e.code === 'similar_exists') {
+      const left = ((e.body?.matches ?? []) as any[]).map(matchFrom).filter(m => !p.skip.includes(m.id))
+      if (!left.length) return send(p, false)   // only ones already turned down: go ahead
+      throw new SimilarExists(left, false)
+    }
+    throw e
+  }
+  const made: KnownPlace = { id: j.locationId, name: j.name, latitude: p.latitude, longitude: p.longitude, isPrivate: p.isPrivate }
+  await addToCache(made)
+  return made
+}
+
+/** Makes a new location and gives it to the round; with no signal, checks this device's copy then keeps it on the round. */
+async function createFor(roundId: string, p: PendingPlace, check: boolean) {
+  let made: KnownPlace
+  try { made = await send(p, check) } catch (e) {
+    if (!(e instanceof ApiError && e.isNetwork)) throw e
+    if (check) {
+      const local = placeMatches(p.name, p.latitude, p.longitude, await getPlaceCache(), p.skip)
+      if (local.length) throw new SimilarExists(local, true)
+    }
+    const r = await getRound(roundId)
+    if (r) await putRound({ ...r, pendingLocation: { ...p, matches: [] }, locationState: 'PENDING_NAME' })
+    return
+  }
+  await setLocation(roundId, made.id, made.name)
+}
+
+/** Locations named with no signal are made now (on each sync); possible duplicates wait for the archer (CHECK_NAME). */
+export async function createPending() {
+  if (!(await getAccount())) return
+  for (const r of await allRounds()) {
+    if (r.locationState !== 'PENDING_NAME' || !r.pendingLocation || r.locationId) continue
+    const p = r.pendingLocation
+    try {
+      const made = await send(p, true)
+      await setLocation(r.id, made.id, made.name)
+    } catch (e) {
+      if (e instanceof SimilarExists) await putRound({ ...r, pendingLocation: { ...p, matches: e.matches }, locationState: 'CHECK_NAME' })
+      else if (e instanceof NameTaken) await putRound({ ...r, pendingLocation: { ...p, matches: [{ id: e.existing.id, name: e.existing.name, isPrivate: false, distanceMetres: null, reasons: ['same_name'] }] }, locationState: 'CHECK_NAME' })
+      else if (e instanceof ApiError && !e.isNetwork && e.status !== 401 && e.status !== 429 && e.status < 500) await putRound({ ...r, pendingLocation: null, locationState: 'NEEDS_NAME' })
+      else throw e
+    }
+  }
+}
+
+/** The archer's answer for a location named with no signal: use one of the suggestions, or null to keep their own name. */
+export async function settlePending(roundId: string, use: PlaceMatch | null) {
+  const r = await getRound(roundId)
+  const p = r?.pendingLocation
+  if (!r || !p) return
+  if (use) { await setLocation(roundId, use.id, use.name); return }
+  await putRound({ ...r, pendingLocation: { ...p, skip: [...p.skip, ...p.matches.map(m => m.id)], matches: [] }, locationState: 'PENDING_NAME' })
+  try { await createPending() } catch { /* next sync */ }
+}
 
 export interface NearbyLocation { id: string; name: string; distanceMetres: number }
 /** latitude / longitude null for a name-only location (3.0: no map pin, e.g. a Nationals years ago). */
@@ -48,11 +153,26 @@ export function lookUpPending(): Promise<void> {
   looking ??= (async () => {
     const a = await getAccount()
     if (!a) return
+    let offline = false
     for (const r of await allRounds()) {
       if (r.locationState !== 'PENDING_LOOKUP' || r.fixLat == null || r.locationId) continue
-      const j = await request('POST', '/api/locations/nearby', { latitude: r.fixLat, longitude: r.fixLon, radiusMetres: null }, a.token)
-      const nearest = j.locations?.[0]
-      if (nearest) await setLocation(r.id, nearest.locationId, nearest.name)
+      if (!offline) {
+        try {
+          const j = await request('POST', '/api/locations/nearby', { latitude: r.fixLat, longitude: r.fixLon, radiusMetres: null }, a.token)
+          const nearest = j.locations?.[0]
+          if (nearest) await setLocation(r.id, nearest.locationId, nearest.name)
+          else await putRound({ ...r, locationState: 'NEEDS_NAME' })
+          continue
+        } catch (e) {
+          if (!(e instanceof ApiError && e.isNetwork)) throw e
+          offline = true
+        }
+      }
+      // 3.2.25: no signal: this device's copy (nothing there yet: wait for signal).
+      const known = await getPlaceCache()
+      if (!known.length) continue
+      const nearest = nearbyPlaces(known, r.fixLat, r.fixLon!, CATCHMENT_METRES)[0]
+      if (nearest) await setLocation(r.id, nearest.id, nearest.name)
       else await putRound({ ...r, locationState: 'NEEDS_NAME' })
     }
   })().finally(() => { looking = null })
@@ -84,14 +204,23 @@ export async function setLocation(roundId: string, locationId: string, name: str
   if (!r) return
   const all = r.groupId ? await groupRounds(r.groupId) : [r]
   const now = nowUtc()
-  await putRounds(all.map(x => ({ ...x, locationId, locationName: name, locationState: null, updatedUtc: now, pending: true, failed: false })))
+  await putRounds(all.map(x => ({ ...x, locationId, locationName: name, locationState: null, pendingLocation: null, updatedUtc: now, pending: true, failed: false })))
 }
 
 /** "Not here?": locations within 10 km of the round's position, nearest first. */
-export async function nearby(r: Round): Promise<NearbyLocation[]> {
-  if (r.fixLat == null) return []
-  const j = await authed(t => request('POST', '/api/locations/nearby', { latitude: r.fixLat, longitude: r.fixLon, radiusMetres: NOT_HERE_RADIUS }, t))
-  return (j.locations ?? []).map((l: any) => ({ id: l.locationId, name: l.name, distanceMetres: l.distanceMetres }))
+export async function nearby(r: Round): Promise<NearbyLocation[]> { return (await nearbyOrCached(r)).list }
+
+/** The same; with no signal (3.2.25), from this device's copy (cached). */
+export async function nearbyOrCached(r: Round): Promise<{ list: NearbyLocation[]; cached: boolean }> {
+  if (r.fixLat == null) return { list: [], cached: false }
+  try {
+    const j = await authed(t => request('POST', '/api/locations/nearby', { latitude: r.fixLat, longitude: r.fixLon, radiusMetres: NOT_HERE_RADIUS }, t))
+    return { list: (j.locations ?? []).map((l: any) => ({ id: l.locationId, name: l.name, distanceMetres: l.distanceMetres })), cached: false }
+  } catch (e) {
+    const known = await getPlaceCache()
+    if (!(e instanceof ApiError && e.isNetwork) || !known.length) throw e
+    return { list: nearbyPlaces(known, r.fixLat, r.fixLon!, NOT_HERE_RADIUS), cached: true }
+  }
 }
 
 /** Took a position now for a round with none. */
@@ -109,34 +238,21 @@ export class NameTaken extends Error {
   constructor(public existing: NearbyLocation, message: string) { super(message) }
 }
 
-/** A new location; 409 name_taken → NameTaken with the existing one. */
-export async function createLocation(name: string, lat: number, lon: number, isPrivate: boolean): Promise<NearbyLocation> {
-  try {
-    const j = await authed(t => request('POST', '/api/locations', { name: name.trim(), latitude: lat, longitude: lon, isPrivate }, t))
-    return { id: j.locationId, name: j.name, distanceMetres: 0 }
-  } catch (e) {
-    const ex = e instanceof ApiError ? e.body?.existing : null
-    if (e instanceof ApiError && e.code === 'name_taken' && ex) throw new NameTaken({ id: ex.locationId, name: ex.name, distanceMetres: -1 }, e.message)
-    throw e
-  }
+/** A new location (not for a round); 409 name_taken → NameTaken; check (3.2.25): similar ones → SimilarExists. */
+export async function createLocation(name: string, lat: number, lon: number, isPrivate: boolean, check = true, skip: string[] = []): Promise<NearbyLocation> {
+  const l = await send({ name: name.trim(), isPrivate, noPin: false, latitude: lat, longitude: lon, skip, matches: [] }, check)
+  return { id: l.id, name: l.name, distanceMetres: 0 }
 }
 
-/** A new name-only location (3.0): no map pin; 409 name_taken → NameTaken with the existing one. */
-export async function createNamed(name: string, isPrivate: boolean): Promise<NearbyLocation> {
-  try {
-    const j = await authed(t => request('POST', '/api/locations', { name: name.trim(), noPin: true, isPrivate }, t))
-    return { id: j.locationId, name: j.name, distanceMetres: -1 }
-  } catch (e) {
-    const ex = e instanceof ApiError ? e.body?.existing : null
-    if (e instanceof ApiError && e.code === 'name_taken' && ex) throw new NameTaken({ id: ex.locationId, name: ex.name, distanceMetres: -1 }, e.message)
-    throw e
-  }
+/** A new name-only location (3.0): no map pin; NameTaken / SimilarExists as createLocation. */
+export async function createNamed(name: string, isPrivate: boolean, check = true, skip: string[] = []): Promise<NearbyLocation> {
+  const l = await send({ name: name.trim(), isPrivate, noPin: true, latitude: null, longitude: null, skip, matches: [] }, check)
+  return { id: l.id, name: l.name, distanceMetres: -1 }
 }
 
-/** Names a new name-only location and gives it to the round. */
-export async function nameOnly(roundId: string, name: string, isPrivate: boolean) {
-  const l = await createNamed(name, isPrivate)
-  await setLocation(roundId, l.id, l.name)
+/** Names a new name-only location and gives it to the round (no signal: kept for later, 3.2.25). */
+export async function nameOnly(roundId: string, name: string, isPrivate: boolean, check = true, skip: string[] = []) {
+  await createFor(roundId, { name: name.trim(), isPrivate, noPin: true, latitude: null, longitude: null, skip, matches: [] }, check)
 }
 
 /** Puts a name-only location on the map (its creator or an Admin); [move] (3.2.14): moves one already on it (Admins). */
@@ -157,10 +273,9 @@ export async function deleteLocation(id: string) {
   await authed(t => request('DELETE', `/api/locations/${id}`, undefined, t))
 }
 
-/** Names a new location at a point and gives it to the round. */
-export async function nameAt(roundId: string, name: string, lat: number, lon: number, isPrivate: boolean) {
-  const l = await createLocation(name, lat, lon, isPrivate)
-  await setLocation(roundId, l.id, l.name)
+/** Names a new location at a point and gives it to the round (no signal: kept for later, 3.2.25). */
+export async function nameAt(roundId: string, name: string, lat: number, lon: number, isPrivate: boolean, check = true, skip: string[] = []) {
+  await createFor(roundId, { name: name.trim(), isPrivate, noPin: false, latitude: lat, longitude: lon, skip, matches: [] }, check)
 }
 
 // ---- map and location pages (straight from the server) ----

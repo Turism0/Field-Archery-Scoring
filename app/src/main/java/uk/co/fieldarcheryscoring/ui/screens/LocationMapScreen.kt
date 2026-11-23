@@ -1,5 +1,8 @@
 package uk.co.fieldarcheryscoring.ui.screens
 
+import uk.co.fieldarcheryscoring.domain.NearbyLocation
+import uk.co.fieldarcheryscoring.domain.LocationMatch
+import uk.co.fieldarcheryscoring.domain.PlaceMatch
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -114,6 +117,7 @@ fun LocationMapScreen(
     val signedIn by vm.signedIn.collectAsStateWithLifecycle()
     val locations by vm.locations.collectAsStateWithLifecycle()
     val taken by vm.taken.collectAsStateWithLifecycle()
+    val similar by vm.similar.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val named by vm.named.collectAsStateWithLifecycle()
     var showNamed by remember { mutableStateOf(false) }
@@ -280,15 +284,20 @@ fun LocationMapScreen(
             onDismiss = { newAt = null; vm.clearTaken() },
             onSave = { name, private -> vm.createAt(roundId, name, point.first, point.second, private) { newAt = null; onPicked() } },
             onUseExisting = { taken?.let { t -> vm.chooseExisting(roundId, t) { newAt = null; vm.clearTaken(); onPicked() } } },
+            similar = similar,
+            onUseMatch = { m -> vm.chooseExisting(roundId, NearbyLocation(m.id, m.name, m.distanceMetres ?: -1)) { newAt = null; vm.clearTaken(); onPicked() } },
+            onAnyway = { name, private -> vm.createAt(roundId, name, point.first, point.second, private, check = false) { newAt = null; onPicked() } },
         )
     } else if (point != null && placing) {
         // Not for a round: just add the location (a name already used comes back as a message).
         NewLocationDialog(
             taken = null,
-            onDismiss = { newAt = null; placing = false },
+            onDismiss = { newAt = null; placing = false; vm.clearTaken() },
             onSave = { name, private -> vm.createNew(name, point.first, point.second, private) { newAt = null; placing = false } },
             onUseExisting = {},
             forRound = false,
+            similar = similar,
+            onAnyway = { name, private -> vm.createNew(name, point.first, point.second, private, check = false) { newAt = null; placing = false } },
         )
     }
 }
@@ -301,6 +310,10 @@ private fun NewLocationDialog(
     onSave: (name: String, private: Boolean) -> Unit,
     onUseExisting: () -> Unit,
     forRound: Boolean = true,
+    /** 3.2.25: locations that might be this one; [onUseMatch] (for a round) or [onAnyway] ("It's a new place"). */
+    similar: List<PlaceMatch>? = null,
+    onUseMatch: ((PlaceMatch) -> Unit)? = null,
+    onAnyway: (name: String, private: Boolean) -> Unit = { _, _ -> },
 ) {
     var name by remember { mutableStateOf("") }
     var private by remember { mutableStateOf(false) }
@@ -332,10 +345,27 @@ private fun NewLocationDialog(
                     Text("There's already a location called \"$taken\".", color = MaterialTheme.colorScheme.error)
                     TextButton(onClick = onUseExisting) { Text("Use $taken") }
                 }
+                if (!similar.isNullOrEmpty()) {
+                    Text(if (forRound) "Is it one of these? They're already known." else "These are already known. Is it one of them?",
+                        style = MaterialTheme.typography.titleSmall)
+                    similar.forEach { m ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(m.name, style = MaterialTheme.typography.bodyLarge)
+                                Text(LocationMatch.why(m), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (onUseMatch != null) TextButton(onClick = { onUseMatch(m) }) { Text("Use") }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(name, private) }, enabled = name.trim().length >= 2) { Text("Save") }
+            if (!similar.isNullOrEmpty()) {
+                TextButton(onClick = { onAnyway(name, private) }, enabled = name.trim().length >= 2) { Text("It's a new place") }
+            } else {
+                TextButton(onClick = { onSave(name, private) }, enabled = name.trim().length >= 2) { Text("Save") }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

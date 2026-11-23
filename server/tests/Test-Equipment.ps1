@@ -86,9 +86,10 @@ $r = Call PUT "/api/equipment/arrows/$arrows" (New-Arrows @($bow) $t) -Token $A.
 Expect 'arrows for it are saved' ($r.Status -eq 200 -and $r.Body.result -eq 'saved') "($($r.Status) $($r.Body.message))"
 
 $r = Call GET '/api/equipment' -Token $A.Token
-$b = @($r.Body.bows)[0]; $a = @($r.Body.arrows)[0]
-Expect 'the bow comes back as sent' ($b.bowId -eq $bow -and $b.type -eq 'LONGBOW' -and $b.make -eq 'Border' -and $b.poundageLb -eq 45.5 -and (@($b.bowStyles) -join ',') -eq 'LB,HT') ($b | ConvertTo-Json -Compress)
-Expect 'the arrows come back as sent' ($a.arrowId -eq $arrows -and $a.spine -eq '45-50' -and $a.fletchCount -eq 3 -and $a.fletchMaterial -eq 'FEATHER' -and $a.pointGrains -eq 125 -and (@($a.bowIds) -join ',') -eq $bow) ($a | ConvertTo-Json -Compress)
+# (Not $a / $b: PowerShell names ignore case, so they'd overwrite the test users $A and $B.)
+$gotBow = @($r.Body.bows)[0]; $gotArrows = @($r.Body.arrows)[0]
+Expect 'the bow comes back as sent' ($gotBow.bowId -eq $bow -and $gotBow.type -eq 'LONGBOW' -and $gotBow.make -eq 'Border' -and $gotBow.poundageLb -eq 45.5 -and (@($gotBow.bowStyles) -join ',') -eq 'LB,HT') ($gotBow | ConvertTo-Json -Compress)
+Expect 'the arrows come back as sent' ($gotArrows.arrowId -eq $arrows -and $gotArrows.spine -eq '45-50' -and $gotArrows.fletchCount -eq 3 -and $gotArrows.fletchMaterial -eq 'FEATHER' -and $gotArrows.pointGrains -eq 125 -and (@($gotArrows.bowIds) -join ',') -eq $bow) ($gotArrows | ConvertTo-Json -Compress)
 
 $r = Call PUT "/api/equipment/bows/$bow" (New-Bow $t.AddMinutes(-1) 'Older') -Token $A.Token
 Expect 'an older copy is ignored' ($r.Body.result -eq 'unchanged') "($($r.Body.result))"
@@ -133,18 +134,18 @@ $null = Call POST '/api/friends/requests' @{ username = $B.Name } -Token $A.Toke
 $null = Call POST "/api/friends/$($A.Id)/accept" -Token $B.Token
 $r = Call GET "/api/friends/$($A.Id)/rounds/$id" -Token $B.Token
 Expect 'a friend can see the round' ($r.Status -eq 200) "($($r.Status))"
-Expect 'but not the bow or arrows' ($null -eq $r.Body.bowId -and $null -eq $r.Body.arrowId) "(got $($r.Body.bowId) / $($r.Body.arrowId))"
+Expect 'but not the bow or arrows' ($r.Status -eq 200 -and $null -eq $r.Body.bowId -and $null -eq $r.Body.arrowId) "(got $($r.Body.bowId) / $($r.Body.arrowId))"
 
 $none = [guid]::Empty.ToString()
 $r = Call PUT "/api/rounds/$id" (New-Round $none $none $t.AddMinutes(2)) -Token $A.Token
 $r = Call GET "/api/rounds/$id" -Token $A.Token
-Expect 'an empty id clears them' ($null -eq $r.Body.bowId -and $null -eq $r.Body.arrowId) "(got $($r.Body.bowId) / $($r.Body.arrowId))"
+Expect 'an empty id clears them' ($r.Status -eq 200 -and $null -eq $r.Body.bowId -and $null -eq $r.Body.arrowId) "(got $($r.Body.bowId) / $($r.Body.arrowId))"
 
 # Deleting keeps them, flagged.
 $r = Call PUT "/api/equipment/bows/$bow" (New-Bow $t.AddMinutes(3) 'Newer' $true) -Token $A.Token
 $r = Call GET '/api/equipment' -Token $A.Token
-$b = @($r.Body.bows) | Where-Object bowId -eq $bow
-Expect 'a deleted bow is kept, flagged as deleted' ($b.isDeleted -eq $true -and $b.make -eq 'Newer') ($b | ConvertTo-Json -Compress)
+$gotBow = @($r.Body.bows) | Where-Object bowId -eq $bow
+Expect 'a deleted bow is kept, flagged as deleted' ($gotBow.isDeleted -eq $true -and $gotBow.make -eq 'Newer') ($gotBow | ConvertTo-Json -Compress)
 
 Write-Host ''
 if ($script:problems -eq 0) { Write-Host 'All equipment tests passed.' -ForegroundColor Green }

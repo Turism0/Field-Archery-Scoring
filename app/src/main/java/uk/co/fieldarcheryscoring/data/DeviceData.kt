@@ -28,6 +28,8 @@ class DeviceData(
     private val archerNames: ArcherNamesStore? = null,
     /** 3.2.24: bows and arrows, put away, brought back, kept or removed with the rounds. */
     private val equipment: uk.co.fieldarcheryscoring.data.local.EquipmentDao? = null,
+    /** 3.2.25: the phone's copy of the locations (private ones are the account's): cleared, downloaded again. */
+    private val places: PlaceCache? = null,
 ) {
     /** Kept apart from the account's own file, which is cleared whenever the sign-in ends. Backed up with the rounds. */
     private val prefs = context.getSharedPreferences("device_data", Context.MODE_PRIVATE)
@@ -114,6 +116,7 @@ class DeviceData(
         archerNames?.clear()
         liveGroups.clearAll()
         rounds.clearWeather()   // 3.2.17: downloaded again for the account that signs in
+        places?.clear()
     }
 
     // ---- Profile (with real name and date of birth, which never leave the phone) kept in the prefs while put away ----

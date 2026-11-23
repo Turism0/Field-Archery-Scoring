@@ -10,16 +10,20 @@ import { ApiError } from '../data/api'
 import { BOW_STYLES, ROUND_TYPE_NAMES, locationStatus, type AgeGroup, type ArcherClass, type Round } from '../domain/round'
 import { multiplier, type HandicapModel } from '../domain/handicap'
 import { deleteLocationWarning, makePrivateWarning } from '../domain/locationPrivacy'
+import { whyMatch, type PlaceMatch } from '../domain/locationMatch'
 
 /** One line showing where the round is; tap for the location sheet. */
 export function LocationChip({ round, signedIn, onClick }: { round: Round; signedIn: boolean; onClick: () => void }) {
   const st = locationStatus(round)
   const [text, action] = st === 'SET' ? [round.locationName ?? 'Location set', 'Not here?']
     : st === 'NEEDS_NAME' ? ['New location', 'Name it']
+    // 3.2.25: named with no signal.
+    : st === 'QUEUED' ? [`${round.pendingLocation!.name} (added when there's signal)`, 'Change']
+    : st === 'CHECK' ? [`${round.pendingLocation!.name}: already known?`, 'Check']
     : st === 'LOOKING' ? [signedIn ? 'Finding location… (needs signal)' : 'Position saved – sign in to find the location', null]
     : ['No location', signedIn ? 'Add' : null]
   return (
-    <button class={`locchip ${st === 'NEEDS_NAME' ? 'hi' : ''}`} disabled={!signedIn} onClick={onClick}>
+    <button class={`locchip ${st === 'NEEDS_NAME' || st === 'CHECK' ? 'hi' : ''}`} disabled={!signedIn} onClick={onClick}>
       <span>📍</span><span class="grow">{text}</span>{action && <b>{action}</b>}
     </button>
   )
@@ -37,41 +41,71 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
   // 3.0: naming a location with no map pin (a shoot you can't place, e.g. a Nationals years ago).
   const [noPin, setNoPin] = useState(false)
   const [pinless, setPinless] = useState('')
+  // 3.2.25: a new name that might be a location already known; and whether the lists are this device's copy (no signal).
+  const [similar, setSimilar] = useState<{ matches: PlaceMatch[]; offline: boolean; name: string; noPin: boolean } | null>(null)
+  const [offline, setOffline] = useState(false)
   const hasFix = round?.fixLat != null
   const desktop = useDesktop()
 
   useEffect(() => {
     if (!open || !round) return
-    setNear(null); setTaken(null); setNoPin(false); setPinless('')
-    loc.knownLocations().then(setKnown, () => setKnown([]))
-    if (hasFix) loc.nearby(round).then(list => setNear({ list }), e => setNear({ error: errorText(e) }))
+    setNear(null); setTaken(null); setNoPin(false); setPinless(''); setSimilar(null); setOffline(false)
+    loc.knownOrCached().then(k => { setKnown(k.list); if (k.cached) setOffline(true) }, () => setKnown([]))
+    if (hasFix) loc.nearbyOrCached(round).then(n => { setNear({ list: n.list }); if (n.cached) setOffline(true) }, e => setNear({ error: errorText(e) }))
   }, [open, hasFix])
 
-  async function run(f: () => Promise<unknown>) {
+  async function run(f: () => Promise<unknown>, what?: { name: string; noPin: boolean }) {
     setBusy(true)
     try { await f() } catch (e) {
       if (e instanceof loc.NameTaken) setTaken(e.existing)
+      else if (e instanceof loc.SimilarExists && what) setSimilar({ matches: e.matches, offline: e.offline, ...what })
       else toast(errorText(e))
     } finally { setBusy(false) }
+  }
+  /** "It's a new place": go ahead without asking again about the ones offered. */
+  const anyway = () => {
+    if (!similar || !round) return
+    const skip = similar.matches.map(m => m.id)
+    run(async () => {
+      if (similar.noPin) await loc.nameOnly(roundId, similar.name, priv, false, skip)
+      else await loc.nameAt(roundId, similar.name, round.fixLat!, round.fixLon!, priv, false, skip)
+      setSimilar(null); onClose()
+    })
   }
   const choose = (id: string, n: string) => run(async () => { await loc.setLocation(roundId, id, n); onClose() })
 
   if (!round) return null
-  const isSet = locationStatus(round) === 'SET'
+  const st = locationStatus(round)
+  const isSet = st === 'SET'
+  const pending = round.pendingLocation
   const others = near?.list?.filter(l => l.name !== round.locationName) ?? []
+  const similarPanel = (noPinPanel: boolean) => similar && similar.noPin === noPinPanel && (
+    <div class="banner col" style="align-items:stretch">
+      <b>Is "{similar.name}" one of these? They're already known.</b>
+      {similar.matches.map(m => <MatchRow m={m} busy={busy} onUse={() => { setSimilar(null); choose(m.id, m.name) }} />)}
+      <button class="outlined" disabled={busy} onClick={anyway}>{similar.offline ? "It's a new place (added when there's signal)" : "No, it's a new place"}</button>
+    </div>)
   return (
     <Dialog open={open} title={isSet ? 'Shoot location' : 'Where are you shooting?'} onClose={onClose} actions={<button onClick={onClose}>Close</button>}>
       <div class="col">
         {isSet && <div>Now: <b>{round.locationName}</b></div>}
+        {st === 'CHECK' && pending && <div class="banner col" style="align-items:stretch">
+          <span>You named this "{pending.name}" with no signal. These are already known – is it one of them?</span>
+          {pending.matches.map(m => <MatchRow m={m} busy={busy} onUse={() => run(async () => { await loc.settlePending(roundId, m); onClose() })} />)}
+          <button class="outlined" disabled={busy} onClick={() => run(async () => { await loc.settlePending(roundId, null); onClose() })}>No, keep "{pending.name}"</button>
+        </div>}
+        {st === 'QUEUED' && pending && <div>"{pending.name}" is added as a new location when you have signal. To use a known location instead, pick it below.</div>}
+        {offline && <div class="sub">No signal: using the locations saved on this device at your last sync.</div>}
         <button class="outlined" disabled={busy} onClick={() => { onClose(); go(`/map?pick=${roundId}`) }}>📍 Choose on map</button>
         {known.length > 0 && <label class="field">Known locations
           <select disabled={busy} value="" onChange={e => { const l = known.find(k => k.id === (e.target as HTMLSelectElement).value); if (l) choose(l.id, l.name) }}>
             <option value="">Pick a known location</option>
             {known.map(k => <option value={k.id}>{loc.knownLabel(k)}</option>)}
           </select></label>}
-        {noPin ? <NameOnlyForm name={pinless} setName={setPinless} priv={priv} setPriv={setPriv} busy={busy} taken={taken}
-          onUse={t => choose(t.id, t.name)} onCancel={() => { setNoPin(false); setTaken(null) }}
-          onSave={() => run(async () => { await loc.nameOnly(roundId, pinless, priv); onClose() })} />
+        {noPin ? <><NameOnlyForm name={pinless} setName={setPinless} priv={priv} setPriv={setPriv} busy={busy} taken={taken}
+          onUse={t => choose(t.id, t.name)} onCancel={() => { setNoPin(false); setTaken(null); setSimilar(null) }}
+          onSave={() => run(async () => { await loc.nameOnly(roundId, pinless, priv); onClose() }, { name: pinless.trim(), noPin: true })} />
+          {similarPanel(true)}</>
         : <button class="outlined" disabled={busy} onClick={() => { setNoPin(true); setTaken(null) }}>Name only – no map pin</button>}
         {noPin ? null : !hasFix && desktop ? <div class="sub">Pick a known location, or choose on the map: tap a pin to use it, or tap where the shoot is to name a new location.</div>
         : !hasFix ? <>
@@ -89,10 +123,11 @@ export function LocationSheet({ roundId, open, onClose }: { roundId: string; ope
           <Field label="Club or ground name"><input maxLength={60} value={name} disabled={busy} onInput={e => setName((e.target as HTMLInputElement).value)} /></Field>
           {taken && <div class="banner">There's already a location called "{taken.name}".
             <button onClick={() => choose(taken.id, taken.name)} disabled={busy}>Use {taken.name}</button></div>}
+          {similarPanel(false)}
           <PrivateSwitch value={priv} onChange={setPriv} />
           <button class="filled" disabled={busy || name.trim().length < 2} onClick={() => run(async () => {
             await loc.nameAt(roundId, name, round.fixLat!, round.fixLon!, priv); onClose()
-          })}>Save new location</button>
+          }, { name: name.trim(), noPin: false })}>Save new location</button>
           <div class="sub">Only your shoot location is shared, never your own position. Admins can correct names later.</div>
         </>}
       </div>
@@ -118,6 +153,12 @@ function NameOnlyForm({ name, setName, priv, setPriv, busy, taken, onUse, onSave
     <div class="row"><button onClick={onCancel} disabled={busy}>Cancel</button>
       <button class="filled" disabled={busy || name.trim().length < 2} onClick={onSave}>Save name only</button></div>
   </>
+}
+
+/** A suggested location: its name, why it's suggested, and Use. */
+function MatchRow({ m, busy, onUse }: { m: PlaceMatch; busy: boolean; onUse: () => void }) {
+  return <div class="row between" style="flex-wrap:nowrap"><span>📍 <b>{m.name}</b><div class="sub">{whyMatch(m)}</div></span>
+    <button class="tonal" disabled={busy} onClick={onUse}>Use</button></div>
 }
 
 function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -148,6 +189,7 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
   const [name, setName] = useState('')
   const [priv, setPriv] = useState(false)
   const [taken, setTaken] = useState<loc.NearbyLocation | null>(null)
+  const [similar, setSimilar] = useState<PlaceMatch[] | null>(null)   // 3.2.25
   const [busy, setBusy] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const tapRef = useRef<(lat: number, lon: number) => void>()
@@ -194,15 +236,18 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
     return () => { if (watch != null) navigator.geolocation.clearWatch(watch); meRef.current = null; setHaveMe(false); map.remove() }
   }, [data.state === 'ready' ? data.value : null])
 
-  async function save() {
+  /** check false (3.2.25): "It's a new place", not asking again about the ones offered. */
+  async function save(check = true) {
     if (!newAt) return
     setBusy(true)
+    const skip = check ? [] : (similar ?? []).map(m => m.id)
     try {
       if (place) { await loc.placeLocation(place, newAt.lat, newAt.lon, move); setNewAt(null); toast(`${placing1?.name ?? 'The location'} ${move ? 'has moved' : 'is on the map'}.`); back() }
-      else if (pick) { await loc.nameAt(pick, name, newAt.lat, newAt.lon, priv); setNewAt(null); back() }
-      else { await loc.createLocation(name, newAt.lat, newAt.lon, priv); setNewAt(null); setPlacing(false); toast('Location added.'); retry() }
+      else if (pick) { await loc.nameAt(pick, name, newAt.lat, newAt.lon, priv, check, skip); setNewAt(null); setSimilar(null); back() }
+      else { await loc.createLocation(name, newAt.lat, newAt.lon, priv, check, skip); setNewAt(null); setSimilar(null); setPlacing(false); toast('Location added.'); retry() }
     } catch (e) {
       if (e instanceof loc.NameTaken) { if (pick) setTaken(e.existing); else toast(e.message) }
+      else if (e instanceof loc.SimilarExists) setSimilar(e.matches)
       else toast(errorText(e))
     } finally { setBusy(false) }
   }
@@ -234,19 +279,26 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
         </>}</Loading>
       </main>
       <Dialog open={!!newAt && !!place} title={move ? 'Move it here?' : 'Put it on the map'} onClose={() => setNewAt(null)}
-        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy} onClick={save}>{move ? 'Move it here' : 'Put it here'}</button></>}>
+        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy} onClick={() => save()}>{move ? 'Move it here' : 'Put it here'}</button></>}>
         <div>{move
           ? <>Move <b>{placing1?.name ?? 'this location'}</b> to the point you tapped? Phones scoring there from now on are matched to the new place; rounds already there keep it.</>
           : <>Put <b>{placing1?.name ?? 'this location'}</b> at the point you tapped? From then on it's on the map and phones scoring there are matched to it. An Admin can move it later.</>}</div>
       </Dialog>
-      <Dialog open={!!newAt && !place} title="New shoot location" onClose={() => setNewAt(null)}
-        actions={<><button onClick={() => setNewAt(null)}>Cancel</button><button disabled={busy || name.trim().length < 2} onClick={save}>Save</button></>}>
+      <Dialog open={!!newAt && !place} title="New shoot location" onClose={() => { setNewAt(null); setSimilar(null) }}
+        actions={<><button onClick={() => { setNewAt(null); setSimilar(null) }}>Cancel</button>
+          {similar?.length ? <button disabled={busy || name.trim().length < 2} onClick={() => save(false)}>It's a new place</button>
+            : <button disabled={busy || name.trim().length < 2} onClick={() => save()}>Save</button>}</>}>
         <div class="col">
           <div>{pick ? "Name the location at the point you tapped. It's used for this round." : 'Name the location at the point you tapped.'}</div>
           <Field label="Club or ground name"><input maxLength={60} value={name} onInput={e => setName((e.target as HTMLInputElement).value)} /></Field>
           <PrivateSwitch value={priv} onChange={setPriv} />
           {taken && pick && <div class="error">There's already a location called "{taken.name}".
             <button onClick={async () => { await loc.setLocation(pick, taken.id, taken.name); setNewAt(null); back() }}>Use {taken.name}</button></div>}
+          {!!similar?.length && <div class="banner col" style="align-items:stretch">
+            <b>{pick ? 'Is it one of these? They\'re already known.' : 'These are already known. Is it one of them?'}</b>
+            {similar.map(m => pick ? <MatchRow m={m} busy={busy} onUse={async () => { await loc.setLocation(pick, m.id, m.name); setNewAt(null); setSimilar(null); back() }} />
+              : <div><b>{m.name}</b><div class="sub">{whyMatch(m)}</div></div>)}
+          </div>}
         </div>
       </Dialog>
     </>

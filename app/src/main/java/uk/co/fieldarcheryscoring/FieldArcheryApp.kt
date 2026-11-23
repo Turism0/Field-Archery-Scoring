@@ -35,7 +35,9 @@ class AppContainer(app: Application) {
     val accountStore = AccountStore(app)
 
     val syncScheduler = SyncScheduler(app, accountStore)
-    val locationRepository = LocationRepository(app, db.roundDao(), api, accountStore, onChanged = { syncScheduler.request() })
+    /** 3.2.25: the phone's copy of the shoot locations you can use (for no signal). */
+    val placeCache = uk.co.fieldarcheryscoring.data.PlaceCache(app)
+    val locationRepository = LocationRepository(app, db.roundDao(), api, accountStore, onChanged = { syncScheduler.request() }, cache = placeCache)
     /** 3.2.24: bows and arrows. */
     val equipmentRepository = uk.co.fieldarcheryscoring.data.EquipmentRepository(db.equipmentDao(), onChanged = { syncScheduler.request() })
     val roundSyncer = RoundSyncer(db.roundDao(), api, accountStore, locationRepository, equipmentRepository)
@@ -46,7 +48,7 @@ class AppContainer(app: Application) {
     val roundRepository = RoundRepository(db.roundDao(), onChanged = { syncScheduler.request() }, names = archerNamesStore.names)
     val friendsRepository = FriendsRepository(api, accountStore, onAccepted = { syncScheduler.request() })
     val adminRepository = AdminRepository(api, accountStore)
-    val locationPageRepository = LocationPageRepository(api, accountStore)
+    val locationPageRepository = LocationPageRepository(api, accountStore, placeCache)
     /** 3.2.17: Stats → Analysis → Compared with others. */
     val compareRepository = uk.co.fieldarcheryscoring.data.CompareRepository(api, accountStore)
     /** Live groups: one round scored on several phones through the server (2.1). */
@@ -64,7 +66,7 @@ class AppContainer(app: Application) {
     }
 
     /** Whose rounds are on this phone (3.2.02). */
-    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository, archerNamesStore, db.equipmentDao())
+    private val deviceData = uk.co.fieldarcheryscoring.data.DeviceData(app, db.roundDao(), db.profileDao(), statsFilterStore, liveGroupRepository, archerNamesStore, db.equipmentDao(), placeCache)
     val accountRepository = AccountRepository(api, accountStore, profileRepository, deviceData, onSignedIn = { syncScheduler.request() })
 }
 
