@@ -74,7 +74,7 @@ describe('equipment', () => {
     expect(chooseEquipment(bows, arrows, 'AFB', { arrowId: NONE }).arrowId).toBeNull()
   })
   it('bow form', () => {
-    expect(bowProblems(emptyBowForm())).toEqual(['Pick the bow type.', 'Give the bow a make or model.', 'Pick the bow styles you shoot it in.'])
+    expect(bowProblems(emptyBowForm())).toEqual(['Pick the bow type.', 'Give the bow a make or model.'])
     const f = { type: 'LONGBOW' as const, make: ' Border ', model: 'Hex  7', poundage: '45,5 lb', bowStyles: ['LB'] }
     expect(bowFromForm(f, 'id', 't')).toEqual({ id: 'id', type: 'LONGBOW', make: 'Border', model: 'Hex 7', poundageLb: 45.5, bowStyles: ['LB'], updatedUtc: 't' })
     expect(bowProblems({ ...f, poundage: 'heavy' })).toEqual(['Poundage should be a number.'])
@@ -88,7 +88,7 @@ describe('equipment', () => {
     expect([a.spine, a.lengthIn, a.pointGrains, a.fletchCount]).toEqual(['500', 29.25, 100, 3])
     expect(arrowProblems({ ...f, spine: 'stiff' })).toEqual(['Spine should look like 500 (carbon), 45-50 (wood) or 2213 (aluminium).'])
     expect(arrowProblems({ ...f, fletchCount: '2.5' })).toEqual(['Fletches must be a whole number from 1 to 8.'])
-    expect(arrowProblems({ ...f, bowIds: [] })).toEqual(['Pick the bows you use them with.'])
+    expect(arrowProblems({ ...f, bowIds: [] })).toEqual([])   // 3.2.27: arrows with no bow can be kept
     expect(arrowProblems({ ...emptyArrowForm(), bowIds: ['b'] })).toEqual(['Give the arrows a make or model.'])
   })
   it('numbers', () => { expect([num(45), num(45.5), num(29.25)]).toEqual(['45', '45.5', '29.25']) })

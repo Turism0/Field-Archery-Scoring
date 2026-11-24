@@ -92,7 +92,7 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
                 list.forEach { b ->
                     EquipmentRow(
                         title = Equipment.name(b),
-                        lines = listOf(Equipment.detail(b), b.bowStyles.sortedBy { it.ordinal }.joinToString(", ") { it.displayName }),
+                        lines = listOf(Equipment.detail(b), if (b.bowStyles.isEmpty()) "No bow style: not offered for rounds" else b.bowStyles.sortedBy { it.ordinal }.joinToString(", ") { it.displayName }),
                         stats = stats[b.id],
                         onClick = { onBow(b.id) },
                     )
@@ -104,19 +104,19 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
             }
             SectionCard(title = "Arrows") {
                 val list = arrows.orEmpty()
-                if (list.isEmpty()) Text(if (bows.isNullOrEmpty()) "Add a bow first, then the arrows you use with it." else "No arrows yet.",
+                if (list.isEmpty()) Text("No arrows yet.",
                     style = MaterialTheme.typography.bodyMedium)
                 list.forEach { a ->
                     val used = a.bowIds.mapNotNull { id -> allBows.firstOrNull { it.id == id } }
                         .joinToString(", ") { Equipment.name(it) + if (it.deleted) " (deleted)" else "" }
                     EquipmentRow(
                         title = Equipment.name(a),
-                        lines = listOf(Equipment.detail(a), if (used.isEmpty()) "" else "With $used").filter { it.isNotEmpty() },
+                        lines = listOf(Equipment.detail(a), if (used.isEmpty()) "No bow: not offered for rounds" else "With $used").filter { it.isNotEmpty() },
                         stats = stats[a.id],
                         onClick = { onArrows(a.id) },
                     )
                 }
-                OutlinedButton(onClick = { onArrows("new") }, enabled = !bows.isNullOrEmpty()) {
+                OutlinedButton(onClick = { onArrows("new") }) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Text(" Add arrows")
                 }
@@ -222,7 +222,7 @@ fun BowEditScreen(vm: BowEditViewModel, onBack: () -> Unit) {
                 TextInput("Poundage (lb, optional)", f.poundage, { v -> vm.update { it.copy(poundage = v) } }, number = true,
                     supporting = "At your draw length, e.g. 45 or 47.5")
             }
-            SectionCard(title = "Bow styles", subtitle = "The styles you shoot it in. New round offers it for these.") {
+            SectionCard(title = "Bow styles", subtitle = "The styles you shoot it in. New round offers it for these (none: kept here, not offered).") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BowStyle.entries.forEach { s ->
                         FilterChip(
@@ -232,6 +232,8 @@ fun BowEditScreen(vm: BowEditViewModel, onBack: () -> Unit) {
                         )
                     }
                 }
+                // 3.2.27 (Pete): unlinked equipment is kept, but say it won't be offered.
+                if (f.bowStyles.isEmpty()) UnlinkedWarning("No bow style picked: this bow won't be available when you start a round until you pick one.")
             }
             if (tried) Problems(f.problems())
         }
@@ -297,8 +299,8 @@ fun ArrowsEditScreen(vm: ArrowsEditViewModel, onBack: () -> Unit) {
                 TextInput("Colours", f.fletchColours, { v -> vm.update { it.copy(fletchColours = v) } },
                     maxLength = Equipment.MAX_COLOURS, supporting = "e.g. barred grey, white cock feather")
             }
-            SectionCard(title = "Used with", subtitle = "The bows you shoot them from. New round offers them for these.") {
-                if (bows.isEmpty()) Text("Add a bow first.", style = MaterialTheme.typography.bodyMedium)
+            SectionCard(title = "Used with", subtitle = "The bows you shoot them from. New round offers them for these (none: kept here, not offered).") {
+                if (bows.isEmpty()) Text("No bows yet.", style = MaterialTheme.typography.bodyMedium)
                 bows.forEach { b ->
                     Row(
                         Modifier.fillMaxWidth().clickable { vm.update { it.copy(bowIds = if (b.id in it.bowIds) it.bowIds - b.id else it.bowIds + b.id) } },
@@ -311,9 +313,19 @@ fun ArrowsEditScreen(vm: ArrowsEditViewModel, onBack: () -> Unit) {
                         }
                     }
                 }
+                if (f.bowIds.isEmpty()) UnlinkedWarning(
+                    if (bows.isEmpty()) "No bow yet: these arrows won't be available when you start a round until you add a bow and pick it here."
+                    else "No bow picked: these arrows won't be available when you start a round until you pick one."
+                )
             }
             if (tried) Problems(f.problems())
         }
     }
     if (confirmDelete) ConfirmDelete("these arrows", onDelete = { confirmDelete = false; vm.delete(onBack) }, onDismiss = { confirmDelete = false })
+}
+
+/** 3.2.27 (Pete): a bow with no bow style, or arrows with no bow, are kept but not offered for rounds until linked. */
+@Composable
+private fun UnlinkedWarning(text: String) {
+    Text("⚠ $text", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
 }

@@ -81,17 +81,17 @@ export function EquipmentScreen() {
           you used last time. With only one, it's used without asking. Only you see your equipment.</div>
         <Card title="Bows">
           {!bows.length && <div>No bows yet.</div>}
-          {bows.map(b => <Row title={bowName(b)} lines={[bowDetail(b), b.bowStyles.map(styleName).join(', ')]} stats={data.stats.get(b.id)}
+          {bows.map(b => <Row title={bowName(b)} lines={[bowDetail(b), b.bowStyles.length ? b.bowStyles.map(styleName).join(', ') : 'No bow style: not offered for rounds']} stats={data.stats.get(b.id)}
             onClick={() => go(`/bow/${b.id}`)} />)}
           <button class="outlined" style="align-self:flex-start" onClick={() => go('/bow/new')}>＋ Add a bow</button>
         </Card>
         <Card title="Arrows">
-          {!arrows.length && <div>{bows.length ? 'No arrows yet.' : 'Add a bow first, then the arrows you use with it.'}</div>}
+          {!arrows.length && <div>No arrows yet.</div>}
           {arrows.map(a => {
             const used = a.bowIds.map(id => data.kit.bows.find(b => b.id === id)).filter(b => !!b).map(b => bowName(b!) + (b!.deleted ? ' (deleted)' : '')).join(', ')
-            return <Row title={arrowName(a)} lines={[arrowDetail(a), used ? `With ${used}` : '']} stats={data.stats.get(a.id)} onClick={() => go(`/arrows/${a.id}`)} />
+            return <Row title={arrowName(a)} lines={[arrowDetail(a), used ? `With ${used}` : 'No bow: not offered for rounds']} stats={data.stats.get(a.id)} onClick={() => go(`/arrows/${a.id}`)} />
           })}
-          <button class="outlined" style="align-self:flex-start" disabled={!bows.length} onClick={() => go('/arrows/new')}>＋ Add arrows</button>
+          <button class="outlined" style="align-self:flex-start" onClick={() => go('/arrows/new')}>＋ Add arrows</button>
         </Card>
       </main>
     </>
@@ -160,7 +160,7 @@ export function BowEdit({ id }: { id: string }) {
           <Text label="Model (optional)" value={f.model} onChange={v => set({ model: v })} />
           <Text label="Poundage (lb, optional)" value={f.poundage} onChange={v => set({ poundage: v })} number help="At your draw length, e.g. 45 or 47.5" />
         </Card>
-        <Card title="Bow styles" sub="The styles you shoot it in. New round offers it for these.">
+        <Card title="Bow styles" sub="The styles you shoot it in. New round offers it for these (none: kept here, not offered).">
           <div class="chips">
             {BOW_STYLES.map(s => (
               <button type="button" class={`chip ${f.bowStyles.includes(s.code) ? 'on' : ''}`} aria-pressed={f.bowStyles.includes(s.code)}
@@ -169,6 +169,7 @@ export function BowEdit({ id }: { id: string }) {
               </button>
             ))}
           </div>
+          {!f.bowStyles.length && <div class="error">⚠ No bow style picked: this bow won't be available when you start a round until you pick one.</div>}
         </Card>
         {tried && <Problems list={bowProblems(f)} />}
       </main>
@@ -237,8 +238,8 @@ export function ArrowsEdit({ id }: { id: string }) {
             optionLabel={c => FLETCH_MATERIALS.find(m => m.code === c)!.name} onChange={m => set({ fletchMaterial: m ?? null })} />
           <Text label="Colours" value={f.fletchColours} onChange={v => set({ fletchColours: v })} max={MAX_COLOURS} help="e.g. barred grey, white cock feather" />
         </Card>
-        <Card title="Used with" sub="The bows you shoot them from. New round offers them for these.">
-          {!bows.length && <div>Add a bow first.</div>}
+        <Card title="Used with" sub="The bows you shoot them from. New round offers them for these (none: kept here, not offered).">
+          {!bows.length && <div>No bows yet.</div>}
           {bows.map(b => (
             <label class="check">
               <input type="checkbox" checked={f.bowIds.includes(b.id)}
@@ -246,6 +247,9 @@ export function ArrowsEdit({ id }: { id: string }) {
               <span>{bowLabel(b)}{b.deleted ? ' (deleted)' : ''}<span class="sub"> · {bowDetail(b)}</span></span>
             </label>
           ))}
+          {!f.bowIds.length && <div class="error">⚠ {bows.length
+            ? "No bow picked: these arrows won't be available when you start a round until you pick one."
+            : "No bow yet: these arrows won't be available when you start a round until you add a bow and pick it here."}</div>}
         </Card>
         {tried && <Problems list={arrowProblems(f.spine && spine ? { ...f, spine: spine.text } : f)} />}
       </main>

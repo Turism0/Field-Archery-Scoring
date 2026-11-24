@@ -178,6 +178,7 @@ object Equipment {
 
     // ---- Choosing -------------------------------------------------------------------------------------------------
 
+    // 3.2.27 (Pete): a bow with no bow style, or arrows with no bow, can be kept, but aren't offered for rounds until linked.
     fun bowsFor(bows: List<Bow>, style: BowStyle?): List<Bow> =
         if (style == null) emptyList()
         else bows.filter { !it.deleted && style in it.bowStyles }.sortedWith(compareBy({ name(it).lowercase() }, { it.poundageLb ?: 0.0 }))
@@ -238,7 +239,6 @@ object Equipment {
             if (clean(make) == null && clean(model) == null) p += "Give the bow a make or model."
             if (make.trim().length > MAX_TEXT || model.trim().length > MAX_TEXT) p += "Make and model can be up to $MAX_TEXT characters."
             check(p, number(poundage), 5.0, 250.0, "Poundage")
-            if (bowStyles.isEmpty()) p += "Pick the bow styles you shoot it in."
             return p
         }
 
@@ -276,7 +276,6 @@ object Equipment {
             if (n != null && (n.isNaN() || n != Math.floor(n) || n < 1 || n > 8)) p += "Fletches must be a whole number from 1 to 8."
             if (fletchColours.trim().length > MAX_COLOURS) p += "Fletch colours can be up to $MAX_COLOURS characters."
             if (spine.isNotBlank() && spine(spine) == null) p += "Spine should look like 500 (carbon), 45-50 (wood) or 2213 (aluminium)."
-            if (bowIds.isEmpty()) p += "Pick the bows you use them with."
             return p
         }
 

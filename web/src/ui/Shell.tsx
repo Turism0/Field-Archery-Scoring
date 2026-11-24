@@ -25,6 +25,7 @@ export function Shell({ section, children }: { section: string; children: Compon
   const account = useData(getAccount)
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
+  const requests = useData(() => getKv<number>('friendRequestCount')) ?? 0   // 3.2.27
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
   const lastSync = useData(() => getKv<string>('lastSync'))
   const [online, server] = useOnline()
@@ -33,7 +34,7 @@ export function Shell({ section, children }: { section: string; children: Compon
   const admin = isAdmin(account)
   // Desktop is for typing in paper rounds, not live scoring: no Join a live group (2.6.02).
   const items = layout.order.filter(id => (id !== 'ADMIN' || admin) && !layout.hidden.includes(id))
-  const badge = (id: TileId) => (id === 'FRIENDS' && account ? offers : id === 'ADMIN' ? duplicates : 0)
+  const badge = (id: TileId) => (id === 'FRIENDS' && account ? offers + requests : id === 'ADMIN' ? duplicates : 0)
 
   return (
     <div class="shell">

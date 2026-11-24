@@ -1,6 +1,6 @@
 #Requires -Version 7
 <#
-    API – equipment (API 3.2.24, schema 15). Run in PowerShell 7 (pwsh):
+    API – equipment (API 3.2.24, schema 15; 3.2.27: bows with no style and arrows with no bow allowed). Run in PowerShell 7 (pwsh):
 
         .\Test-Equipment.ps1
         .\Test-Equipment.ps1 -BaseUrl http://localhost:8085
@@ -102,9 +102,15 @@ Expect "another archer doesn't get them" (@($r.Body.bows).Count -eq 0 -and @($r.
 $r = Call PUT "/api/equipment/bows/$bow" (New-Bow $t.AddMinutes(5) 'Stolen') -Token $B.Token
 Expect "another archer can't change them" ($r.Status -eq 404) "($($r.Status))"
 
-$bad = New-Bow $t; $bad.bowStyles = @()
+$loose = New-Bow $t; $loose.bowStyles = @(); $looseId = [guid]::NewGuid().ToString()
+$r = Call PUT "/api/equipment/bows/$looseId" $loose -Token $A.Token
+Expect 'a bow with no bow style is kept (3.2.27)' ($r.Status -eq 200) "($($r.Status) $($r.Body.message))"
+$r = Call GET '/api/equipment' -Token $A.Token
+$gotLoose = @($r.Body.bows) | Where-Object bowId -eq $looseId
+Expect 'and comes back with no bow styles' ($null -ne $gotLoose -and @($gotLoose.bowStyles).Count -eq 0) ($gotLoose | ConvertTo-Json -Compress)
+$bad = New-Bow $t; $bad.bowStyles = @('XX')
 $r = Call PUT "/api/equipment/bows/$([guid]::NewGuid())" $bad -Token $A.Token
-Expect 'a bow with no bow style is refused' ($r.Status -eq 400) "($($r.Status))"
+Expect 'an unknown bow style is refused' ($r.Status -eq 400) "($($r.Status))"
 $bad = New-Bow $t; $bad.type = 'SLINGSHOT'
 $r = Call PUT "/api/equipment/bows/$([guid]::NewGuid())" $bad -Token $A.Token
 Expect 'an unknown bow type is refused' ($r.Status -eq 400) "($($r.Status))"
@@ -117,8 +123,12 @@ foreach ($s in '500', '2213', '45-50') {
 }
 $r = Call PUT "/api/equipment/arrows/$([guid]::NewGuid())" (New-Arrows @($bow) $t 'stiff') -Token $A.Token
 Expect "spine 'stiff' is refused" ($r.Status -eq 400) "($($r.Status))"
-$r = Call PUT "/api/equipment/arrows/$([guid]::NewGuid())" (New-Arrows @() $t) -Token $A.Token
-Expect 'arrows with no bow are refused' ($r.Status -eq 400) "($($r.Status))"
+$looseArrows = [guid]::NewGuid().ToString()
+$r = Call PUT "/api/equipment/arrows/$looseArrows" (New-Arrows @() $t) -Token $A.Token
+Expect 'arrows with no bow are kept (3.2.27)' ($r.Status -eq 200) "($($r.Status) $($r.Body.message))"
+$r = Call GET '/api/equipment' -Token $A.Token
+$gotLooseArrows = @($r.Body.arrows) | Where-Object arrowId -eq $looseArrows
+Expect 'and come back with no bows' ($null -ne $gotLooseArrows -and @($gotLooseArrows.bowIds).Count -eq 0) ($gotLooseArrows | ConvertTo-Json -Compress)
 
 # Rounds: the bow and arrows are the archer's own.
 $id = [guid]::NewGuid()

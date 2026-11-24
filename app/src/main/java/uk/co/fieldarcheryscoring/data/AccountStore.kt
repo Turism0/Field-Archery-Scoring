@@ -54,6 +54,12 @@ class AccountStore(context: Context) {
 
     fun setRoundOffers(count: Int) { _roundOffers.value = count }
 
+    private val _friendRequests = MutableStateFlow(0)
+    /** 3.2.27 (Pete): friend requests waiting for an answer (badge on the Friends tile). Not stored. */
+    val friendRequests: StateFlow<Int> = _friendRequests.asStateFlow()
+
+    fun setFriendRequests(count: Int) { _friendRequests.value = count }
+
     /**
      * Friends' usernames and ids from the last time the list was fetched, so friends can be added to a group round
      * with no signal. Usernames only (the server's own data), cleared on sign-out.
@@ -109,6 +115,7 @@ class AccountStore(context: Context) {
         _role.value = AccountRole.USER
         _duplicateLocations.value = 0
         _roundOffers.value = 0
+        _friendRequests.value = 0
         ended?.let { onCleared?.invoke(it) }
     }
 

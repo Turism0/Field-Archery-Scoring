@@ -248,6 +248,8 @@ class HomeViewModel(
     val duplicateLocations: StateFlow<Int> = accountStore.duplicateLocations
     /** Rounds friends have scored for you, waiting for an answer (badge on the Friends tile). */
     val roundOffers: StateFlow<Int> = accountStore.roundOffers
+    /** Friend requests waiting for an answer (3.2.27: also on the Friends tile badge). */
+    val friendRequests: StateFlow<Int> = accountStore.friendRequests
 
     init {
         // Guests' scores in group rounds are only kept for 30 days.

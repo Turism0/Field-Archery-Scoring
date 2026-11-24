@@ -111,7 +111,7 @@ class EquipmentTest {
     }
 
     @Test fun `bow form`() {
-        assertEquals(listOf("Pick the bow type.", "Give the bow a make or model.", "Pick the bow styles you shoot it in."), Equipment.BowForm().problems())
+        assertEquals(listOf("Pick the bow type.", "Give the bow a make or model."), Equipment.BowForm().problems())
         val f = Equipment.BowForm(BowType.LONGBOW, " Border ", "Hex  7", "45,5 lb", setOf(BowStyle.LONGBOW))
         assertEquals(Bow("id", BowType.LONGBOW, "Border", "Hex 7", 45.5, setOf(BowStyle.LONGBOW), 9), f.toBow("id", 9))
         assertEquals(listOf("Poundage should be a number."), f.copy(poundage = "heavy").problems())
@@ -126,7 +126,7 @@ class EquipmentTest {
         assertEquals("500", a.spine); assertEquals(29.25, a.lengthIn!!, 0.0); assertEquals(100.0, a.pointGrains!!, 0.0); assertEquals(3, a.fletchCount)
         assertEquals(listOf("Spine should look like 500 (carbon), 45-50 (wood) or 2213 (aluminium)."), f.copy(spine = "stiff").problems())
         assertEquals(listOf("Fletches must be a whole number from 1 to 8."), f.copy(fletchCount = "2.5").problems())
-        assertEquals(listOf("Pick the bows you use them with."), f.copy(bowIds = emptySet()).problems())
+        assertEquals(emptyList<String>(), f.copy(bowIds = emptySet()).problems())   // 3.2.27: arrows with no bow can be kept
         assertEquals(listOf("Give the arrows a make or model."), Equipment.ArrowForm(bowIds = setOf("b")).problems())
     }
 

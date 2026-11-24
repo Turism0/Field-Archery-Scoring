@@ -49,6 +49,13 @@ public static class FriendEndpoints
 
     public sealed record PendingRequest(Guid ArcherId, string Username, DateTime RequestedUtc, bool Outgoing);
 
+    /// <summary>3.2.27 (Pete): friend requests waiting for this archer to answer (badge on the Friends tile; /api/me).</summary>
+    public static Task<int> IncomingCountAsync(SqlConnection conn, Guid me, CancellationToken ct) =>
+        conn.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT COUNT(*) FROM dbo.Friendship
+            WHERE Status = 'PENDING' AND RequestedById <> @me AND (ArcherLowId = @me OR ArcherHighId = @me);
+            """, new { me }, cancellationToken: ct));
+
     public sealed record FriendRoundSummary(
         Guid RoundId, DateTime ShootDate, short TargetCount, string ArcherClass, string AgeGroup, string BowStyle, int TotalPoints,
         string? LocationName, string RoundType, int AnimalCount = 0, int PredatorPrey = 0, int Fans = 0, int FunShots = 0, int FunPoints = 0);

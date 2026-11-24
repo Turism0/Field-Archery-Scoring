@@ -86,6 +86,11 @@ $r = Call GET '/api/friends' -Token $A.Token
 Expect "A sees an outgoing request to B" (@($r.Body.outgoing | Where-Object username -eq $B.Name).Count -eq 1)
 $r = Call GET '/api/friends' -Token $B.Token
 Expect "B sees an incoming request from A" (@($r.Body.incoming | Where-Object username -eq $A.Name).Count -eq 1)
+# 3.2.27: /api/me counts requests waiting for an answer (the Friends tile badge), not ones you sent.
+$r = Call GET '/api/me' -Token $B.Token
+Expect "B's /api/me counts 1 friend request waiting" ($r.Body.friendRequests -eq 1) "(got $($r.Body.friendRequests))"
+$r = Call GET '/api/me' -Token $A.Token
+Expect "A's /api/me doesn't count the request A sent" ($r.Body.friendRequests -eq 0) "(got $($r.Body.friendRequests))"
 $r = Call GET "/api/friends/$($A.Id)/rounds" -Token $B.Token
 Expect "B still can't see A's rounds while pending" ($r.Status -eq 404) "($($r.Status))"
 
@@ -96,6 +101,8 @@ $r = Call POST "/api/friends/$($A.Id)/accept" -Token $C.Token
 Expect "C can't accept a request that wasn't sent to them" ($r.Status -eq 404) "($($r.Status))"
 $r = Call POST "/api/friends/$($A.Id)/accept" -Token $B.Token
 Expect 'B accepts' ($r.Status -eq 200) "($($r.Status))"
+$r = Call GET '/api/me' -Token $B.Token
+Expect "after accepting, B has no requests waiting" ($r.Body.friendRequests -eq 0) "(got $($r.Body.friendRequests))"
 
 $r = Call GET '/api/friends' -Token $B.Token
 $friendA = @($r.Body.friends | Where-Object username -eq $A.Name)

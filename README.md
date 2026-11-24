@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.27
+
+- **3.2.27 (app, web app and API; no SQL): friend request badge, and equipment that isn't linked yet (Pete).**
+  - **Friends tile badge:** friend requests waiting for your answer now count on the Friends tile's badge (with rounds scored for you), and the tile says "2 friend requests waiting". Web: the same on Home, the side menu and the desktop dashboard. API: `GET /api/me` has `friendRequests` (requests sent to you, not ones you sent); refreshed on each sync and whenever the Friends list loads.
+  - **Bows with no bow style, arrows with no bow:** can now be saved (the API no longer refuses them). They're kept in Equipment, marked "not offered for rounds" (and the bow / arrows screen warns "won't be available when you start a round until you pick one" while none is picked), and aren't offered in New round / Join / Add a round until they're linked (Pete's choice). Add arrows works before you have a bow.
+  - Tests: Test-Friends (the /api/me count), Test-Equipment (unlinked bows/arrows kept; an unknown bow style still refused); Kotlin and web equipment tests updated.
+
 ## Version 3.2.26
 
 - **3.2.26 (app only; no SQL, API and web app just renumbered): the QR scanner works in the Play build (Pete's error screenshot).**

@@ -128,6 +128,7 @@ class FriendsRepository(
         )
         // Remembered for adding friends to a group round with no signal.
         accounts.setCachedFriends(overview.friends.map { CachedFriend(it.archerId, it.username) })
+        accounts.setFriendRequests(overview.incoming.size)   // 3.2.27: the Friends tile badge
         overview
     }
 

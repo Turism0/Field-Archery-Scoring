@@ -21,7 +21,7 @@ public sealed record BowDto(
     string? Make,
     string? Model,
     decimal? PoundageLb,
-    IReadOnlyList<string> BowStyles,   // codes (LB, HT …), at least one
+    IReadOnlyList<string> BowStyles,   // codes (LB, HT …); none allowed (3.2.27)
     bool IsDeleted,
     DateTime ClientUpdatedUtc);
 
@@ -36,7 +36,7 @@ public sealed record ArrowDto(
     decimal? FletchLengthIn,
     string? FletchColours,
     decimal? PointGrains,
-    IReadOnlyList<Guid> BowIds,        // the bows they're used with
+    IReadOnlyList<Guid> BowIds,        // the bows they're used with; none allowed (3.2.27)
     bool IsDeleted,
     DateTime ClientUpdatedUtc);
 
@@ -115,8 +115,8 @@ public static class EquipmentEndpoints
         if (Clean(b.Make) is null && Clean(b.Model) is null) p.Add("Give the bow a make or model.");
         if ((b.Make?.Trim().Length ?? 0) > MaxText || (b.Model?.Trim().Length ?? 0) > MaxText) p.Add($"Make and model can be up to {MaxText} characters.");
         InRange(p, b.PoundageLb, 5, 250, "Poundage");
-        if (b.BowStyles is null || b.BowStyles.Count == 0) p.Add("Pick at least one bow style.");
-        else if (b.BowStyles.Any(s => !RoundValidator.BowStyles.Contains(s))) p.Add("Unknown bow style.");
+        // 3.2.27 (Pete): a bow with no bow style can be kept (the apps don't offer it for rounds until it has one).
+        if (b.BowStyles is { } styles && styles.Any(s => !RoundValidator.BowStyles.Contains(s))) p.Add("Unknown bow style.");
         return p;
     }
 
@@ -133,8 +133,8 @@ public static class EquipmentEndpoints
         if (a.FletchMaterial is { } m && !FletchMaterials.Contains(m)) p.Add("Unknown fletch material.");
         if ((a.FletchColours?.Trim().Length ?? 0) > MaxColours) p.Add($"Fletch colours can be up to {MaxColours} characters.");
         if (Clean(a.Spine) is { } s && !SpineFormat.IsMatch(s)) p.Add("Spine should look like 500 (carbon), 45-50 (wood) or 2213 (aluminium).");
-        if (a.BowIds is null || a.BowIds.Count == 0) p.Add("Pick at least one bow.");
-        else if (a.BowIds.Count > MaxBowsPerArrow) p.Add($"Up to {MaxBowsPerArrow} bows.");
+        // 3.2.27 (Pete): arrows with no bow can be kept (not offered for rounds until linked to one).
+        if (a.BowIds is { Count: > MaxBowsPerArrow }) p.Add($"Up to {MaxBowsPerArrow} bows.");
         return p;
     }
 

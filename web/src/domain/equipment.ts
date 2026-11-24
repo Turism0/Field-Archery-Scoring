@@ -141,6 +141,7 @@ export function parseSpine(input: string | null | undefined): Spine | null {
 
 // ---- Choosing ----
 
+// 3.2.27 (Pete): a bow with no bow style, or arrows with no bow, can be kept, but aren't offered for rounds until linked.
 export function bowsFor(bows: Bow[], style: string | null | undefined): Bow[] {
   if (!style) return []
   return bows.filter(b => !b.deleted && b.bowStyles.includes(style))
@@ -203,7 +204,6 @@ export function bowProblems(f: BowForm): string[] {
   if (!clean(f.make) && !clean(f.model)) p.push('Give the bow a make or model.')
   if (f.make.trim().length > MAX_TEXT || f.model.trim().length > MAX_TEXT) p.push(`Make and model can be up to ${MAX_TEXT} characters.`)
   check(p, parseNumber(f.poundage), 5, 250, 'Poundage')
-  if (!f.bowStyles.length) p.push('Pick the bow styles you shoot it in.')
   return p
 }
 
@@ -234,7 +234,6 @@ export function arrowProblems(f: ArrowForm): string[] {
   if (n != null && (Number.isNaN(n) || !Number.isInteger(n) || n < 1 || n > 8)) p.push('Fletches must be a whole number from 1 to 8.')
   if (f.fletchColours.trim().length > MAX_COLOURS) p.push(`Fletch colours can be up to ${MAX_COLOURS} characters.`)
   if (f.spine.trim() && !parseSpine(f.spine)) p.push('Spine should look like 500 (carbon), 45-50 (wood) or 2213 (aluminium).')
-  if (!f.bowIds.length) p.push('Pick the bows you use them with.')
   return p
 }
 

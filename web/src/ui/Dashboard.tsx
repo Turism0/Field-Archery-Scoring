@@ -18,6 +18,7 @@ export function Dashboard() {
   const going = useData(inProgress) ?? []
   const done = useData(finished)
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
+  const requests = useData(() => getKv<number>('friendRequestCount')) ?? 0   // 3.2.27
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
   const [editing, setEditing] = useState<HomeLayout | null>(null)
@@ -69,9 +70,11 @@ export function Dashboard() {
           </Card>
         </div>
 
-        {(offers > 0 && account) || (duplicates > 0 && admin) || (account && noLocation.length > 0) || going.length > 0 ? <div class="grid2">
+        {(offers > 0 && account) || (requests > 0 && account) || (duplicates > 0 && admin) || (account && noLocation.length > 0) || going.length > 0 ? <div class="grid2">
           {offers > 0 && account && <button class="tile hi" onClick={() => go('/friends')}><span class="dot">☺</span>
             <span class="grow"><b>{offers} round{offers === 1 ? '' : 's'} scored for you</b><span class="sub">Accept or decline them in Friends</span></span></button>}
+          {requests > 0 && account && <button class="tile hi" onClick={() => go('/friends')}><span class="dot">☺</span>
+            <span class="grow"><b>{requests} friend request{requests === 1 ? '' : 's'} waiting</b><span class="sub">Accept or decline them in Friends</span></span></button>}
           {duplicates > 0 && admin && <button class="tile warn" onClick={() => go('/admin/duplicates')}><span class="dot">⚠</span>
             <span class="grow"><b>{duplicates} possible duplicate location{duplicates === 1 ? '' : 's'}</b><span class="sub">Merge or mark as different places</span></span></button>}
           {account && noLocation.length > 0 && <button class="tile" onClick={() => go(`/card/${noLocation[0].id}`)}><span class="dot">📍</span>

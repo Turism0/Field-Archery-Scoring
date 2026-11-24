@@ -104,6 +104,7 @@ fun HomeScreen(
     val role by vm.role.collectAsStateWithLifecycle()
     val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
     val roundOffers by vm.roundOffers.collectAsStateWithLifecycle()
+    val friendRequests by vm.friendRequests.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
     val updateRequired by vm.updateRequired.collectAsStateWithLifecycle()
@@ -227,11 +228,15 @@ fun HomeScreen(
                                 title = "Friends",
                                 subtitle = when {
                                     !signedIn -> "Sign in to see friends' scorecards"
+                                    // 3.2.27 (Pete): friend requests waiting get the badge too.
+                                    friendRequests > 0 && roundOffers > 0 ->
+                                        "${plural(friendRequests, "friend request")} and ${plural(roundOffers, "round")} scored for you waiting"
+                                    friendRequests > 0 -> "${plural(friendRequests, "friend request")} waiting"
                                     roundOffers > 0 -> "$roundOffers round${if (roundOffers == 1) "" else "s"} scored for you to accept"
                                     else -> "Friends' scorecards and stats, requests"
                                 },
                                 onClick = onFriends,
-                                badge = if (signedIn) roundOffers else 0,
+                                badge = if (signedIn) roundOffers + friendRequests else 0,
                             )
                             HomeTileId.LOCATIONS -> HomeTile(
                                 icon = Icons.Filled.LocationOn,
@@ -548,3 +553,6 @@ private fun HomeTile(
         }
     }
 }
+
+/** "1 friend request", "2 friend requests". */
+private fun plural(n: Int, what: String) = "$n $what${if (n == 1) "" else "s"}"

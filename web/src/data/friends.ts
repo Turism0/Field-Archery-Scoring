@@ -57,6 +57,7 @@ export async function overview(): Promise<FriendsOverview> {
     outgoing: j.outgoing.map((x: any) => ({ archerId: x.archerId, username: x.username })),
   }
   await setKv('friends', o.friends.map(f => ({ archerId: f.archerId, username: f.username })))
+  await setKv('friendRequestCount', o.incoming.length)   // 3.2.27: the Friends badge
   return o
 }
 

@@ -30,6 +30,7 @@ export function Home() {
   const done = useData(finished)
   const lastSync = useData(() => getKv<string>('lastSync'))
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
+  const requests = useData(() => getKv<number>('friendRequestCount')) ?? 0   // 3.2.27
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
   const [online, server] = useOnline()
@@ -59,8 +60,11 @@ export function Home() {
       case 'HANDICAP': return <Tile icon="ⓘ" title="Handicaps" onClick={() => go('/handicap')}
         sub={hs.length ? `Your handicap: ${hs.map(h => `${h.bowStyle} ${h.handicap}`).join(' · ')} · class multipliers` : 'Your personal handicap, and the class multipliers for handicap competitions'} />
       case 'EQUIPMENT': return <Tile icon="🏹" title="Equipment" sub="Your bows and arrows, to pick when you start a round and compare in Stats" onClick={() => go('/equipment')} />
-      case 'FRIENDS': return <Tile icon="☺" title="Friends" badge={signedIn ? offers : 0}
-        sub={!signedIn ? "Sign in to see friends' scorecards" : offers > 0 ? `${offers} round${offers === 1 ? '' : 's'} scored for you to accept` : "Friends' scorecards and stats, requests"} onClick={() => go('/friends')} />
+      case 'FRIENDS': return <Tile icon="☺" title="Friends" badge={signedIn ? offers + requests : 0}
+        sub={!signedIn ? "Sign in to see friends' scorecards"
+          : requests > 0 && offers > 0 ? `${plural(requests, 'friend request')} and ${plural(offers, 'round')} scored for you waiting`
+          : requests > 0 ? `${plural(requests, 'friend request')} waiting`
+          : offers > 0 ? `${offers} round${offers === 1 ? '' : 's'} scored for you to accept` : "Friends' scorecards and stats, requests"} onClick={() => go('/friends')} />
       case 'LOCATIONS': return <Tile icon="📍" title="Shoot locations" sub={signedIn ? 'Map of locations, your scorecards and stats at each' : 'Sign in to see the map of shoot locations'} onClick={() => go('/map')} />
       case 'ADMIN': return <Tile icon="⚙" title="Admin" badge={duplicates}
         sub={duplicates > 0 ? `${duplicates} possible duplicate location${duplicates === 1 ? '' : 's'} to check` : account?.role === 'OWNER' ? 'Accounts, admins and shoot locations' : 'Accounts and shoot locations'} onClick={() => go('/admin')} />
@@ -170,3 +174,6 @@ export function syncText(lastSync: string | null | undefined): string {
   const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   return `Last synced ${today ? time : `${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${time}`}`
 }
+
+/** "1 friend request", "2 friend requests". */
+function plural(n: number, what: string) { return `${n} ${what}${n === 1 ? '' : 's'}` }
