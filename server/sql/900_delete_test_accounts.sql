@@ -1,6 +1,6 @@
 /*
     Removes accounts created by the scripts in server/tests (usernames starting zz_test_),
-    with their tokens, rounds, scores, groups and round requests, and test shoot locations (names starting zz_test). Safe to run any time, as admin or nfas_api.
+    with their tokens, rounds, scores, groups and round requests, and test shoot locations (names starting zz_test, or zzsim from Test-SimilarLocations). Safe to run any time, as admin or nfas_api.
 */
 USE FieldArcheryScoring;
 GO
@@ -10,11 +10,11 @@ INSERT @test SELECT ArcherId FROM dbo.Archer WHERE Username LIKE N'zz[_]test[_]%
 DELETE f FROM dbo.Friendship f
 WHERE f.ArcherLowId IN (SELECT ArcherId FROM @test) OR f.ArcherHighId IN (SELECT ArcherId FROM @test);
 
--- Test locations (named zz_test…): unhook rounds and merge pointers, then remove them.
+-- Test locations (named zz_test… or zzsim…): unhook rounds and merge pointers, then remove them.
 IF OBJECT_ID(N'dbo.ShootLocation') IS NOT NULL
 BEGIN
     DECLARE @loc TABLE (LocationId UNIQUEIDENTIFIER PRIMARY KEY);
-    INSERT @loc SELECT LocationId FROM dbo.ShootLocation WHERE Name LIKE N'zz[_]test%';
+    INSERT @loc SELECT LocationId FROM dbo.ShootLocation WHERE Name LIKE N'zz[_]test%' OR Name LIKE N'zzsim %';
     UPDATE dbo.Round SET LocationId = NULL WHERE LocationId IN (SELECT LocationId FROM @loc);
     IF OBJECT_ID(N'dbo.ScoreGroup') IS NOT NULL
         UPDATE dbo.ScoreGroup SET LocationId = NULL WHERE LocationId IN (SELECT LocationId FROM @loc);

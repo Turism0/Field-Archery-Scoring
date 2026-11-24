@@ -8,3 +8,10 @@
 # osmdroid (the map) ships no R8 rules. It loads its tile sources and some classes by name, so it's kept as it is.
 -keep class org.osmdroid.** { *; }
 -dontwarn org.osmdroid.**
+
+# 3.2.26 (Pete: "Couldn't open the scanner (NullPointerException ... getClass() on a null object reference)"): ML Kit (the
+# QR scanner) finds its parts through ComponentRegistrar classes named in the manifest and makes them by name, with their
+# empty constructors. R8 removed those constructors (usage.txt: CommonComponentRegistrar / VisionCommonRegistrar <init>()),
+# so the scanner client was never set up. Keep them.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { public <init>(); }
+-keep class com.google.mlkit.common.internal.MlKitComponentDiscoveryService { *; }

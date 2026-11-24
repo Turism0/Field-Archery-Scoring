@@ -4,6 +4,12 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.26
+
+- **3.2.26 (app only; no SQL, API and web app just renumbered): the QR scanner works in the Play build (Pete's error screenshot).**
+  - Tapping **Scan QR code** (Join a live group, and the group QR check) said "Couldn't open the scanner (NullPointerException … getClass() on a null object reference)". The release build's R8 shrinking (on since 3.2.13) removed the empty constructors of ML Kit's `CommonComponentRegistrar` and `VisionCommonRegistrar` (listed in `build/outputs/mapping/release/usage.txt`). ML Kit makes those by name from the manifest, so its parts were never set up and `GmsBarcodeScanning.getClient` found nothing. Debug builds don't shrink, so it only happened in Play builds.
+  - `app/proguard-rules.pro`: keep every `ComponentRegistrar` and its empty constructor.
+
 ## Version 3.2.25
 
 - **3.2.25 (app, web app and API; no SQL): fewer duplicate shoot locations, and locations with no signal (Pete).**
