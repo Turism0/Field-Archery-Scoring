@@ -54,6 +54,8 @@ public static class LocationEndpoints
 
     /// <summary>3.2.25 (Pete): a new location this close to an existing one is suggested to be that one instead.</summary>
     public const int SimilarMetres = 300;
+    /// <summary>3.2.28 (Pete, "option 5"): a similar (not the same) name only counts within this, or when either has no pin.</summary>
+    public const int SimilarNameMetres = 500;
     public sealed record PositionRequest(double? Latitude, double? Longitude, bool? Move = null);
     public sealed record ResolveRequest(IReadOnlyList<Guid>? Ids);
     public sealed record RenameRequest(string? Name, bool? IsPrivate = null);
@@ -607,11 +609,24 @@ public static class LocationEndpoints
             var reasons = new List<string>();
             var k = DuplicateFinder.Key(r.Name);
             if (k == key) reasons.Add("same_name");
-            else if (DuplicateFinder.Similar(k, key)) reasons.Add("similar_name");
+            else if (CloseName(k, key) && (metres is null || metres <= SimilarNameMetres)) reasons.Add("similar_name");
             if (metres <= SimilarMetres) reasons.Add("nearby");
             if (reasons.Count > 0) found.Add(new SimilarMatch(r.LocationId, r.Name, r.IsPrivate, metres, reasons));
         }
         return found.OrderByDescending(m => m.reasons.Count).ThenBy(m => m.distanceMetres ?? int.MaxValue).ThenBy(m => m.name).Take(5).ToList();
+    }
+
+    /// <summary>
+    /// 3.2.28: DuplicateFinder.Similar for suggestions (the Admin duplicate finder keeps its own): one name inside the
+    /// other only counts when the shorter is at least half the longer ("sherwood" in "sherwoodforest" yes; "test" in a
+    /// longer name, no); typos as before. The same as the apps' LocationMatch.closeName / closeName.
+    /// </summary>
+    public static bool CloseName(string a, string b)
+    {
+        if (a.Length == 0 || b.Length == 0) return false;
+        int shorter = Math.Min(a.Length, b.Length), longer = Math.Max(a.Length, b.Length);
+        if (shorter >= 4 && shorter * 2 >= longer && (a.Contains(b) || b.Contains(a))) return true;
+        return DuplicateFinder.NearlySame(a, b);   // typos
     }
 
     private static async Task<IResult> NameTaken(SqlConnection conn, string name, CancellationToken ct)

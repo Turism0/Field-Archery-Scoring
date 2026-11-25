@@ -1,6 +1,6 @@
 // Suggesting a known location instead of a new one, and finding them with no signal (3.2.25). The same cases as the app's LocationMatchTest.kt.
 import { describe, expect, it } from 'vitest'
-import { nearbyPlaces, placeKey, placeMatches, similarKeys, whyMatch, type KnownPlace } from '../src/domain/locationMatch'
+import { closeName, nearbyPlaces, placeKey, placeMatches, similarKeys, whyMatch, type KnownPlace } from '../src/domain/locationMatch'
 
 const club: KnownPlace = { id: 'c', name: 'Sherwood Archers', latitude: 53.2, longitude: -1.07, isPrivate: false }
 const other: KnownPlace = { id: 'o', name: 'Kielder Bowmen', latitude: 55.2, longitude: -2.5, isPrivate: false }
@@ -19,6 +19,17 @@ describe('location matching', () => {
     expect(similarKeys('sherwood', 'sherwoodforest')).toBe(true)
     expect(similarKeys('sherwood', 'kielder')).toBe(false)
     expect(similarKeys('abc', 'abcd')).toBe(false)
+  })
+  it('close names for suggestions (3.2.28)', () => {
+    expect(closeName('sherwood', 'sherwod')).toBe(true)
+    expect(closeName('sherwood', 'sherwoodforest')).toBe(true)
+    expect(closeName('test', 'zzsimabcdefg')).toBe(false)
+    expect(closeName('kent', 'kentishwoodsmen')).toBe(false)
+    expect(similarKeys('kent', 'kentishwoodsmen')).toBe(true)
+  })
+  it('similar name only within 500 m or with no pin', () => {
+    expect(placeMatches('Sherwod', 51, 0, known)).toEqual([])
+    expect(placeMatches('Sherwod', 53.2 + 0.004, -1.07, known).map(m => [m.id, m.reasons])).toEqual([['c', ['similar_name']]])
   })
   it('same or similar name anywhere', () => {
     expect(placeMatches('Sherwood Bowmen', 51, 0, known).map(m => [m.id, m.reasons])).toEqual([['c', ['same_name']]])

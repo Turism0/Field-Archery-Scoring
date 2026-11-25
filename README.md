@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.28
+
+- **3.2.28 (app, web app and API; no SQL): fewer odd "Is it one of these?" suggestions (Pete, "option 5").**
+  - When naming a new location, the **same name** is still suggested anywhere, but a **similar name** (a typo, or one name inside another) is now only suggested within **500 m**, or when either place has no map pin (distance unknown). Places within 300 m are still suggested whatever their name.
+  - One name inside another now only counts when the shorter is at least half the longer: "Sherwood" still matches "Sherwood Forest", but "Test Ground" (key "test") no longer matches every name containing "test", and "Kent" doesn't match "Kentish Woodsmen".
+  - Only the suggestions changed: the Admin duplicate finder keeps its rules (Pete). Server `LocationEndpoints.CloseName` / `SimilarNameMetres`, `DuplicateFinder.NearlySame`; app `LocationMatch.closeName` / `SIMILAR_NAME_METRES`; web `closeName` / `SIMILAR_NAME_METRES`. Tests: Test-SimilarLocations (typo 400 m suggested, 11 km made, no pin suggested), Kotlin 138, web 133.
+
 ## Version 3.2.27
 
 - **3.2.27 (app, web app and API; no SQL): friend request badge, and equipment that isn't linked yet (Pete).**

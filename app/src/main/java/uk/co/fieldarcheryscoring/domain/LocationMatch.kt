@@ -6,6 +6,10 @@ package uk.co.fieldarcheryscoring.domain
  * name is checked against them first: the same or a similar name (anywhere), or within [SIMILAR_METRES]. The name rules
  * are the server's (DuplicateFinder.Key / Similar), so the phone and the API agree. The same as the web app's
  * domain/locationMatch.ts.
+ *
+ * 3.2.28 (Pete, "option 5"): suggestions are stricter than the Admin duplicate rules. The same name still counts
+ * anywhere; a similar name only counts within [SIMILAR_NAME_METRES] (or when either place has no pin, so the distance
+ * isn't known), and one name inside another only counts when the shorter is at least half the longer ([closeName]).
  */
 data class KnownPlace(val id: String, val name: String, val latitude: Double?, val longitude: Double?, val isPrivate: Boolean = false) {
     val hasPin: Boolean get() = latitude != null && longitude != null
@@ -16,6 +20,8 @@ data class PlaceMatch(val id: String, val name: String, val isPrivate: Boolean, 
 
 object LocationMatch {
     const val SIMILAR_METRES = 300
+    /** 3.2.28: a similar (not the same) name only counts within this. */
+    const val SIMILAR_NAME_METRES = 500
     /** The server's catchment: a round within this of a location is put at it without asking (about a quarter mile). */
     const val CATCHMENT_METRES = 402
 
@@ -44,6 +50,17 @@ object LocationMatch {
         return 1.0 - levenshtein(a, b).toDouble() / maxOf(a.length, b.length) >= 0.8
     }
 
+    /**
+     * 3.2.28: [similar] for suggestions: one name inside the other only counts when the shorter is at least half the
+     * longer ("sherwood" in "sherwoodforest" yes; "test" in "zzsimabcdefg", "kent" in "kentishwoodsmen" no); typos as before.
+     */
+    fun closeName(a: String, b: String): Boolean {
+        if (a.isEmpty() || b.isEmpty()) return false
+        val short = minOf(a.length, b.length); val long = maxOf(a.length, b.length)
+        if (short >= 4 && short * 2 >= long && (a.contains(b) || b.contains(a))) return true
+        return 1.0 - levenshtein(a, b).toDouble() / long >= 0.8
+    }
+
     private fun levenshtein(a: String, b: String): Int {
         var prev = IntArray(b.length + 1) { it }
         var cur = IntArray(b.length + 1)
@@ -68,7 +85,8 @@ object LocationMatch {
             val metres = if (lat != null && lon != null && p.hasPin) Math.round(metresBetween(lat, lon, p.latitude!!, p.longitude!!)).toInt() else null
             val reasons = buildList {
                 val pk = key(p.name)
-                if (pk == k) add("same_name") else if (similar(pk, k)) add("similar_name")
+                if (pk == k) add("same_name")
+                else if (closeName(pk, k) && (metres == null || metres <= SIMILAR_NAME_METRES)) add("similar_name")
                 if (metres != null && metres <= SIMILAR_METRES) add("nearby")
             }
             if (reasons.isEmpty()) null else PlaceMatch(p.id, p.name, p.isPrivate, metres, reasons)

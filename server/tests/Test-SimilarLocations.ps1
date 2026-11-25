@@ -6,7 +6,8 @@
         .\Test-SimilarLocations.ps1 -BaseUrl http://localhost:8085
 
     Naming a new location with checkSimilar: true is answered 409 similar_exists when a location you can use (public, or
-    your own private) has the same or a similar name, or is within 300 m. Without checkSimilar (older apps, or "it's a new
+    your own private) has the same name (anywhere), a similar name within 500 m (or either has no pin; 3.2.28), or is
+    within 300 m. Without checkSimilar (older apps, or "it's a new
     place"), it's made as before. Two throwaway accounts (zz_test_…) and test locations out in the North Sea, named
     "zzsim …" (not zz_test: that holds the word "test", which a real "Test Ground" counts as similar to).
     Every line should start with OK. Tidy up afterwards with server/sql/900_delete_test_accounts.sql.
@@ -58,9 +59,14 @@ $club = $r.Body.locationId
 $r = Call POST '/api/locations' @{ name = "zzsim $word Archers"; latitude = $lat + 0.1; longitude = $lon; checkSimilar = $true } -Token $Archer2.Token
 Expect 'the same name with a different club word, 11 km away: suggested (same_name)' ($r.Status -eq 409 -and $r.Body.error -eq 'similar_exists' -and (Ids $r) -contains $club -and (@($r.Body.matches | Where-Object locationId -eq $club)[0].reasons -contains 'same_name')) "($($r.Status) $($r.Body | ConvertTo-Json -Compress -Depth 5))"
 
-$typo = $word.Substring(0, 6) + 'x'
+$typo = $word.Substring(0, 6) + $(if ($word[6] -eq 'x') { 'y' } else { 'x' })   # one letter different
+# 3.2.28 (Pete): a similar name only counts within 500 m (or with no pin); the same name counts anywhere.
+$r = Call POST '/api/locations' @{ name = "zzsim $typo Bowmen"; latitude = $lat + 0.0036; longitude = $lon; checkSimilar = $true } -Token $Archer2.Token
+Expect 'a one-letter typo 400 m away: suggested (similar_name)' ($r.Status -eq 409 -and (Ids $r) -contains $club -and (@($r.Body.matches | Where-Object locationId -eq $club)[0].reasons -contains 'similar_name')) "($($r.Status) $($r.Body | ConvertTo-Json -Compress -Depth 5))"
 $r = Call POST '/api/locations' @{ name = "zzsim $typo Bowmen"; latitude = $lat + 0.1; longitude = $lon; checkSimilar = $true } -Token $Archer2.Token
-Expect 'a one-letter typo far away: suggested (similar_name)' ($r.Status -eq 409 -and (Ids $r) -contains $club) "($($r.Status))"
+Expect 'a one-letter typo 11 km away: not suggested (made)' ($r.Status -eq 201) "($($r.Status) $($r.Body | ConvertTo-Json -Compress -Depth 5))"
+$r = Call POST '/api/locations' @{ name = "zzsim $typo Society"; noPin = $true; checkSimilar = $true } -Token $Archer2.Token
+Expect 'a typo with no pin (distance unknown): suggested' ($r.Status -eq 409 -and (Ids $r) -contains $club) "($($r.Status))"
 
 $r = Call POST '/api/locations' @{ name = "zzsim $(Word) Field"; latitude = $lat + 0.002; longitude = $lon; checkSimilar = $true } -Token $Archer2.Token
 Expect 'a different name 220 m away: suggested (nearby)' ($r.Status -eq 409 -and (Ids $r) -contains $club -and (@($r.Body.matches | Where-Object locationId -eq $club)[0].distanceMetres -lt 300)) "($($r.Status) $($r.Body | ConvertTo-Json -Compress -Depth 5))"

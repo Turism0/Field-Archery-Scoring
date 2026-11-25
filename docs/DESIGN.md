@@ -78,7 +78,7 @@ Bows (type, make, model, poundage, bow styles) and arrow sets (make, model, leng
 
 ## Duplicate locations and no signal (3.2.25, Pete)
 
-A new location name is checked for ones you can use with the same or a similar name (DuplicateFinder rules, any distance) or within 300 m: the apps send `checkSimilar: true` and offer the 409 `similar_exists` matches ("Use" / "It's a new place"). Each phone and browser keeps a copy of every location you can use (map + named lists), refreshed on each sync, for matching rounds, Nearby and Known locations with no signal; a name given with no signal is checked against the copy, kept on the round (`pending_location`, phone only) and made on the next sync, asking the archer if the server then suggests others.
+A new location name is checked for ones you can use with the same name (any distance), a similar name within 500 m or with no pin (3.2.28: one name inside another only when the shorter is at least half the longer; the Admin duplicate finder keeps its looser rules), or within 300 m: the apps send `checkSimilar: true` and offer the 409 `similar_exists` matches ("Use" / "It's a new place"). Each phone and browser keeps a copy of every location you can use (map + named lists), refreshed on each sync, for matching rounds, Nearby and Known locations with no signal; a name given with no signal is checked against the copy, kept on the round (`pending_location`, phone only) and made on the next sync, asking the archer if the server then suggests others.
 
 ## Architecture
 

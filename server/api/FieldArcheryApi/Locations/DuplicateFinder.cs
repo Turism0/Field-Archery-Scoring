@@ -93,6 +93,13 @@ public static class DuplicateFinder
     {
         if (a.Length == 0 || b.Length == 0) return false;
         if (Math.Min(a.Length, b.Length) >= 4 && (a.Contains(b) || b.Contains(a))) return true;
+        return NearlySame(a, b);
+    }
+
+    /// <summary>At least 80% the same by edit distance (typos). 3.2.28: also used by the new-location suggestions.</summary>
+    public static bool NearlySame(string a, string b)
+    {
+        if (a.Length == 0 || b.Length == 0) return false;
         var distance = Levenshtein(a, b);
         return 1.0 - (double)distance / Math.Max(a.Length, b.Length) >= 0.8;
     }

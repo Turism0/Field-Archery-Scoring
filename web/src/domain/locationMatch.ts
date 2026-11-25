@@ -1,6 +1,6 @@
 // 3.2.25 (Pete): people were making duplicate shoot locations, and with no signal you couldn't pick one at all. Locations
 // you can use are kept on this device (refreshed on each sync) so they can be found with no signal, and a new name is
-// checked against them first: the same or a similar name (anywhere), or within SIMILAR_METRES. The name rules are the
+// checked against them first: the same name (anywhere), a similar name (within SIMILAR_NAME_METRES, 3.2.28), or within SIMILAR_METRES. The name rules are the
 // server's (DuplicateFinder.Key / Similar). The same as the app's domain/LocationMatch.kt; tested in test/locationMatch.test.ts.
 
 export interface KnownPlace { id: string; name: string; latitude: number | null; longitude: number | null; isPrivate: boolean }
@@ -8,6 +8,8 @@ export interface KnownPlace { id: string; name: string; latitude: number | null;
 export interface PlaceMatch { id: string; name: string; isPrivate: boolean; distanceMetres: number | null; reasons: string[] }
 
 export const SIMILAR_METRES = 300
+/** 3.2.28 (Pete, "option 5"): a similar (not the same) name only counts within this, or when either place has no pin. */
+export const SIMILAR_NAME_METRES = 500
 /** The server's catchment: a round within this of a location is put at it without asking (about a quarter mile). */
 export const CATCHMENT_METRES = 402
 
@@ -52,6 +54,17 @@ export function similarKeys(a: string, b: string): boolean {
   return 1 - levenshtein(a, b) / Math.max(a.length, b.length) >= 0.8
 }
 
+/**
+ * 3.2.28: similarKeys for suggestions: one name inside the other only counts when the shorter is at least half the longer
+ * ("sherwood" in "sherwoodforest" yes; "test" in "zzsimabcdefg" no); typos as before. The Admin rule (similarKeys) is unchanged.
+ */
+export function closeName(a: string, b: string): boolean {
+  if (!a || !b) return false
+  const short = Math.min(a.length, b.length), long = Math.max(a.length, b.length)
+  if (short >= 4 && short * 2 >= long && (a.includes(b) || b.includes(a))) return true
+  return 1 - levenshtein(a, b) / long >= 0.8
+}
+
 const pinned = (p: KnownPlace): p is KnownPlace & { latitude: number; longitude: number } => p.latitude != null && p.longitude != null
 
 /** Places that might be the one being named (at lat / lon if it has a pin), best first, at most 5; skip: already turned down. */
@@ -63,7 +76,8 @@ export function placeMatches(name: string, lat: number | null, lon: number | nul
     const metres = lat != null && lon != null && pinned(p) ? Math.round(metresBetween(lat, lon, p.latitude, p.longitude)) : null
     const reasons: string[] = []
     const pk = placeKey(p.name)
-    if (pk === k) reasons.push('same_name'); else if (similarKeys(pk, k)) reasons.push('similar_name')
+    if (pk === k) reasons.push('same_name')
+    else if (closeName(pk, k) && (metres == null || metres <= SIMILAR_NAME_METRES)) reasons.push('similar_name')
     if (metres != null && metres <= SIMILAR_METRES) reasons.push('nearby')
     if (reasons.length) out.push({ id: p.id, name: p.name, isPrivate: p.isPrivate, distanceMetres: metres, reasons })
   }
