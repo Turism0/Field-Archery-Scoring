@@ -6,8 +6,8 @@ import { Card, go, one, useData } from './common'
 import { ROUND_TYPE_NAMES, bowName, CLASS_NAMES, AGE_NAMES, type Round } from '../domain/round'
 import { TARGET_TYPE_NAMES, type RoundType } from '../domain/scoring'
 import {
-  arrowCounts, byEquipment, byLocation, byTargetType, comparedText, consistency, form, hitCounts, hitsOverTime, recentRounds, roundAverages, streak, thirds,
-  weatherSplits, type ArrowCounts, type EquipmentSummary, type HitCounts,
+  arrowCounts, byEquipment, byLocation, equipmentPair, byTargetType, comparedText, consistency, form, hitCounts, hitsOverTime, recentRounds, roundAverages, streak, thirds,
+  weatherSplits, type ArrowCounts, type HitCounts,
 } from '../domain/analysis'
 import { compareKey, compareWithOthers, weatherMap } from '../data/weather'
 import { getAccount } from '../data/account'
@@ -94,7 +94,7 @@ function TypeAnalysis({ rounds, type, weather, kit }: { rounds: Round[]; type: R
           <span><b>{l.name}</b><div class="sub">{l.rounds} round{l.rounds === 1 ? '' : 's'} · best {one(l.best)}</div></span><b>{one(l.average)}</b></button>)}
     </Card>
 
-    {/* 3.2.24 (Pete): your bows and arrows compared (once you've used more than one). */}
+    {/* 3.2.24 (Pete): your bows and arrows compared; 3.2.29: by pair, moved here from Equipment. */}
     <EquipmentCard rounds={rounds} type={type} kit={kit} />
 
     <Card title="Weather" sub={`Your average ${per(type)} in different weather. ${withWeather} of these ${rounds.length} rounds have weather (rounds at a location with a map pin). Weather data by Open-Meteo.com.`}>
@@ -169,20 +169,20 @@ function Compared({ rounds, type }: { rounds: Round[]; type: RoundType }) {
 }
 
 function EquipmentCard({ rounds, type, kit }: { rounds: Round[]; type: RoundType; kit?: EquipmentStore }) {
-  const byBow = byEquipment(rounds, r => r.bowId), byArrows = byEquipment(rounds, r => r.arrowId)
-  if (byBow.length < 2 && byArrows.length < 2) return null
+  // 3.2.29 (Pete): by bow + arrows pair (arrows used with two bows aren't averaged together), shown once any round has them.
+  const pairs = byEquipment(rounds, equipmentPair)
+  if (!pairs.length) return null
   const bowLabelOf = (id: string) => { const b = kit?.bows.find(x => x.id === id); return b ? bowLabel(b) : 'Unknown bow' }
   const arrowLabelOf = (id: string) => { const a = kit?.arrows.find(x => x.id === id); return a ? arrowLabel(a) : 'Unknown arrows' }
-  const rows = (title: string, list: EquipmentSummary[], name: (id: string) => string) => list.length < 2 ? null : <>
-    <h3 class="small">{title}</h3>
-    {list.map(e => <button class="row between plain" onClick={() => go(`/card/${e.bestRound.id}`)}>
-      <span><b>{name(e.id)}</b><div class="sub">{e.rounds} round{e.rounds === 1 ? '' : 's'} · best {one(e.best)}{e.killRate != null ? ` · kills ${Math.round(e.killRate * 100)}%` : ''}</div></span>
-      <b>{one(e.average)}</b></button>)}
-  </>
+  const name = (id: string) => {
+    const [b, a] = id.split('|')
+    return b && a ? `${bowLabelOf(b)} + ${arrowLabelOf(a)}` : b ? `${bowLabelOf(b)} (no arrows picked)` : `${arrowLabelOf(a)} (no bow picked)`
+  }
   return (
-    <Card title="By equipment" sub={`Average and best ${per(type)} with each bow and set of arrows.`}>
-      {rows('Bows', byBow, bowLabelOf)}
-      {rows('Arrows', byArrows, arrowLabelOf)}
+    <Card title="By equipment" sub={`Average and best ${per(type)} with each bow and set of arrows you've shot together.`}>
+      {pairs.map(e => <button class="row between plain" onClick={() => go(`/card/${e.bestRound.id}`)}>
+        <span><b>{name(e.id)}</b><div class="sub">{e.rounds} round{e.rounds === 1 ? '' : 's'} · best {one(e.best)}{e.killRate != null ? ` · kills ${Math.round(e.killRate * 100)}%` : ''}</div></span>
+        <b>{one(e.average)}</b></button>)}
     </Card>
   )
 }

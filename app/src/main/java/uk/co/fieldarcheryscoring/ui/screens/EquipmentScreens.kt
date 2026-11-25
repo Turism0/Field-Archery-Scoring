@@ -46,7 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uk.co.fieldarcheryscoring.domain.BowStyle
 import uk.co.fieldarcheryscoring.domain.BowType
 import uk.co.fieldarcheryscoring.domain.Equipment
-import uk.co.fieldarcheryscoring.domain.EquipmentSummary
 import uk.co.fieldarcheryscoring.domain.FletchMaterial
 import uk.co.fieldarcheryscoring.ui.ArrowsEditViewModel
 import uk.co.fieldarcheryscoring.ui.BowEditViewModel
@@ -54,7 +53,6 @@ import uk.co.fieldarcheryscoring.ui.EquipmentViewModel
 import uk.co.fieldarcheryscoring.ui.components.BottomActionBar
 import uk.co.fieldarcheryscoring.ui.components.OptionDropdown
 import uk.co.fieldarcheryscoring.ui.components.SectionCard
-import java.util.Locale
 
 /**
  * Equipment (3.2.24, Pete): your bows (type, make, model, poundage, the bow styles you shoot each in) and arrows (make,
@@ -67,7 +65,6 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
     val bows by vm.bows.collectAsStateWithLifecycle()
     val arrows by vm.arrows.collectAsStateWithLifecycle()
     val allBows by vm.allBows.collectAsStateWithLifecycle()
-    val stats by vm.stats.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -82,7 +79,8 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
         ) {
             Text(
                 "New round offers the bows for the bow style you pick, and the arrows for that bow, starting on the ones you " +
-                    "used last time. With only one, it's used without asking. Only you see your equipment.",
+                    "used last time. With only one, it's used without asking. Only you see your equipment. How you shoot with each " +
+                    "bow and set of arrows is in Stats → Analysis.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -93,7 +91,6 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
                     EquipmentRow(
                         title = Equipment.name(b),
                         lines = listOf(Equipment.detail(b), if (b.bowStyles.isEmpty()) "No bow style: not offered for rounds" else b.bowStyles.sortedBy { it.ordinal }.joinToString(", ") { it.displayName }),
-                        stats = stats[b.id],
                         onClick = { onBow(b.id) },
                     )
                 }
@@ -112,7 +109,6 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
                     EquipmentRow(
                         title = Equipment.name(a),
                         lines = listOf(Equipment.detail(a), if (used.isEmpty()) "No bow: not offered for rounds" else "With $used").filter { it.isNotEmpty() },
-                        stats = stats[a.id],
                         onClick = { onArrows(a.id) },
                     )
                 }
@@ -126,36 +122,21 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
 }
 
 @Composable
-private fun EquipmentRow(title: String, lines: List<String>, stats: EquipmentSummary?, onClick: () -> Unit) {
+private fun EquipmentRow(title: String, lines: List<String>, onClick: () -> Unit) {
+    // 3.2.29 (Pete): no figures here (arrows used with two bows would mix them); Stats → Analysis → By equipment has them.
     Card(
         Modifier.fillMaxWidth().clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                lines.filter { it.isNotBlank() }.forEach {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                stats?.let { s ->
-                    Text(
-                        "${s.rounds} Big Game round${if (s.rounds == 1) "" else "s"} · best ${one(s.best)}" +
-                            (s.killRate?.let { " · kills ${Math.round(it * 100)}%" } ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            stats?.let { s ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(one(s.average), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("per animal", style = MaterialTheme.typography.labelSmall)
-                }
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            lines.filter { it.isNotBlank() }.forEach {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
-private fun one(d: Double) = String.format(Locale.UK, "%.1f", d)
 
 @Composable
 private fun TextInput(

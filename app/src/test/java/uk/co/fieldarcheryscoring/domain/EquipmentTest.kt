@@ -148,6 +148,11 @@ class EquipmentTest {
         assertEquals(listOf("b1" to 2, "b2" to 1), byBow.map { it.id to it.rounds })
         assertEquals(20.0, byBow[0].average, 0.0001)
         assertEquals(listOf("a1" to 2, "a2" to 1), Analysis.byEquipment(rs) { it.arrowId }.map { it.id to it.rounds })
+        // 3.2.29: bow + arrows pairs, so arrows used with two bows aren't averaged together
+        val pairs = Analysis.byEquipment(rs, Analysis::equipmentPair)
+        assertEquals(setOf("b1|a1", "b1|a2", "b2|a1"), pairs.map { it.id }.toSet())   // r4 (neither picked) left out
+        assertEquals(listOf(1, 1, 1), pairs.map { it.rounds })
+        assertEquals("b1|", Analysis.equipmentPair(rs[0].copy(arrowId = null)))
     }
 
     @Test fun `stats filter by bow and arrows`() {

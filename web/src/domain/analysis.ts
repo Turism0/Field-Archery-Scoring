@@ -169,7 +169,15 @@ export function thirds(rounds: Round[]): Thirds {
 
 export interface EquipmentSummary { id: string; rounds: number; average: number; best: number; bestRound: Round; killRate: number | null }
 
-/** Each bow's (key = r => r.bowId) or arrows' (r => r.arrowId) rounds, average, best and kill rate. Most rounds first. */
+/**
+ * 3.2.29 (Pete): Stats compares each bow + arrows pair actually shot ("bowId|arrowId", either part empty when not picked),
+ * so arrows used with two bows aren't averaged together. null: neither picked.
+ */
+export function equipmentPair(r: Round): string | null {
+  return r.bowId == null && r.arrowId == null ? null : `${r.bowId ?? ''}|${r.arrowId ?? ''}`
+}
+
+/** Each bow's (key = r => r.bowId), arrows' (r => r.arrowId) or pair's (equipmentPair) rounds, average, best and kill rate. Most rounds first. */
 export function byEquipment(rounds: Round[], key: (r: Round) => string | null | undefined): EquipmentSummary[] {
   const groups = new Map<string, Round[]>()
   for (const r of rounds) { const k = key(r); if (k) groups.set(k, [...(groups.get(k) ?? []), r]) }

@@ -16,12 +16,9 @@ import kotlinx.coroutines.launch
 import uk.co.fieldarcheryscoring.data.EquipmentRepository
 import uk.co.fieldarcheryscoring.data.ProfileRepository
 import uk.co.fieldarcheryscoring.data.RoundRepository
-import uk.co.fieldarcheryscoring.domain.Analysis
 import uk.co.fieldarcheryscoring.domain.ArrowSet
 import uk.co.fieldarcheryscoring.domain.Bow
 import uk.co.fieldarcheryscoring.domain.Equipment
-import uk.co.fieldarcheryscoring.domain.EquipmentSummary
-import uk.co.fieldarcheryscoring.domain.RoundType
 
 /** Equipment on Home (3.2.24, Pete): your bows and arrows, with how you've shot with each. */
 class EquipmentViewModel(private val equipment: EquipmentRepository, rounds: RoundRepository) : ViewModel() {
@@ -33,12 +30,6 @@ class EquipmentViewModel(private val equipment: EquipmentRepository, rounds: Rou
 
     /** Every bow (deleted ones too), to name the bows arrows are used with. */
     val allBows: StateFlow<List<Bow>> = equipment.bows.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** Your finished Big Game rounds with each bow and set of arrows: id → rounds, average per animal, best, kills. */
-    val stats: StateFlow<Map<String, EquipmentSummary>> = rounds.finishedRounds.map { list ->
-        val bg = list.filter { it.type == RoundType.BIG_GAME }
-        (Analysis.byEquipment(bg) { it.bowId } + Analysis.byEquipment(bg) { it.arrowId }).associateBy { it.id }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 }
 
 /** Adding or changing a bow. Nav argument "bowId" ("new" for a new one). */

@@ -1,11 +1,10 @@
 // Equipment (3.2.24, Pete): your bows and arrows, and the pickers for a round's bow and arrows (New round, Join, Round
 // details). As the app's EquipmentScreens.kt and EquipmentPickers.kt.
 import { useEffect, useState } from 'preact/hooks'
-import { Bar, Card, Dialog, Field, Select, back, go, one, useData } from './common'
+import { Bar, Card, Dialog, Field, Select, back, go, useData } from './common'
 import { allRounds } from '../data/db'
 import { getProfile } from '../data/account'
 import { deleteArrows, deleteBow, getEquipment, saveArrows, saveBow, type EquipmentStore } from '../data/equipment'
-import { byEquipment, type EquipmentSummary } from '../domain/analysis'
 import { BOW_STYLES } from '../domain/round'
 import {
   BOW_TYPES, FLETCH_MATERIALS, MAX_COLOURS, MAX_TEXT, NONE, SPINE_KIND_NAMES, arrowDetail, arrowForm, arrowLabel, arrowName, arrowProblems,
@@ -49,27 +48,20 @@ export function EquipmentPickers({ choice, onBow, onArrows, always = false }: {
 
 const styleName = (code: string) => BOW_STYLES.find(b => b.code === code)?.name ?? code
 
-function Row({ title, lines, stats, onClick }: { title: string; lines: string[]; stats?: EquipmentSummary; onClick: () => void }) {
+// 3.2.29 (Pete): no figures here (arrows used with two bows would mix them); Stats → Analysis → By equipment has them.
+function Row({ title, lines, onClick }: { title: string; lines: string[]; onClick: () => void }) {
   return (
     <button class="tile kit" onClick={onClick}>
       <span class="grow">
         <b>{title}</b>
         {lines.filter(Boolean).map(l => <span class="sub">{l}</span>)}
-        {stats && <span class="sub">{stats.rounds} Big Game round{stats.rounds === 1 ? '' : 's'} · best {one(stats.best)}
-          {stats.killRate != null ? ` · kills ${Math.round(stats.killRate * 100)}%` : ''}</span>}
       </span>
-      {stats && <span class="kitavg"><b class="big">{one(stats.average)}</b><span class="sub">per animal</span></span>}
     </button>
   )
 }
 
 export function EquipmentScreen() {
-  const data = useData(async () => {
-    const kit = await getEquipment()
-    const bg = (await allRounds()).filter(r => r.status === 'COMPLETED' && r.type === 'BIG_GAME' && (r.groupRole == null || r.groupRole === 'SCORER'))
-    const stats = new Map([...byEquipment(bg, r => r.bowId), ...byEquipment(bg, r => r.arrowId)].map(s => [s.id, s]))
-    return { kit, stats }
-  })
+  const data = useData(async () => ({ kit: await getEquipment() }))
   if (!data) return <Bar title="Equipment" />
   const bows = data.kit.bows.filter(b => !b.deleted).sort((a, b) => bowLabel(a).localeCompare(bowLabel(b)))
   const arrows = data.kit.arrows.filter(a => !a.deleted).sort((a, b) => arrowLabel(a).localeCompare(arrowLabel(b)))
@@ -78,10 +70,11 @@ export function EquipmentScreen() {
       <Bar title="Equipment" />
       <main class="form">
         <div class="sub">New round offers the bows for the bow style you pick, and the arrows for that bow, starting on the ones
-          you used last time. With only one, it's used without asking. Only you see your equipment.</div>
+          you used last time. With only one, it's used without asking. Only you see your equipment. How you shoot with each bow and
+          set of arrows is in Stats → Analysis.</div>
         <Card title="Bows">
           {!bows.length && <div>No bows yet.</div>}
-          {bows.map(b => <Row title={bowName(b)} lines={[bowDetail(b), b.bowStyles.length ? b.bowStyles.map(styleName).join(', ') : 'No bow style: not offered for rounds']} stats={data.stats.get(b.id)}
+          {bows.map(b => <Row title={bowName(b)} lines={[bowDetail(b), b.bowStyles.length ? b.bowStyles.map(styleName).join(', ') : 'No bow style: not offered for rounds']}
             onClick={() => go(`/bow/${b.id}`)} />)}
           <button class="outlined" style="align-self:flex-start" onClick={() => go('/bow/new')}>＋ Add a bow</button>
         </Card>
@@ -89,7 +82,7 @@ export function EquipmentScreen() {
           {!arrows.length && <div>No arrows yet.</div>}
           {arrows.map(a => {
             const used = a.bowIds.map(id => data.kit.bows.find(b => b.id === id)).filter(b => !!b).map(b => bowName(b!) + (b!.deleted ? ' (deleted)' : '')).join(', ')
-            return <Row title={arrowName(a)} lines={[arrowDetail(a), used ? `With ${used}` : 'No bow: not offered for rounds']} stats={data.stats.get(a.id)} onClick={() => go(`/arrows/${a.id}`)} />
+            return <Row title={arrowName(a)} lines={[arrowDetail(a), used ? `With ${used}` : 'No bow: not offered for rounds']} onClick={() => go(`/arrows/${a.id}`)} />
           })}
           <button class="outlined" style="align-self:flex-start" onClick={() => go('/arrows/new')}>＋ Add arrows</button>
         </Card>

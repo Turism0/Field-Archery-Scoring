@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.29
+
+- **3.2.29 (app and web app; API just renumbered, no SQL): equipment figures moved to Stats, by bow + arrows pair (Pete).**
+  - The **Equipment** screen no longer shows rounds, averages and bests on each bow and set of arrows (arrows used with two bows mixed both together). It says the figures are in Stats → Analysis.
+  - **Stats → Analysis → By equipment** now lists each **bow + arrows pair** you've actually shot together ("Border Hex 7 + Port Orford Cedar", "Bodnik + Port Orford Cedar"; "… (no arrows picked)" / "(no bow picked)" when only one was), with rounds, average, best and kills, so arrows used with two bows aren't averaged together. Shown once any round has a bow or arrows (before: only with two or more). `Analysis.equipmentPair` / web `equipmentPair`; tests updated.
+  - `server/sql/901_set_round_equipment.sql` (one-off, run in SSMS): gives an archer's older rounds of one bow style (default Turismo, CL) that have no equipment the bow set up for that style and the arrows linked to it (asks you to pick if there's more than one); @DryRun = 1 by default; moves the rounds' edit times to now so phones pick it up on their next sync.
+
 ## Version 3.2.28
 
 - **3.2.28 (app, web app and API; no SQL): fewer odd "Is it one of these?" suggestions (Pete, "option 5").**

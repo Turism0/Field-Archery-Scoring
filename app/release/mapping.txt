@@ -3,8 +3,8 @@
 # min_api: 26
 # common_typos_disable
 # {"id":"com.android.tools.r8.mapping","version":"2.2"}
-# pg_map_id: bb153115d082dcaafd9c033c11fd5ed76ed99b4f73b3f77802f3398348f8f5ae
-# pg_map_hash: SHA-256 3c924bf6710111e356fb86e73c3b7e562e61333ba4b1cc08187edb3eec849c52
+# pg_map_id: 911b1fb27bd8c1b844ac6d25486b52efeda4a2309ee31ba487bc35f16e38d9b9
+# pg_map_hash: SHA-256 952e76f80018a6dd996e86a687c27230404a6033ac6e4ac30e2cf97f882e22aa
 _COROUTINE.ArtificialStackFrames -> R8$$REMOVED$$CLASS$$0:
 # {"id":"sourceFile","fileName":"CoroutineDebugging.kt"}
 _COROUTINE.ArtificialStackFramesUnsafe -> xj:
@@ -205909,30 +205909,30 @@ androidx.navigation.compose.DialogHostKt$DialogHost$2$1 -> d90:
     86:99:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     100:106:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33:33 -> q
     100:106:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
-    107:108:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> q
+    107:108:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> q
     107:108:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33 -> q
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     107:108:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     109:114:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33:33 -> q
     109:114:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
-    115:116:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> q
+    115:116:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> q
     115:116:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33 -> q
     115:116:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     117:122:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33:33 -> q
     117:122:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
-    123:126:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():10:10 -> q
+    123:126:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():14:14 -> q
     123:126:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33 -> q
     123:126:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     127:132:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):33:33 -> q
     127:132:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     133:134:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):34:34 -> q
     133:134:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
-    135:138:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():10:10 -> q
+    135:138:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():14:14 -> q
     135:138:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):34 -> q
     135:138:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     139:146:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):34:34 -> q
     139:146:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
-    147:148:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():10:10 -> q
+    147:148:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():14:14 -> q
     147:148:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):34 -> q
     147:148:java.lang.Object DialogHostKt$DialogHost$2$1.invokeSuspend(java.lang.Object):0 -> q
     149:152:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache$replace$2.invokeSuspend(java.lang.Object):34:34 -> q
@@ -213127,7 +213127,7 @@ androidx.startup.AppInitializer -> ki:
       # {"id":"com.android.tools.r8.residualsignature","signature":"(Lw31;Lh10;)Ljava/lang/Object;"}
     10:14:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache.add(uk.co.fieldarcheryscoring.domain.KnownPlace,kotlin.coroutines.Continuation):62:62 -> c
     15:31:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache.add(uk.co.fieldarcheryscoring.domain.KnownPlace,kotlin.coroutines.Continuation):63:63 -> c
-    32:35:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> c
+    32:35:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> c
     32:35:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache.add(uk.co.fieldarcheryscoring.domain.KnownPlace,kotlin.coroutines.Continuation):42 -> c
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     36:41:java.lang.Object uk.co.fieldarcheryscoring.data.PlaceCache.add(uk.co.fieldarcheryscoring.domain.KnownPlace,kotlin.coroutines.Continuation):42:42 -> c
@@ -232938,16 +232938,16 @@ com.google.android.gms.common.internal.ClientSettings -> nt:
     181:194:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):292:292 -> r
     195:196:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):293:293 -> r
     197:198:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150:150 -> r
-    199:200:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> r
+    199:200:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> r
     199:200:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150 -> r
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    201:202:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> r
+    201:202:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> r
     201:202:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150 -> r
-    203:204:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():10:10 -> r
+    203:204:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():14:14 -> r
     203:204:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150 -> r
-    205:206:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():10:10 -> r
+    205:206:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():14:14 -> r
     205:206:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150 -> r
-    207:210:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():10:10 -> r
+    207:210:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():14:14 -> r
     207:210:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150 -> r
     211:213:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):150:150 -> r
     214:217:java.lang.Object uk.co.fieldarcheryscoring.data.LocationPageRepository.knownOrCached(kotlin.coroutines.Continuation):293:293 -> r
@@ -266895,28 +266895,28 @@ com.google.android.gms.internal.mlkit_code_scanner.zzio -> so3:
     79:94:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):39:39 -> o
     95:101:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27:27 -> o
     95:101:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
-    102:103:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> o
+    102:103:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> o
     102:103:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27 -> o
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     102:103:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
     104:107:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27:27 -> o
     104:107:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
-    108:109:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> o
+    108:109:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> o
     108:109:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27 -> o
     108:109:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
     110:115:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27:27 -> o
     110:115:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
-    116:117:boolean uk.co.fieldarcheryscoring.domain.PlaceMatch.isPrivate():15:15 -> o
+    116:117:boolean uk.co.fieldarcheryscoring.domain.PlaceMatch.isPrivate():19:19 -> o
     116:117:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27 -> o
     116:117:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
     118:121:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):27:27 -> o
     118:121:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
-    122:125:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():15:15 -> o
+    122:125:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():19:19 -> o
     122:125:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):28 -> o
     122:125:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
     126:135:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):28:28 -> o
     126:135:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
-    136:137:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():15:15 -> o
+    136:137:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():19:19 -> o
     136:137:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):28 -> o
     136:137:java.lang.String uk.co.fieldarcheryscoring.data.PendingPlaceJson.encode(uk.co.fieldarcheryscoring.domain.PendingPlace):14 -> o
     138:146:org.json.JSONObject uk.co.fieldarcheryscoring.data.PendingPlaceJson.matchJson(uk.co.fieldarcheryscoring.domain.PlaceMatch):28:28 -> o
@@ -293019,7 +293019,7 @@ com.google.android.gms.internal.mlkit_code_scanner.zzoj -> iu3:
       # {"id":"com.android.tools.r8.outlineCallsite","positions":{"0":407,"4":409,"7":412,"11":416},"outline":"Lfw1;p(ILqy;ILjx;)V"}
     230:232:void uk.co.fieldarcheryscoring.ui.components.LocationKt.MatchRow(uk.co.fieldarcheryscoring.domain.PlaceMatch,boolean,kotlin.jvm.functions.Function0,androidx.compose.runtime.Composer,int):503:503 -> f
     230:232:void zzoj.MatchRow(PlaceMatch,boolean,Function0,ComposerImpl,int):0 -> f
-    233:234:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> f
+    233:234:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> f
     233:234:void uk.co.fieldarcheryscoring.ui.components.LocationKt.MatchRow(uk.co.fieldarcheryscoring.domain.PlaceMatch,boolean,kotlin.jvm.functions.Function0,androidx.compose.runtime.Composer,int):353 -> f
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     233:234:void zzoj.MatchRow(PlaceMatch,boolean,Function0,ComposerImpl,int):0 -> f
@@ -347720,10 +347720,10 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     36:94:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):211:211 -> d
       # {"id":"com.android.tools.r8.residualsignature","signature":"(Ljava/lang/String;Ltz1;ZLh10;)Ljava/lang/Object;"}
     95:110:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):213:213 -> d
-    111:112:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> d
+    111:112:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> d
     111:112:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):224 -> d
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    113:114:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> d
+    113:114:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> d
     113:114:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):224 -> d
     115:139:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):224:224 -> d
     140:146:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):225:225 -> d
@@ -347748,123 +347748,120 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     188:189:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
     190:195:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):0:0 -> d
     190:195:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    196:199:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):66:66 -> d
+    196:199:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):83:83 -> d
     196:199:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    200:204:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):103:103 -> d
+    200:204:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):121:121 -> d
     200:204:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    205:223:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):104:104 -> d
+    205:223:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):122:122 -> d
     205:223:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    224:225:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> d
-    224:225:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):67 -> d
+    224:225:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> d
+    224:225:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):84 -> d
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     224:225:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    226:231:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):67:67 -> d
+    226:231:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):84:84 -> d
     226:231:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    232:239:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):104:104 -> d
+    232:239:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):122:122 -> d
     232:239:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    240:244:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):106:106 -> d
+    240:244:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):124:124 -> d
     240:244:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    245:257:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):116:116 -> d
+    245:257:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):134:134 -> d
     245:257:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    258:267:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):115:115 -> d
+    258:267:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):133:133 -> d
     258:267:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    268:277:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():11:11 -> d
-    268:277:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):68 -> d
+    268:277:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():15:15 -> d
+    268:277:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):85 -> d
     268:277:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    278:287:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):68:68 -> d
+    278:287:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):85:85 -> d
     278:287:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    288:289:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():10:10 -> d
-    288:289:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):68 -> d
+    288:289:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():14:14 -> d
+    288:289:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):85 -> d
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     288:289:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    290:329:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):68:68 -> d
+    290:329:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):85:85 -> d
     290:329:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    330:333:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):69:69 -> d
+    330:333:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):86:86 -> d
     330:333:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    334:335:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):70:70 -> d
+    334:335:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):87:87 -> d
     334:335:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    336:337:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> d
-    336:337:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):70 -> d
+    336:337:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> d
+    336:337:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):87 -> d
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     336:337:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    338:341:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):70:70 -> d
+    338:341:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):87:87 -> d
     338:341:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
     342:347:boolean kotlin.jvm.internal.Intrinsics.areEqual(java.lang.Object,java.lang.Object):169:169 -> d
-    342:347:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
+    342:347:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):88 -> d
     342:347:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    348:367:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71:71 -> d
+    348:367:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):88:88 -> d
     348:367:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    368:382:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):42:42 -> d
-    368:382:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
+    368:382:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):58:58 -> d
+    368:382:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
     368:382:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    383:400:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):43:43 -> d
-    383:400:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    383:400:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    401:423:boolean kotlin.text.StringsKt__StringsKt.contains$default(java.lang.CharSequence,java.lang.CharSequence,boolean,int,java.lang.Object):1190:1190 -> d
-    401:423:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):43 -> d
-    401:423:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    401:423:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    424:441:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):48:48 -> d
-    424:441:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    424:441:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    424:441:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    442:449:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):49:49 -> d
-    442:449:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    442:449:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    442:449:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    450:461:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):50:50 -> d
-    450:461:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    450:461:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    450:461:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    462:465:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):51:51 -> d
-    462:465:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    462:465:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    462:465:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    466:479:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):52:52 -> d
-    466:479:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    466:479:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    466:479:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    480:498:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):53:53 -> d
-    480:498:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    480:498:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    480:498:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    499:577:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):54:54 -> d
-    499:577:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    499:577:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    499:577:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    578:584:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):58:58 -> d
-    578:584:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44 -> d
-    578:584:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    578:584:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    585:611:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.similar(java.lang.String,java.lang.String):44:44 -> d
-    585:611:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71 -> d
-    585:611:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    612:618:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):71:71 -> d
-    612:618:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    619:631:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):72:72 -> d
-    619:631:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    632:635:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):69:69 -> d
-    632:635:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    636:645:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):74:74 -> d
-    636:645:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    646:647:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> d
-    646:647:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):74 -> d
-    646:647:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    648:649:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> d
-    648:649:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):74 -> d
+    383:418:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):59:59 -> d
+    383:418:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    383:418:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    419:439:boolean kotlin.text.StringsKt__StringsKt.contains$default(java.lang.CharSequence,java.lang.CharSequence,boolean,int,java.lang.Object):1190:1190 -> d
+    419:439:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):60 -> d
+    419:439:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    419:439:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    440:457:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):65:65 -> d
+    440:457:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    440:457:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    440:457:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    458:465:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):66:66 -> d
+    458:465:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    458:465:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    458:465:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    466:477:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):67:67 -> d
+    466:477:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    466:477:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    466:477:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    478:481:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):68:68 -> d
+    478:481:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    478:481:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    478:481:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    482:495:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):69:69 -> d
+    482:495:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    482:495:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    482:495:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    496:512:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):70:70 -> d
+    496:512:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    496:512:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    496:512:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    513:581:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):71:71 -> d
+    513:581:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    513:581:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    513:581:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    582:605:int uk.co.fieldarcheryscoring.domain.LocationMatch.levenshtein(java.lang.String,java.lang.String):75:75 -> d
+    582:605:boolean uk.co.fieldarcheryscoring.domain.LocationMatch.closeName(java.lang.String,java.lang.String):61 -> d
+    582:605:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89 -> d
+    582:605:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    606:620:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):89:89 -> d
+    606:620:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    621:633:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):90:90 -> d
+    621:633:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    634:637:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):86:86 -> d
+    634:637:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    638:647:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):92:92 -> d
+    638:647:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    648:649:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> d
+    648:649:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):92 -> d
     648:649:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    650:657:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():10:10 -> d
-    650:657:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):74 -> d
-    650:657:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    658:664:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):74:74 -> d
-    658:664:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    665:694:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):115:115 -> d
-    665:694:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    695:740:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):75:75 -> d
-    695:740:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
-    741:763:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):219:219 -> d
-    764:797:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):221:221 -> d
-    798:798:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):215:215 -> d
+    650:651:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> d
+    650:651:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):92 -> d
+    650:651:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    652:659:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.isPrivate():14:14 -> d
+    652:659:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):92 -> d
+    652:659:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    660:666:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):92:92 -> d
+    660:666:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    667:696:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):133:133 -> d
+    667:696:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    697:742:java.util.List uk.co.fieldarcheryscoring.domain.LocationMatch.matches(java.lang.String,java.lang.Double,java.lang.Double,java.util.List,java.util.Set):93:93 -> d
+    697:742:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):218 -> d
+    743:765:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):219:219 -> d
+    766:801:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):221:221 -> d
+    802:802:java.lang.Object create(java.lang.String,uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):215:215 -> d
     30:106:java.lang.Object createPending(kotlin.coroutines.Continuation):261:261 -> e
       # {"id":"com.android.tools.r8.residualsignature","signature":"(Lh10;)Ljava/lang/Object;"}
     107:108:java.lang.Object createPending(kotlin.coroutines.Continuation):262:262 -> e
@@ -347897,10 +347894,10 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     191:193:java.lang.String uk.co.fieldarcheryscoring.data.local.RoundEntity.getId():64:64 -> e
     191:193:java.lang.Object createPending(kotlin.coroutines.Continuation):267 -> e
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    194:195:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> e
+    194:195:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> e
     194:195:java.lang.Object createPending(kotlin.coroutines.Continuation):267 -> e
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    196:199:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> e
+    196:199:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> e
     196:199:java.lang.Object createPending(kotlin.coroutines.Continuation):267 -> e
     200:232:java.lang.Object createPending(kotlin.coroutines.Continuation):267:267 -> e
     233:300:java.lang.Object createPending(kotlin.coroutines.Continuation):268:268 -> e
@@ -348160,7 +348157,7 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     133:145:java.lang.Object refreshCache(kotlin.coroutines.Continuation):135:135 -> o
     146:150:java.lang.Object refreshCache(kotlin.coroutines.Continuation):367:367 -> o
     151:166:java.lang.Object refreshCache(kotlin.coroutines.Continuation):368:368 -> o
-    167:174:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():11:11 -> o
+    167:174:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():15:15 -> o
     167:174:java.lang.Object refreshCache(kotlin.coroutines.Continuation):135 -> o
     175:178:java.lang.Object refreshCache(kotlin.coroutines.Continuation):368:368 -> o
     179:187:java.lang.Object refreshCache(kotlin.coroutines.Continuation):137:137 -> o
@@ -348184,7 +348181,7 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     268:272:java.lang.Object refreshCache(kotlin.coroutines.Continuation):371:371 -> o
     273:285:java.lang.Object refreshCache(kotlin.coroutines.Continuation):372:372 -> o
     286:288:java.lang.Object refreshCache(kotlin.coroutines.Continuation):373:373 -> o
-    289:290:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> o
+    289:290:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> o
     289:290:java.lang.Object refreshCache(kotlin.coroutines.Continuation):141 -> o
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     291:296:java.lang.Object refreshCache(kotlin.coroutines.Continuation):374:374 -> o
@@ -348359,7 +348356,7 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     297:298:java.lang.Object send(uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):245 -> r
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     297:298:java.lang.Object LocationRepository.send(PendingPlace,boolean,ContinuationImpl):0 -> r
-    299:300:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> r
+    299:300:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> r
     299:300:java.lang.Object send(uk.co.fieldarcheryscoring.domain.PendingPlace,boolean,kotlin.coroutines.Continuation):245 -> r
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     299:300:java.lang.Object LocationRepository.send(PendingPlace,boolean,ContinuationImpl):0 -> r
@@ -348380,10 +348377,10 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     98:99:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):288 -> s
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     100:107:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):288:288 -> s
-    108:109:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> s
+    108:109:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> s
     108:109:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):290 -> s
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    110:112:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> s
+    110:112:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> s
     110:112:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):290 -> s
     113:132:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):290:290 -> s
     133:139:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):291:291 -> s
@@ -348395,7 +348392,7 @@ uk.co.fieldarcheryscoring.data.LocationRepository -> th1:
     144:154:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):389:389 -> s
     155:168:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):390:390 -> s
     169:170:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):391:391 -> s
-    171:172:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> s
+    171:172:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> s
     171:172:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):294 -> s
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     173:176:java.lang.Object settlePending(java.lang.String,uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.coroutines.Continuation):391:391 -> s
@@ -358536,7 +358533,7 @@ uk.co.fieldarcheryscoring.domain.KnownPlace -> w31:
     java.lang.Double latitude -> c
     java.lang.Double longitude -> d
     boolean isPrivate -> e
-    6:19:void <init>(java.lang.String,java.lang.String,java.lang.Double,java.lang.Double,boolean):10:10 -> <init>
+    6:19:void <init>(java.lang.String,java.lang.String,java.lang.Double,java.lang.Double,boolean):14:14 -> <init>
     4:63:boolean equals(java.lang.Object):0:0 -> equals
     11:15:int hashCode():0:0 -> hashCode
     11:15:int KnownPlace.hashCode():0 -> hashCode
@@ -358827,82 +358824,82 @@ uk.co.fieldarcheryscoring.domain.LiveRules$validate$$inlined$groupingBy$1 -> id1
 uk.co.fieldarcheryscoring.domain.LocationMatch -> dg1:
 # {"id":"sourceFile","fileName":"LocationMatch.kt"}
     java.util.Set commonWords -> a
-    0:55:void <clinit>():24:24 -> <clinit>
+    0:55:void <clinit>():30:30 -> <clinit>
     56:59:java.util.Set kotlin.collections.SetsKt__SetsKt.setOf(java.lang.Object[]):44:44 -> <clinit>
-    56:59:void <clinit>():22 -> <clinit>
-    60:62:void <clinit>():22:22 -> <clinit>
-    3:7:java.lang.String key(java.lang.String):29:29 -> a
-    8:12:java.lang.String key(java.lang.String):30:30 -> a
-    13:39:java.lang.String key(java.lang.String):31:31 -> a
-    40:61:java.lang.String key(java.lang.String):32:32 -> a
-    62:74:java.lang.String key(java.lang.String):34:34 -> a
+    56:59:void <clinit>():28 -> <clinit>
+    60:62:void <clinit>():28:28 -> <clinit>
+    3:7:java.lang.String key(java.lang.String):35:35 -> a
+    8:12:java.lang.String key(java.lang.String):36:36 -> a
+    13:39:java.lang.String key(java.lang.String):37:37 -> a
+    40:61:java.lang.String key(java.lang.String):38:38 -> a
+    62:74:java.lang.String key(java.lang.String):40:40 -> a
     75:80:java.lang.StringBuilder kotlin.text.StringsKt__StringBuilderJVMKt.clear(java.lang.StringBuilder):66:66 -> a
-    75:80:java.lang.String key(java.lang.String):34 -> a
-    81:85:java.lang.String key(java.lang.String):99:99 -> a
-    86:100:java.lang.String key(java.lang.String):100:100 -> a
-    101:108:java.lang.String key(java.lang.String):36:36 -> a
-    109:112:java.lang.String key(java.lang.String):100:100 -> a
-    113:133:java.lang.String key(java.lang.String):37:37 -> a
-    0:4:java.util.List nearby(java.util.List,double,double,int):120:120 -> b
-    5:21:java.util.List nearby(java.util.List,double,double,int):121:121 -> b
-    22:29:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():11:11 -> b
-    22:29:java.util.List nearby(java.util.List,double,double,int):80 -> b
-    30:33:java.util.List nearby(java.util.List,double,double,int):121:121 -> b
-    34:44:java.util.List nearby(java.util.List,double,double,int):123:123 -> b
-    45:58:java.util.List nearby(java.util.List,double,double,int):124:124 -> b
-    59:60:java.util.List nearby(java.util.List,double,double,int):125:125 -> b
-    61:62:java.util.List nearby(java.util.List,double,double,int):81:81 -> b
-    63:64:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():10:10 -> b
-    63:64:java.util.List nearby(java.util.List,double,double,int):81 -> b
+    75:80:java.lang.String key(java.lang.String):40 -> a
+    81:85:java.lang.String key(java.lang.String):117:117 -> a
+    86:100:java.lang.String key(java.lang.String):118:118 -> a
+    101:108:java.lang.String key(java.lang.String):42:42 -> a
+    109:112:java.lang.String key(java.lang.String):118:118 -> a
+    113:133:java.lang.String key(java.lang.String):43:43 -> a
+    0:4:java.util.List nearby(java.util.List,double,double,int):138:138 -> b
+    5:21:java.util.List nearby(java.util.List,double,double,int):139:139 -> b
+    22:29:boolean uk.co.fieldarcheryscoring.domain.KnownPlace.getHasPin():15:15 -> b
+    22:29:java.util.List nearby(java.util.List,double,double,int):98 -> b
+    30:33:java.util.List nearby(java.util.List,double,double,int):139:139 -> b
+    34:44:java.util.List nearby(java.util.List,double,double,int):141:141 -> b
+    45:58:java.util.List nearby(java.util.List,double,double,int):142:142 -> b
+    59:60:java.util.List nearby(java.util.List,double,double,int):143:143 -> b
+    61:62:java.util.List nearby(java.util.List,double,double,int):99:99 -> b
+    63:64:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getId():14:14 -> b
+    63:64:java.util.List nearby(java.util.List,double,double,int):99 -> b
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    65:66:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():10:10 -> b
-    65:66:java.util.List nearby(java.util.List,double,double,int):81 -> b
-    67:68:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():10:10 -> b
-    67:68:java.util.List nearby(java.util.List,double,double,int):81 -> b
-    69:75:java.util.List nearby(java.util.List,double,double,int):81:81 -> b
-    76:77:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():10:10 -> b
-    76:77:java.util.List nearby(java.util.List,double,double,int):81 -> b
-    78:100:java.util.List nearby(java.util.List,double,double,int):81:81 -> b
-    101:104:java.util.List nearby(java.util.List,double,double,int):125:125 -> b
-    105:109:java.util.List nearby(java.util.List,double,double,int):127:127 -> b
-    110:125:java.util.List nearby(java.util.List,double,double,int):128:128 -> b
+    65:66:java.lang.String uk.co.fieldarcheryscoring.domain.KnownPlace.getName():14:14 -> b
+    65:66:java.util.List nearby(java.util.List,double,double,int):99 -> b
+    67:68:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLatitude():14:14 -> b
+    67:68:java.util.List nearby(java.util.List,double,double,int):99 -> b
+    69:75:java.util.List nearby(java.util.List,double,double,int):99:99 -> b
+    76:77:java.lang.Double uk.co.fieldarcheryscoring.domain.KnownPlace.getLongitude():14:14 -> b
+    76:77:java.util.List nearby(java.util.List,double,double,int):99 -> b
+    78:100:java.util.List nearby(java.util.List,double,double,int):99:99 -> b
+    101:104:java.util.List nearby(java.util.List,double,double,int):143:143 -> b
+    105:109:java.util.List nearby(java.util.List,double,double,int):145:145 -> b
+    110:125:java.util.List nearby(java.util.List,double,double,int):146:146 -> b
     126:131:int uk.co.fieldarcheryscoring.domain.NearbyLocation.getDistanceMetres():36:36 -> b
-    126:131:java.util.List nearby(java.util.List,double,double,int):82 -> b
+    126:131:java.util.List nearby(java.util.List,double,double,int):100 -> b
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    132:135:java.util.List nearby(java.util.List,double,double,int):128:128 -> b
-    136:137:java.util.List nearby(java.util.List,double,double,int):130:130 -> b
+    132:135:java.util.List nearby(java.util.List,double,double,int):146:146 -> b
+    136:137:java.util.List nearby(java.util.List,double,double,int):148:148 -> b
     138:140:void uk.co.fieldarcheryscoring.domain.LocationMatch$nearby$$inlined$sortedBy$1.<init>():0:0 -> b
-    138:140:java.util.List nearby(java.util.List,double,double,int):130 -> b
-    141:145:java.util.List nearby(java.util.List,double,double,int):130:130 -> b
-    3:4:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():15:15 -> c
-    3:4:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):87 -> c
+    138:140:java.util.List nearby(java.util.List,double,double,int):148 -> b
+    141:145:java.util.List nearby(java.util.List,double,double,int):148:148 -> b
+    3:4:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():19:19 -> c
+    3:4:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):105 -> c
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     3:4:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
       # {"id":"com.android.tools.r8.synthesized"}
       # {"id":"com.android.tools.r8.residualsignature","signature":"(La12;)Ljava/lang/String;"}
-    5:28:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):87:87 -> c
+    5:28:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):105:105 -> c
     5:28:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    29:32:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():15:15 -> c
-    29:32:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):88 -> c
+    29:32:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():19:19 -> c
+    29:32:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):106 -> c
     29:32:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    33:40:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):88:88 -> c
+    33:40:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):106:106 -> c
     33:40:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    41:42:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):90:90 -> c
+    41:42:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):108:108 -> c
     41:42:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
     43:56:java.lang.String LocationMatch.why(PlaceMatch):0:0 -> c
-    57:82:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):91:91 -> c
+    57:82:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):109:109 -> c
     57:82:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    83:105:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):92:92 -> c
+    83:105:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):110:110 -> c
     83:105:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    106:109:boolean uk.co.fieldarcheryscoring.domain.PlaceMatch.isPrivate():15:15 -> c
-    106:109:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):95 -> c
+    106:109:boolean uk.co.fieldarcheryscoring.domain.PlaceMatch.isPrivate():19:19 -> c
+    106:109:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):113 -> c
     106:109:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    110:115:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):95:95 -> c
+    110:115:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):113:113 -> c
     110:115:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
     116:122:java.util.List kotlin.collections.CollectionsKt__CollectionsKt.listOfNotNull(java.lang.Object[]):140:140 -> c
-    116:122:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):86 -> c
+    116:122:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):104 -> c
     116:122:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
-    123:131:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):96:96 -> c
+    123:131:java.lang.String why(uk.co.fieldarcheryscoring.domain.PlaceMatch):114:114 -> c
     123:131:java.lang.String LocationMatch.why(PlaceMatch):0 -> c
 uk.co.fieldarcheryscoring.domain.LocationMatch$nearby$$inlined$sortedBy$1 -> cg1:
 # {"id":"sourceFile","fileName":"Comparisons.kt"}
@@ -359477,7 +359474,7 @@ uk.co.fieldarcheryscoring.domain.PlaceMatch -> a12:
     boolean isPrivate -> c
     java.lang.Integer distanceMetres -> d
     java.util.List reasons -> e
-    6:19:void <init>(java.lang.String,java.lang.String,boolean,java.lang.Integer,java.util.List):15:15 -> <init>
+    6:19:void <init>(java.lang.String,java.lang.String,boolean,java.lang.Integer,java.util.List):19:19 -> <init>
     48:57:boolean kotlin.jvm.internal.Intrinsics.areEqual(java.lang.Object,java.lang.Object):169:169 -> equals
     48:57:boolean equals(java.lang.Object):0 -> equals
     11:14:int hashCode():0:0 -> hashCode
@@ -371456,7 +371453,7 @@ uk.co.fieldarcheryscoring.ui.LocationMapViewModel$createAt$1 -> wf1:
     57:67:java.lang.Object invokeSuspend(java.lang.Object):2599:2599 -> q
     68:81:java.lang.Object invokeSuspend(java.lang.Object):2600:2600 -> q
     82:83:java.lang.Object invokeSuspend(java.lang.Object):2601:2601 -> q
-    84:85:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> q
+    84:85:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> q
     84:85:java.lang.Object invokeSuspend(java.lang.Object):766 -> q
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     86:89:java.lang.Object invokeSuspend(java.lang.Object):2601:2601 -> q
@@ -375661,7 +375658,7 @@ uk.co.fieldarcheryscoring.ui.RoundLocationViewModel -> gb2:
     17:27:void nameAnyway(kotlin.jvm.functions.Function0):2604:2604 -> h
     28:41:void nameAnyway(kotlin.jvm.functions.Function0):2605:2605 -> h
     42:43:void nameAnyway(kotlin.jvm.functions.Function0):2606:2606 -> h
-    44:45:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> h
+    44:45:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> h
     44:45:void nameAnyway(kotlin.jvm.functions.Function0):1897 -> h
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     46:49:void nameAnyway(kotlin.jvm.functions.Function0):2606:2606 -> h
@@ -375670,12 +375667,12 @@ uk.co.fieldarcheryscoring.ui.RoundLocationViewModel -> gb2:
     3:8:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1908:1908 -> i
       # {"id":"com.android.tools.r8.residualsignature","signature":"(La12;Lyq0;)V"}
     9:10:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1909:1909 -> i
-    11:12:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> i
+    11:12:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> i
     11:12:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1909 -> i
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
-    13:14:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> i
+    13:14:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> i
     13:14:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1909 -> i
-    15:18:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():15:15 -> i
+    15:18:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():19:19 -> i
     15:18:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1909 -> i
     19:31:void useMatch(uk.co.fieldarcheryscoring.domain.PlaceMatch,kotlin.jvm.functions.Function0):1909:1909 -> i
 uk.co.fieldarcheryscoring.ui.RoundLocationViewModel$Similar -> bb2:
@@ -394702,14 +394699,14 @@ uk.co.fieldarcheryscoring.ui.screens.AdminDuplicatesScreenKt$$ExternalSyntheticL
     45:47:java.lang.Object AdminDuplicatesScreenKt$$ExternalSyntheticLambda16.invoke(java.lang.Object):0 -> i
     48:49:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMapScreen$lambda$34$0(uk.co.fieldarcheryscoring.ui.LocationMapViewModel,java.lang.String,kotlin.jvm.functions.Function0,androidx.compose.runtime.MutableState,uk.co.fieldarcheryscoring.domain.PlaceMatch):288:288 -> i
     48:49:java.lang.Object AdminDuplicatesScreenKt$$ExternalSyntheticLambda16.invoke(java.lang.Object):0 -> i
-    50:51:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():15:15 -> i
+    50:51:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getId():19:19 -> i
     50:51:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMapScreen$lambda$34$0(uk.co.fieldarcheryscoring.ui.LocationMapViewModel,java.lang.String,kotlin.jvm.functions.Function0,androidx.compose.runtime.MutableState,uk.co.fieldarcheryscoring.domain.PlaceMatch):288 -> i
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     50:51:java.lang.Object AdminDuplicatesScreenKt$$ExternalSyntheticLambda16.invoke(java.lang.Object):0 -> i
-    52:53:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> i
+    52:53:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> i
     52:53:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMapScreen$lambda$34$0(uk.co.fieldarcheryscoring.ui.LocationMapViewModel,java.lang.String,kotlin.jvm.functions.Function0,androidx.compose.runtime.MutableState,uk.co.fieldarcheryscoring.domain.PlaceMatch):288 -> i
     52:53:java.lang.Object AdminDuplicatesScreenKt$$ExternalSyntheticLambda16.invoke(java.lang.Object):0 -> i
-    54:57:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():15:15 -> i
+    54:57:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():19:19 -> i
     54:57:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMapScreen$lambda$34$0(uk.co.fieldarcheryscoring.ui.LocationMapViewModel,java.lang.String,kotlin.jvm.functions.Function0,androidx.compose.runtime.MutableState,uk.co.fieldarcheryscoring.domain.PlaceMatch):288 -> i
     54:57:java.lang.Object AdminDuplicatesScreenKt$$ExternalSyntheticLambda16.invoke(java.lang.Object):0 -> i
     58:75:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMapScreen$lambda$34$0(uk.co.fieldarcheryscoring.ui.LocationMapViewModel,java.lang.String,kotlin.jvm.functions.Function0,androidx.compose.runtime.MutableState,uk.co.fieldarcheryscoring.domain.PlaceMatch):288:288 -> i
@@ -427120,27 +427117,27 @@ uk.co.fieldarcheryscoring.ui.screens.HistoryScreenKt$$ExternalSyntheticLambda2 -
     120:128:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0:0 -> i
     129:131:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$4(uk.co.fieldarcheryscoring.domain.PlaceMatch):0:0 -> i
     129:131:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
-    132:134:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> i
-    132:134:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$4(uk.co.fieldarcheryscoring.domain.PlaceMatch):75 -> i
+    132:134:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> i
+    132:134:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$4(uk.co.fieldarcheryscoring.domain.PlaceMatch):93 -> i
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     132:134:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
     135:138:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0:0 -> i
     139:141:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$3(uk.co.fieldarcheryscoring.domain.PlaceMatch):0:0 -> i
     139:141:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
-    142:148:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():15:15 -> i
-    142:148:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$3(uk.co.fieldarcheryscoring.domain.PlaceMatch):75 -> i
+    142:148:java.lang.Integer uk.co.fieldarcheryscoring.domain.PlaceMatch.getDistanceMetres():19:19 -> i
+    142:148:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$3(uk.co.fieldarcheryscoring.domain.PlaceMatch):93 -> i
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     142:148:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
-    149:153:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$3(uk.co.fieldarcheryscoring.domain.PlaceMatch):75:75 -> i
+    149:153:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$3(uk.co.fieldarcheryscoring.domain.PlaceMatch):93:93 -> i
     149:153:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
     154:157:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0:0 -> i
     158:160:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$2(uk.co.fieldarcheryscoring.domain.PlaceMatch):0:0 -> i
     158:160:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
-    161:162:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():15:15 -> i
-    161:162:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$2(uk.co.fieldarcheryscoring.domain.PlaceMatch):75 -> i
+    161:162:java.util.List uk.co.fieldarcheryscoring.domain.PlaceMatch.getReasons():19:19 -> i
+    161:162:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$2(uk.co.fieldarcheryscoring.domain.PlaceMatch):93 -> i
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     161:162:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
-    163:172:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$2(uk.co.fieldarcheryscoring.domain.PlaceMatch):75:75 -> i
+    163:172:java.lang.Comparable uk.co.fieldarcheryscoring.domain.LocationMatch.matches$lambda$2(uk.co.fieldarcheryscoring.domain.PlaceMatch):93:93 -> i
     163:172:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0 -> i
     173:176:java.lang.Object HistoryScreenKt$$ExternalSyntheticLambda2.invoke(java.lang.Object):0:0 -> i
     177:178:boolean uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.LocationMap$lambda$14$1$0$0(org.osmdroid.views.overlay.Overlay):463:463 -> i
@@ -432999,7 +432996,7 @@ uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt$$ExternalSyntheticLambd
     1072:1074:java.lang.Object LocationMapScreenKt$$ExternalSyntheticLambda42.invoke(java.lang.Object,java.lang.Object):0:0 -> g
     1075:1078:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.NewLocationDialog$lambda$9(boolean,java.lang.String,kotlin.jvm.functions.Function0,java.util.List,androidx.compose.runtime.MutableState,androidx.compose.runtime.MutableState,kotlin.jvm.functions.Function1,androidx.compose.runtime.Composer,int):1360:1360 -> g
     1075:1078:java.lang.Object LocationMapScreenKt$$ExternalSyntheticLambda42.invoke(java.lang.Object,java.lang.Object):0 -> g
-    1079:1080:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():15:15 -> g
+    1079:1080:java.lang.String uk.co.fieldarcheryscoring.domain.PlaceMatch.getName():19:19 -> g
     1079:1080:kotlin.Unit uk.co.fieldarcheryscoring.ui.screens.LocationMapScreenKt.NewLocationDialog$lambda$9(boolean,java.lang.String,kotlin.jvm.functions.Function0,java.util.List,androidx.compose.runtime.MutableState,androidx.compose.runtime.MutableState,kotlin.jvm.functions.Function1,androidx.compose.runtime.Composer,int):354 -> g
       # {"id":"com.android.tools.r8.rewriteFrame","conditions":["throws(Ljava/lang/NullPointerException;)"],"actions":["removeInnerFrames(1)"]}
     1079:1080:java.lang.Object LocationMapScreenKt$$ExternalSyntheticLambda42.invoke(java.lang.Object,java.lang.Object):0 -> g

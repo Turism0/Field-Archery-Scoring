@@ -177,7 +177,14 @@ object Analysis {
             }
             .sortedWith(compareBy<LocationSummary>({ -it.rounds }, { -it.average }, { it.name }))
 
-    /** Each bow's rounds ([key] = Round::bowId) or arrows' (Round::arrowId), most rounds first. */
+    /**
+     * 3.2.29 (Pete): Stats compares each bow + arrows pair actually shot ("bowId|arrowId", either part empty when not
+     * picked), so arrows used with two bows aren't averaged together. Null: neither picked.
+     */
+    fun equipmentPair(r: Round): String? =
+        if (r.bowId == null && r.arrowId == null) null else "${r.bowId.orEmpty()}|${r.arrowId.orEmpty()}"
+
+    /** Each bow's rounds ([key] = Round::bowId), arrows' (Round::arrowId) or pair's ([equipmentPair]), most rounds first. */
     fun byEquipment(rounds: List<Round>, key: (Round) -> String?): List<EquipmentSummary> =
         rounds.filter { key(it) != null }.groupBy { key(it)!! }.mapNotNull { (id, list) ->
             val avgs = roundAverages(list)

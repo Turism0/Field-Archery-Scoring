@@ -89,8 +89,9 @@ internal fun AnalysisTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
                 item(key = "thirds-$type") { ThirdsCard(list, type) }
                 item(key = "compare-$type") { CompareCard(list, type, compare, groups) }
                 item(key = "locations-$type") { LocationsCard(list, type, onOpenRound) }
-                // 3.2.24 (Pete): your bows and arrows compared (once you've used more than one).
-                if (list.mapNotNull { it.bowId }.distinct().size > 1 || list.mapNotNull { it.arrowId }.distinct().size > 1) {
+                // 3.2.24 (Pete): your bows and arrows compared. 3.2.29: by bow + arrows pair, shown once any round has them
+                // (the figures moved here from the Equipment screen).
+                if (list.any { Analysis.equipmentPair(it) != null }) {
                     item(key = "equipment-$type") { EquipmentCard(list, type, kit.first, kit.second, onOpenRound) }
                 }
                 item(key = "weather-$type") { WeatherCard(list, type, weather) }
@@ -303,20 +304,29 @@ private fun EquipmentCard(
     rounds: List<Round>, type: RoundType, bows: List<uk.co.fieldarcheryscoring.domain.Bow>,
     arrows: List<uk.co.fieldarcheryscoring.domain.ArrowSet>, onOpenRound: (String) -> Unit,
 ) {
-    val byBow = remember(rounds) { Analysis.byEquipment(rounds) { it.bowId } }
-    val byArrows = remember(rounds) { Analysis.byEquipment(rounds) { it.arrowId } }
-    SectionCard(title = "By equipment", subtitle = "Average and best ${per(type)} with each bow and set of arrows.") {
-        EquipmentRows("Bows", byBow, onOpenRound) { id -> bows.firstOrNull { it.id == id }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown bow" }
-        EquipmentRows("Arrows", byArrows, onOpenRound) { id -> arrows.firstOrNull { it.id == id }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown arrows" }
+    val pairs = remember(rounds) { Analysis.byEquipment(rounds, Analysis::equipmentPair) }
+    SectionCard(title = "By equipment", subtitle = "Average and best ${per(type)} with each bow and set of arrows you've shot together.") {
+        EquipmentRows(pairs, onOpenRound) { id -> pairName(id, bows, arrows) }
+    }
+}
+
+/** "Border Hex 7 + Easton 500s"; "Border Hex 7 (no arrows picked)"; "Easton 500s (no bow picked)". */
+private fun pairName(id: String, bows: List<uk.co.fieldarcheryscoring.domain.Bow>, arrows: List<uk.co.fieldarcheryscoring.domain.ArrowSet>): String {
+    val bowId = id.substringBefore('|').ifEmpty { null }
+    val arrowId = id.substringAfter('|').ifEmpty { null }
+    val bow = bowId?.let { b -> bows.firstOrNull { it.id == b }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown bow" }
+    val arrow = arrowId?.let { a -> arrows.firstOrNull { it.id == a }?.let { uk.co.fieldarcheryscoring.domain.Equipment.label(it) } ?: "Unknown arrows" }
+    return when {
+        bow != null && arrow != null -> "$bow + $arrow"
+        bow != null -> "$bow (no arrows picked)"
+        else -> "$arrow (no bow picked)"
     }
 }
 
 @Composable
 private fun EquipmentRows(
-    title: String, list: List<uk.co.fieldarcheryscoring.domain.EquipmentSummary>, onOpenRound: (String) -> Unit, name: (String) -> String,
+    list: List<uk.co.fieldarcheryscoring.domain.EquipmentSummary>, onOpenRound: (String) -> Unit, name: (String) -> String,
 ) {
-    if (list.size < 2) return
-    Text(title, style = MaterialTheme.typography.titleSmall)
     list.forEach { e ->
         Row(Modifier.fillMaxWidth().clickable { onOpenRound(e.bestRound.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

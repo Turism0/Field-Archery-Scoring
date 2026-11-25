@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { newRound, type Round } from '../src/domain/round'
 import { withOverride, newTarget } from '../src/domain/scoring'
-import { byEquipment } from '../src/domain/analysis'
+import { byEquipment, equipmentPair } from '../src/domain/analysis'
 import { matchesFilter, resolveFilter, DEFAULT_PERIOD, type StatsFilter } from '../src/domain/statsFilter'
 import { handicapHistory, type HEntry } from '../src/domain/handicap'
 import {
@@ -112,6 +112,10 @@ describe('equipment in rounds', () => {
     expect(byBow.map(s => [s.id, s.rounds])).toEqual([['b1', 2], ['b2', 1]])
     expect(byBow[0].average).toBeCloseTo(20)
     expect(byEquipment(rs, r => r.arrowId).map(s => [s.id, s.rounds])).toEqual([['a1', 2], ['a2', 1]])
+    // 3.2.29: bow + arrows pairs, so arrows used with two bows aren't averaged together
+    const pairs = byEquipment(rs, equipmentPair)
+    expect(new Set(pairs.map(p => p.id))).toEqual(new Set(['b1|a1', 'b1|a2', 'b2|a1']))
+    expect(pairs.map(p => p.rounds)).toEqual([1, 1, 1])
   })
   it('stats filter by bow and arrows', () => {
     const rs = [round('r1', 1, 'LB', 'b1', 'a1'), round('r2', 2, 'LB', 'b2', 'a1')]
