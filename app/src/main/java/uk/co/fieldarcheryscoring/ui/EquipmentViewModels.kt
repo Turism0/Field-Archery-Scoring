@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -86,10 +85,9 @@ class ArrowsEditViewModel(private val equipment: EquipmentRepository, saved: Sav
     private val _tried = MutableStateFlow(false)
     val tried: StateFlow<Boolean> = _tried.asStateFlow()
 
-    /** Your bows to tick (not deleted, plus any deleted one these arrows still name). */
-    val bows: StateFlow<List<Bow>> = combine(equipment.bows, _form) { list, f ->
-        list.filter { !it.deleted || (f != null && it.id in f.bowIds) }.sortedBy { Equipment.label(it).lowercase() }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Your bows to tick (3.2.30: not deleted ones; a deleted bow is taken off the arrows when they're saved). */
+    val bows: StateFlow<List<Bow>> = equipment.bows.map { list -> list.filter { !it.deleted }.sortedBy { Equipment.label(it).lowercase() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         viewModelScope.launch {
@@ -98,7 +96,10 @@ class ArrowsEditViewModel(private val equipment: EquipmentRepository, saved: Sav
                 val live = equipment.bows.first().filter { !it.deleted }
                 Equipment.ArrowForm(bowIds = if (live.size == 1) setOf(live.first().id) else emptySet())
             } else {
-                equipment.arrows.first().firstOrNull { it.id == id }?.let { Equipment.ArrowForm.of(it) } ?: Equipment.ArrowForm()
+                // 3.2.30: bows deleted since (on an older app, or another phone) aren't kept on the arrows.
+                val live = equipment.bows.first().filter { !it.deleted }.map { it.id }.toSet()
+                equipment.arrows.first().firstOrNull { it.id == id }?.let { a -> Equipment.ArrowForm.of(a).let { f -> f.copy(bowIds = f.bowIds.intersect(live)) } }
+                    ?: Equipment.ArrowForm()
             }
         }
     }

@@ -81,7 +81,7 @@ export function EquipmentScreen() {
         <Card title="Arrows">
           {!arrows.length && <div>No arrows yet.</div>}
           {arrows.map(a => {
-            const used = a.bowIds.map(id => data.kit.bows.find(b => b.id === id)).filter(b => !!b).map(b => bowName(b!) + (b!.deleted ? ' (deleted)' : '')).join(', ')
+            const used = a.bowIds.map(id => data.kit.bows.find(b => b.id === id && !b.deleted)).filter(b => !!b).map(b => bowName(b!)).join(', ')   // 3.2.30: not deleted bows
             return <Row title={arrowName(a)} lines={[arrowDetail(a), used ? `With ${used}` : 'No bow: not offered for rounds']} onClick={() => go(`/arrows/${a.id}`)} />
           })}
           <button class="outlined" style="align-self:flex-start" onClick={() => go('/arrows/new')}>＋ Add arrows</button>
@@ -181,7 +181,8 @@ export function ArrowsEdit({ id }: { id: string }) {
   useEffect(() => {
     getEquipment().then(e => {
       const a = e.arrows.find(x => x.id === id)
-      if (a) setF(arrowForm(a))
+      // 3.2.30: bows deleted since (on an older app, or another device) aren't kept on the arrows.
+      if (a) { const f0 = arrowForm(a); setF({ ...f0, bowIds: f0.bowIds.filter(b => e.bows.some(x => x.id === b && !x.deleted)) }) }
       else {
         // With only one bow, new arrows are for it.
         const live = e.bows.filter(b => !b.deleted)
@@ -201,7 +202,7 @@ export function ArrowsEdit({ id }: { id: string }) {
     const a = arrowsFromForm(fixed, arrowId, '')
     if (a) { await saveArrows(a); back() }
   }
-  const bows = kit.bows.filter(b => !b.deleted || f.bowIds.includes(b.id)).sort((a, b) => bowLabel(a).localeCompare(bowLabel(b)))
+  const bows = kit.bows.filter(b => !b.deleted).sort((a, b) => bowLabel(a).localeCompare(bowLabel(b)))
   return (
     <>
       <Bar title={isNew ? 'Add arrows' : 'Arrows'}>

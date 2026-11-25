@@ -4,6 +4,12 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.30
+
+- **3.2.30 (app and web app; API just renumbered, no SQL): deleting a bow takes it off its arrows (Pete).**
+  - Deleting a bow now also removes it from any arrows linked to it (the arrows are synced like any other change). Arrows left with no bow show "No bow: not offered for rounds" and the warning on their screen.
+  - Bows deleted before this (or on an older app) are no longer shown as linked on the Equipment screen or ticked on the arrows' screen, and come off the arrows the next time they're saved. Rounds shot with a deleted bow keep it.
+
 ## Version 3.2.29
 
 - **3.2.29 (app and web app; API just renumbered, no SQL): equipment figures moved to Stats, by bow + arrows pair (Pete).**

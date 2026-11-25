@@ -47,7 +47,12 @@ class EquipmentRepository(
 
     suspend fun deleteBow(id: String) {
         val b = dao.getBow(id) ?: return
-        dao.upsertBow(b.copy(deleted = true, updatedAt = Instant.now(clock), syncState = SyncState.PENDING))
+        val now = Instant.now(clock)
+        dao.upsertBow(b.copy(deleted = true, updatedAt = now, syncState = SyncState.PENDING))
+        // 3.2.30 (Pete): the bow comes off any arrows linked to it (synced like any other change to the arrows).
+        dao.arrowsWithBow(id).forEach { a ->
+            dao.upsertArrows(a.copy(bowIds = (split(a.bowIds) - id).joinToString(","), updatedAt = now, syncState = SyncState.PENDING))
+        }
         onChanged()
     }
 

@@ -104,8 +104,9 @@ fun EquipmentScreen(vm: EquipmentViewModel, onBack: () -> Unit, onBow: (String) 
                 if (list.isEmpty()) Text("No arrows yet.",
                     style = MaterialTheme.typography.bodyMedium)
                 list.forEach { a ->
-                    val used = a.bowIds.mapNotNull { id -> allBows.firstOrNull { it.id == id } }
-                        .joinToString(", ") { Equipment.name(it) + if (it.deleted) " (deleted)" else "" }
+                    // 3.2.30 (Pete): deleted bows aren't shown as linked.
+                    val used = a.bowIds.mapNotNull { id -> allBows.firstOrNull { it.id == id && !it.deleted } }
+                        .joinToString(", ") { Equipment.name(it) }
                     EquipmentRow(
                         title = Equipment.name(a),
                         lines = listOf(Equipment.detail(a), if (used.isEmpty()) "No bow: not offered for rounds" else "With $used").filter { it.isNotEmpty() },

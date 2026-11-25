@@ -338,6 +338,10 @@ abstract class EquipmentDao {
     @Query("SELECT * FROM arrow_set WHERE id = :id")
     abstract suspend fun getArrows(id: String): ArrowSetEntity?
 
+    /** 3.2.30: arrows (showing here) linked to a bow, so deleting the bow can take it off them. */
+    @Query("SELECT * FROM arrow_set WHERE hidden_owner IS NULL AND (',' || bow_ids || ',') LIKE ('%,' || :bowId || ',%')")
+    abstract suspend fun arrowsWithBow(bowId: String): List<ArrowSetEntity>
+
     @Upsert abstract suspend fun upsertBow(bow: BowEntity)
     @Upsert abstract suspend fun upsertArrows(arrows: ArrowSetEntity)
 

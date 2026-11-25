@@ -27,7 +27,13 @@ export async function saveArrows(a: ArrowSet) {
 
 export async function deleteBow(id: string) {
   const e = await getEquipment()
-  await save({ ...e, bows: e.bows.map(b => (b.id === id ? { ...b, deleted: true, updatedUtc: nowUtc(), pending: true } : b)) })
+  const now = nowUtc()
+  await save({
+    ...e,
+    bows: e.bows.map(b => (b.id === id ? { ...b, deleted: true, updatedUtc: now, pending: true } : b)),
+    // 3.2.30 (Pete): the bow comes off any arrows linked to it (synced like any other change to the arrows).
+    arrows: e.arrows.map(a => (a.bowIds.includes(id) ? { ...a, bowIds: a.bowIds.filter(x => x !== id), updatedUtc: now, pending: true } : a)),
+  })
 }
 
 export async function deleteArrows(id: string) {
