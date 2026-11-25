@@ -17,3 +17,6 @@ server/api/**/obj/
 server/jobs/**/bin/
 server/jobs/**/obj/
 appsettings.Production.json
+
+# Release builds (bundle, APK, R8 mapping): made by Android Studio each release, kept out of git (Pete, 25 Nov 2026)
+/app/release/
