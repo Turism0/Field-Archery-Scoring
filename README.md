@@ -4,6 +4,17 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.31
+
+- **3.2.31 (app, web app and API; no SQL): the Owner can see private shoot locations; Bests shows 40 and 36 only (Pete).**
+  - **Map:** the Owner's map also shows other archers' private locations, in **purple** ("Others' private (n)" in the key). They're view-only: never offered when picking a location for a round, never matched to rounds and never kept in the phone's or browser's copy of locations. Their page opens for the Owner (view-only: no delete, move or privacy switch). API: `GET /api/locations/map` includes them for the Owner, marked `othersPrivate: true`; the page has `location.othersPrivate`.
+  - **Admin → Shoot locations:** the Owner now sees their names and positions (before: "Private location", hidden), still view-only (`othersPrivate`; `hidden` always false, kept for older apps). Admins still don't see them.
+  - **Wording:** private locations now say "Other archers can't see it" (was "Only you see it"); the Admins sentence is gone.
+  - **Privacy policy** (26 November 2026): private shoot locations aren't shown to other archers; the person who runs the app can access the data on the server only to run and look after the service.
+  - Test-LocationReview: the Owner's map, page and admin list for someone else's private location (Admin checks unchanged).
+  - **Stats → Bests** (Pete): each round type and bow style now shows only the best average per animal and the best 40- and 36-target totals (40 first); rounds of other lengths aren't listed.
+  - Android Gradle Plugin 9.5.3 (Pete).
+
 ## Version 3.2.30
 
 - **3.2.30 (app and web app; API just renumbered, no SQL): deleting a bow takes it off its arrows (Pete).**

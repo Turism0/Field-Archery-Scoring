@@ -160,12 +160,12 @@ export function AdminLocations() {
         <Loading load={data} retry={retry}>{list => <>
           {!list.length && <p class="sub">No shoot locations yet. They appear as archers name them.</p>}
           <div class="grid2">{list.map(l => (
-            <button class="tile" disabled={l.hidden} onClick={() => { setSel(l); setName(l.name); setPriv(l.isPrivate); setMerging(false) }}>
+            <button class="tile" disabled={l.hidden || l.othersPrivate} onClick={() => { setSel(l); setName(l.name); setPriv(l.isPrivate); setMerging(false) }}>
               <span class="grow"><b>{l.name}</b>{l.isPrivate && <span class="sub"> · PRIVATE</span>}{l.latitude == null && !l.hidden && <span class="sub"> · NO MAP PIN</span>}
                 <span class="sub" style="display:block">{l.rounds} round{l.rounds === 1 ? '' : 's'}{l.createdBy ? ` · named by ${l.createdBy}` : ''}{l.createdUtc ? ` · ${ukDate(l.createdUtc)}` : ''}</span></span>
             </button>
           ))}</div>
-          {list.some(l => l.hidden) && <div class="sub">Private locations belong to the archer who named them: their names and positions are hidden. They only appear under Possible duplicates if they clash with a public location.</div>}
+          {list.some(l => l.hidden || l.othersPrivate) && <div class="sub">Other archers' private locations are shown to you as the Owner only, and can't be changed here. They only appear under Possible duplicates if they clash with a public location.</div>}
         </>}</Loading>
       </main>
       <Dialog open={!!sel} title={sel?.name ?? ''} onClose={() => setSel(null)}
@@ -184,7 +184,7 @@ export function AdminLocations() {
         </div>}
         {sel && merging && <div class="col">
           <div>Merge into which location? Nearest first{sel.latitude == null ? ' (this one has no map pin, so by name)' : ''}.</div>
-          {all.filter(o => o.id !== sel.id && !o.hidden).sort((a, b) => (metres(sel, a) ?? Infinity) - (metres(sel, b) ?? Infinity) || a.name.localeCompare(b.name)).map(o => {
+          {all.filter(o => o.id !== sel.id && !o.hidden && !o.othersPrivate).sort((a, b) => (metres(sel, a) ?? Infinity) - (metres(sel, b) ?? Infinity) || a.name.localeCompare(b.name)).map(o => {
             const m = metres(sel, o)
             return <button class="row between plain" onClick={() => setMerge([sel, o])}>
               <span><b>{o.name}</b><div class="sub">{m != null ? distanceText(Math.round(m)) : o.latitude == null ? 'No map pin' : 'On the map'} · {o.rounds} round{o.rounds === 1 ? '' : 's'}</div></span></button>

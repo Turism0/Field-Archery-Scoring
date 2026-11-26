@@ -36,6 +36,11 @@ data class MapLocation(
     /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
     val otherArchers: Int = 0,
     val otherRounds: Int = 0,
+    /**
+     * 3.2.31 (Pete): someone else's private location, only ever sent to the Owner: on the map in its own colour and
+     * view-only; never offered for a round or kept in the phone's copy of locations.
+     */
+    val othersPrivate: Boolean = false,
 ) {
     val hasPin: Boolean get() = latitude != null && longitude != null
 
@@ -194,6 +199,7 @@ class LocationPageRepository(
                 canDelete = location.optBoolean("canDelete"),
                 roundsHere = location.optInt("roundsHere"),
                 canChangePrivacy = location.optBoolean("canChangePrivacy"),
+                othersPrivate = location.optBoolean("othersPrivate"),   // 3.2.31: the Owner looking
                 otherArchers = location.optInt("otherArchers"),
                 otherRounds = location.optInt("otherRounds"),
             ),
@@ -256,6 +262,7 @@ private fun JSONObject.toMapLocation() = MapLocation(
     isPrivate = optBoolean("isPrivate"),
     myRounds = optInt("myRounds"),
     rounds = optInt("rounds"),
+    othersPrivate = optBoolean("othersPrivate"),
 )
 
 private fun JSONObject.toRoundSummary(): FriendRoundSummary {

@@ -142,13 +142,13 @@ fun AdminLocationsScreen(
                             }
                         }
                         items(l.value, key = { it.id }) { loc ->
-                            // Other people's private locations (Owner only): shown so you know they exist, can't be opened.
-                            LocationCard(loc, onClick = if (loc.hidden) null else ({ selected = loc }))
+                            // Other people's private locations (Owner only): view-only (3.2.31: names and positions shown).
+                            LocationCard(loc, onClick = if (loc.hidden || loc.othersPrivate) null else ({ selected = loc }))
                         }
-                        if (l.value.any { it.hidden }) {
+                        if (l.value.any { it.hidden || it.othersPrivate }) {
                             item(key = "hiddenNote") {
                                 Text(
-                                    "Private locations belong to the archer who named them: their names and positions are hidden. " +
+                                    "Other archers' private locations are shown to you as the Owner only, and can't be changed here. " +
                                         "They only appear under Possible duplicates if they clash with a public location.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -210,7 +210,7 @@ fun LocationSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Private", style = MaterialTheme.typography.bodyLarge)
-                        Text("Only you see it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Other archers can't see it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = private, onCheckedChange = { private = it }, enabled = !busy)
                 }
@@ -297,7 +297,7 @@ fun LocationSheet(
                 Column(Modifier.weight(1f)) {
                     Text("Private", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "Only you see it, e.g. your garden. Others shooting here won't be matched to it. Admins only see it if it clashes with a public location.",
+                        "Other archers can't see it and it isn't on the map, e.g. your garden. Others shooting here won't be matched to it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -143,7 +143,7 @@ public static class AccountDeletion
 
     private const string PrivacyHtml = $"""
         <h1>Field Archery Scoring – privacy policy</h1>
-        <p>Last updated 22 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
+        <p>Last updated 26 November 2026. Field Archery Scoring is an app for scoring field archery rounds. It is run by an
         individual, not a company, and is not connected with the National Field Archery Society (NFAS).
         Contact: <a href="mailto:{ContactEmail}">{ContactEmail}</a>.</p>
 
@@ -168,7 +168,10 @@ public static class AccountDeletion
         <p>Round notes and equipment are yours alone: friends who can see your rounds don't see them. Notes are free text, so please don't
         put other people's personal details in them.</p>
         <p>Friends you accept can see your finished rounds. Everyone's finished rounds at a public shoot location count towards
-        that location's stats, which show bow styles and classes but no names.</p>
+        that location's stats, which show bow styles and classes but no names. Shoot locations you make private aren't shown
+        to other archers.</p>
+        <p>The person who runs the app can access the data held on the server, only to run and look after the service (for
+        example fixing problems or tidying up duplicate shoot locations).</p>
 
         <h2>Location</h2>
         <p>When you start a round the app takes one position from your phone to find the shoot location. The position is only

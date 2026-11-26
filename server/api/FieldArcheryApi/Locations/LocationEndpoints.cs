@@ -260,8 +260,9 @@ public static class LocationEndpoints
     private sealed record PlaceRow(string Name, decimal? Latitude, bool IsPrivate, Guid? CreatedById);
 
     /// <summary>
-    /// Admin list (2.0.17): public locations and your own private ones. The Owner also sees that other people's private
-    /// locations exist (name and position hidden, "hidden": true) but can't change them; Admins don't see them at all.
+    /// Admin list (2.0.17): public locations and your own private ones. The Owner also sees other people's private locations
+    /// (3.2.31, Pete: with their names and positions, "othersPrivate": true; before, hidden) but can't change them; Admins
+    /// don't see them at all. "hidden" is kept (always false now) for older apps.
     /// </summary>
     private static async Task<IResult> AdminList(ClaimsPrincipal user, Db db, CancellationToken ct)
     {
@@ -284,15 +285,16 @@ public static class LocationEndpoints
         {
             locations = rows.Select(r =>
             {
-                var hidden = r.IsPrivate && !mineIds.Contains(r.LocationId);
+                var othersPrivate = r.IsPrivate && !mineIds.Contains(r.LocationId);   // only ever the Owner's list
                 return new
                 {
                     r.LocationId,
-                    name = hidden ? PrivateName : r.Name,
-                    latitude = hidden ? null : (double?)r.Latitude,
-                    longitude = hidden ? null : (double?)r.Longitude,
+                    name = r.Name,
+                    latitude = (double?)r.Latitude,
+                    longitude = (double?)r.Longitude,
                     createdUtc = DateTime.SpecifyKind(r.CreatedUtc, DateTimeKind.Utc), r.CreatedBy, r.Rounds, r.IsPrivate,
-                    hidden,
+                    hidden = false,
+                    othersPrivate,
                 };
             }),
         });

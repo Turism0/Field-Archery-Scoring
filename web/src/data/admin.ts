@@ -8,13 +8,15 @@ export interface AdminLocation {
   /** latitude / longitude null: a name-only location (3.0, no map pin), or someone's hidden private one. */
   id: string; name: string; latitude: number | null; longitude: number | null; createdUtc: string | null; createdBy: string | null
   rounds: number; isPrivate: boolean; hidden: boolean
+  /** 3.2.31 (Pete): someone else's private location (Owner only), name and position shown, view-only. */
+  othersPrivate: boolean
 }
 /** distanceMetres null when either has no map pin (3.0): paired on their names. */
 export interface DuplicatePair { a: AdminLocation; b: AdminLocation; distanceMetres: number | null; reasons: string[] }
 
 const toLoc = (l: any): AdminLocation => ({
   id: l.locationId, name: l.name, latitude: l.latitude ?? null, longitude: l.longitude ?? null, createdUtc: l.createdUtc ?? null,
-  createdBy: l.createdBy ?? null, rounds: l.rounds ?? 0, isPrivate: !!l.isPrivate, hidden: !!l.hidden,
+  createdBy: l.createdBy ?? null, rounds: l.rounds ?? 0, isPrivate: !!l.isPrivate, hidden: !!l.hidden, othersPrivate: !!l.othersPrivate,
 })
 
 export async function archers(): Promise<AdminArcher[]> {

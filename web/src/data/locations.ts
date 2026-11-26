@@ -116,7 +116,11 @@ export async function settlePending(roundId: string, use: PlaceMatch | null) {
 
 export interface NearbyLocation { id: string; name: string; distanceMetres: number }
 /** latitude / longitude null for a name-only location (3.0: no map pin, e.g. a Nationals years ago). */
-export interface MapLocation { id: string; name: string; latitude: number | null; longitude: number | null; isPrivate: boolean; myRounds: number; rounds: number }
+export interface MapLocation {
+  id: string; name: string; latitude: number | null; longitude: number | null; isPrivate: boolean; myRounds: number; rounds: number
+  /** 3.2.31 (Pete): someone else's private location (only ever sent to the Owner): on the map in its own colour, never offered or cached. */
+  othersPrivate?: boolean
+}
 /** A location on the map (it has a pin). */
 export type PinnedLocation = MapLocation & { latitude: number; longitude: number }
 export const hasPin = (l: MapLocation): l is PinnedLocation => l.latitude != null && l.longitude != null
@@ -281,7 +285,7 @@ export async function nameAt(roundId: string, name: string, lat: number, lon: nu
 // ---- map and location pages (straight from the server) ----
 
 const toMap = (l: any): MapLocation => ({ id: l.locationId, name: l.name, latitude: l.latitude ?? null, longitude: l.longitude ?? null,
-  isPrivate: !!l.isPrivate, myRounds: l.myRounds ?? 0, rounds: l.rounds ?? 0 })
+  isPrivate: !!l.isPrivate, myRounds: l.myRounds ?? 0, rounds: l.rounds ?? 0, othersPrivate: !!l.othersPrivate })
 
 /** The locations on the map (with a pin). */
 export async function mapLocations(): Promise<PinnedLocation[]> {
@@ -301,7 +305,8 @@ export async function namedLocations(): Promise<MapLocation[]> {
 /** Every location you can pick for a round, by name: on the map and name-only. */
 export async function knownLocations(): Promise<MapLocation[]> {
   const [pinned, named] = await Promise.all([mapLocations(), namedLocations()])
-  return [...pinned, ...named].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
+  // 3.2.31: others' private locations (the Owner's map only) are never offered for a round or kept in this device's copy.
+  return [...pinned.filter(l => !l.othersPrivate), ...named].sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }))
 }
 
 /** "Name (private)", "Name (no map pin)" for a pick list. */

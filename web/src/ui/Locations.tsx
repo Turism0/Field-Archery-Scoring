@@ -164,7 +164,7 @@ function MatchRow({ m, busy, onUse }: { m: PlaceMatch; busy: boolean; onUse: () 
 function PrivateSwitch({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <label class="row" style="flex-wrap:nowrap;align-items:flex-start">
-      <span class="grow"><b>Private</b><div class="sub">Only you see it, e.g. your garden. Others shooting here won't be matched to it. Admins only see it if it clashes with a public location.</div></span>
+      <span class="grow"><b>Private</b><div class="sub">Other archers can't see it and it isn't on the map, e.g. your garden. Others shooting here won't be matched to it.</div></span>
       <input type="checkbox" style="width:auto;margin-top:4px" checked={value} onChange={e => onChange((e.target as HTMLInputElement).checked)} />
     </label>
   )
@@ -197,15 +197,16 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
 
   useEffect(() => {
     if (data.state !== 'ready' || !data.value || !box.current) return
-    const list = data.value
+    // 3.2.31: others' private locations (Owner only) can't be picked for a round.
+    const list = pick ? data.value.filter(l => !l.othersPrivate) : data.value
     const map = L.map(box.current, { zoomControl: true })
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map)
     const style = getComputedStyle(document.documentElement)
     const shot = style.getPropertyValue('--primary').trim() || '#3a6a45'
     for (const l of list) {
-      const m = L.circleMarker([l.latitude, l.longitude], { radius: 9, color: '#fff', weight: 2, fillColor: l.myRounds > 0 ? shot : '#8a8a8a', fillOpacity: 1 }).addTo(map)
+      const m = L.circleMarker([l.latitude, l.longitude], { radius: 9, color: '#fff', weight: 2, fillColor: l.othersPrivate ? OTHERS_PRIVATE : l.myRounds > 0 ? shot : '#8a8a8a', fillOpacity: 1 }).addTo(map)
       const div = document.createElement('div')
-      const b = document.createElement('b'); b.textContent = l.name + (l.isPrivate ? ' (private)' : ''); div.append(b)
+      const b = document.createElement('b'); b.textContent = l.name + (l.othersPrivate ? " (someone's private location)" : l.isPrivate ? ' (private)' : ''); div.append(b)
       const p = document.createElement('div')
       p.textContent = (l.myRounds > 0 ? `You: ${l.myRounds} round${l.myRounds === 1 ? '' : 's'}` : 'Not shot here yet') + (l.isPrivate ? '' : ` · everyone: ${l.rounds}`)
       div.append(p)
@@ -266,8 +267,9 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
         <Loading load={data} retry={retry}>{() => <>
           <div style="position:relative"><div ref={box} class="map" />
             {haveMe && <button class="tonal" style="position:absolute;right:10px;top:10px;z-index:500" onClick={() => meRef.current?.go()}>◎ Me</button>}</div>
-          <div class="row sub"><span class="legend" style="background:var(--primary)" /> Shot here ({list.filter(l => l.myRounds > 0).length})
-            <span class="legend" style="background:#8a8a8a" /> Not yet ({list.filter(l => !l.myRounds).length})</div>
+          <div class="row sub"><span class="legend" style="background:var(--primary)" /> Shot here ({list.filter(l => l.myRounds > 0 && !l.othersPrivate).length})
+            <span class="legend" style="background:#8a8a8a" /> Not yet ({list.filter(l => !l.myRounds && !l.othersPrivate).length})
+            {!pick && list.some(l => l.othersPrivate) && <><span class="legend" style={`background:${OTHERS_PRIVATE}`} /> Others' private ({list.filter(l => l.othersPrivate).length})</>}</div>
           {!place && !!named?.length && <>
             <h3 class="section">No map pin ({named.length})</h3>
             <div class="sub">Shoots known by name only, e.g. championships from years ago.{pick ? ' Tap one to use it for this round.' : ''}</div>
@@ -327,7 +329,7 @@ export function LocationPageScreen({ id }: { id: string }) {
         const types = [...new Set(shown.map(b => b.roundType))]
         return <div class="split"><div>
           {p.location.canChangePrivacy ? <PrivacyCard page={p} id={id} onChanged={retry} />
-            : p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 Private: only you see it</span>}
+            : p.location.isPrivate && <span class="chip" style="align-self:flex-start">🔒 {p.location.othersPrivate ? "Someone else's private location: other archers can't see it" : "Private: other archers can't see it"}</span>}
           {!loc.hasPin(p.location) && <Card title="No map pin" sub="This shoot is known by its name only, so it isn't on the map.">
             {p.location.canPlace && <button class="tonal" style="align-self:flex-start" onClick={() => go(`/map?place=${p.location.id}`)}>📍 Put it on the map</button>}
           </Card>}
@@ -407,8 +409,8 @@ function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: stri
     <div class="card low">
       <label class="row" style="flex-wrap:nowrap;align-items:flex-start">
         <span class="grow"><b>🔒 Private</b><div class="sub">{l.isPrivate
-          ? 'Only you see it. Turn off to share it: it goes on the map and other archers can be matched to it.'
-          : 'You named this location, so you can make it private: only you see it, e.g. your garden.'}</div></span>
+          ? 'Other archers can\'t see it. Turn off to share it: it goes on the map and other archers can be matched to it.'
+          : 'You named this location, so you can make it private: other archers won\'t see it, e.g. your garden.'}</div></span>
         <input type="checkbox" style="width:auto;margin-top:4px" checked={l.isPrivate} disabled={busy}
           onChange={e => { const v = (e.target as HTMLInputElement).checked; (e.target as HTMLInputElement).checked = l.isPrivate; toggle(v) }} />
       </label>
@@ -473,3 +475,6 @@ function BowStyleTable({ rows, model }: { rows: loc.BowStyleStats[]; model: Hand
     </div>
   )
 }
+
+/** 3.2.31: other archers' private locations on the Owner's map (purple, unlike the green / grey of the others). */
+const OTHERS_PRIVATE = '#7b4fa0'

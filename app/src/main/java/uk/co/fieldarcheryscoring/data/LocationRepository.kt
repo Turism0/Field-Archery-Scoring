@@ -126,7 +126,8 @@ class LocationRepository(
     suspend fun refreshCache() {
         val c = cache ?: return
         val token = accounts.account.value?.token ?: return
-        fun JSONArray.places() = (0 until length()).map { getJSONObject(it) }.map { o ->
+        // 3.2.31: others' private locations (the Owner's map only) are never matched or offered, so not kept here.
+        fun JSONArray.places() = (0 until length()).map { getJSONObject(it) }.filter { !it.optBoolean("othersPrivate") }.map { o ->
             KnownPlace(o.getString("locationId"), o.getString("name"),
                 if (!o.has("latitude") || o.isNull("latitude")) null else o.getDouble("latitude"),
                 if (!o.has("longitude") || o.isNull("longitude")) null else o.getDouble("longitude"),

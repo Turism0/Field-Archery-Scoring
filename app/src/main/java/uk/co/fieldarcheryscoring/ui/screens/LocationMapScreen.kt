@@ -178,7 +178,8 @@ fun LocationMapScreen(
                     }
                     is Load.Ready -> {
                         LocationMap(
-                            l.value, onOpenLocation, pickMode,
+                            // 3.2.31: others' private locations (Owner only) can't be picked for a round.
+                            if (pickMode) l.value.filter { !it.othersPrivate } else l.value, onOpenLocation, pickMode,
                             onMapTap = if ((pickMode && roundId != null) || placing || placeId != null) { lat, lon -> newAt = lat to lon } else null,
                         )
                         if (placeId != null) {
@@ -198,7 +199,12 @@ fun LocationMapScreen(
                                 modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).padding(bottom = if (pickMode) 0.dp else 72.dp),
                             ) { Text("No map pin (${named.size})") }
                         }
-                        Legend(Modifier.align(Alignment.BottomStart).padding(12.dp), shot = l.value.count { it.myRounds > 0 }, total = l.value.size)
+                        Legend(
+                            Modifier.align(Alignment.BottomStart).padding(12.dp),
+                            shot = l.value.count { it.myRounds > 0 && !it.othersPrivate },
+                            total = l.value.count { !it.othersPrivate },
+                            othersPrivate = if (pickMode) 0 else l.value.count { it.othersPrivate },
+                        )
                         if (placing) {
                             Surface(
                                 Modifier.align(Alignment.TopCenter).padding(12.dp),
@@ -336,7 +342,7 @@ private fun NewLocationDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Private", style = MaterialTheme.typography.bodyLarge)
-                        Text("Only you see it", style = MaterialTheme.typography.bodySmall,
+                        Text("Other archers can't see it", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(checked = private, onCheckedChange = { private = it })
@@ -383,6 +389,7 @@ private fun LocationMap(
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val shotColour = MaterialTheme.colorScheme.primary.toArgb()
     val otherColour = Color(0xFF8A8A8A).toArgb()
+    val othersPrivateColour = OthersPrivateColour.toArgb()
     val fitted = remember { booleanArrayOf(false) }   // zoom to the pins once, not on every update
     val mapView = remember {
         MapView(context).apply {
@@ -467,8 +474,16 @@ private fun LocationMap(
                 val marker = Marker(map).apply {
                     position = GeoPoint(lat, lon)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    icon = tinted(icon, if (loc.myRounds > 0) shotColour else otherColour)
-                    title = loc.name + if (loc.isPrivate) " (private)" else ""
+                    icon = tinted(icon, when {
+                        loc.othersPrivate -> othersPrivateColour
+                        loc.myRounds > 0 -> shotColour
+                        else -> otherColour
+                    })
+                    title = loc.name + when {
+                        loc.othersPrivate -> " (someone's private location)"
+                        loc.isPrivate -> " (private)"
+                        else -> ""
+                    }
                     snippet = buildString {
                         append(if (loc.myRounds > 0) "You: ${loc.myRounds} round${if (loc.myRounds == 1) "" else "s"}" else "Not shot here yet")
                         if (!loc.isPrivate) append(" · everyone: ${loc.rounds}")
@@ -531,11 +546,13 @@ private fun tinted(pin: Drawable?, colour: Int): Drawable? =
     pin?.constantState?.newDrawable()?.mutate()?.let { d -> DrawableCompat.wrap(d).also { DrawableCompat.setTint(it, colour) } }
 
 @Composable
-private fun Legend(modifier: Modifier, shot: Int, total: Int) {
+private fun Legend(modifier: Modifier, shot: Int, total: Int, othersPrivate: Int = 0) {
     Surface(modifier = modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             LegendRow(MaterialTheme.colorScheme.primary, "Shot here ($shot)")
             LegendRow(Color(0xFF8A8A8A), "Not yet (${total - shot})")
+            // 3.2.31 (Pete): the Owner sees other archers' private locations in their own colour.
+            if (othersPrivate > 0) LegendRow(OthersPrivateColour, "Others' private ($othersPrivate)")
             Text("© OpenStreetMap contributors", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -549,3 +566,6 @@ private fun LegendRow(colour: Color, text: String) {
         Text(text, style = MaterialTheme.typography.bodySmall)
     }
 }
+
+/** 3.2.31: other archers' private locations on the Owner's map (purple, unlike the green / grey of the others). */
+private val OthersPrivateColour = Color(0xFF7B4FA0)

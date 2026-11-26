@@ -175,8 +175,13 @@ private fun StatsFilterBar(
 private fun BestsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
     val bests by vm.bests.collectAsStateWithLifecycle()
     val averages by vm.bestAverages.collectAsStateWithLifecycle()
-    // One card per round type and bow style.
-    val groups = bests.groupBy { it.key.type to it.key.bowStyle }
+    // One card per round type and bow style. 3.2.31 (Pete): only the best 40- and 36-target totals (40 first), besides
+    // the best average (a card can have just the average).
+    val shownBests = bests.filter { it.key.targetCount == 40 || it.key.targetCount == 36 }.sortedByDescending { it.key.targetCount }
+    val keys = (bests.map { it.key.type to it.key.bowStyle } + averages.map { it.type to it.bowStyle }).distinct()
+        .sortedWith(compareBy({ it.first.ordinal }, { it.second.ordinal }))
+    val groups = keys.associateWith { k -> shownBests.filter { it.key.type == k.first && it.key.bowStyle == k.second } }
+        .filter { (k, l) -> l.isNotEmpty() || averages.any { it.type == k.first && it.bowStyle == k.second } }
     val handicaps by vm.handicaps.collectAsStateWithLifecycle()
     val history by vm.handicapHistory.collectAsStateWithLifecycle()
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -184,7 +189,7 @@ private fun BestsTab(vm: StatsViewModel, onOpenRound: (String) -> Unit) {
         item(key = "handicap") { HandicapSummary(handicaps, history) }
         item(key = "about") {
             Text(
-                "Best totals for each round type, bow style and number of targets in these dates, from fully scored rounds. " +
+                "Best average, and best 40- and 36-target totals, for each round type and bow style in these dates, from fully scored rounds. " +
                     "Best average counts rounds of ${PersonalStats.MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -215,7 +220,7 @@ private fun BestsCard(type: RoundType, bow: BowStyle, list: List<PersonalBest>, 
                 }
                 Text(one(a.average), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
-            HorizontalDivider()
+            if (list.isNotEmpty()) HorizontalDivider()
         }
         list.forEach { pb ->
             Row(

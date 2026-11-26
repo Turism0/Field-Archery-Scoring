@@ -27,8 +27,10 @@ data class AdminLocation(
     val createdBy: String?,
     val rounds: Int,
     val isPrivate: Boolean = false,
-    /** Someone else's private location the Owner can see exists (name and position hidden, can't be changed). */
+    /** Someone else's private location the Owner can see exists (name and position hidden; servers before 3.2.31). */
     val hidden: Boolean = false,
+    /** 3.2.31 (Pete): someone else's private location (Owner only), name and position shown, view-only. */
+    val othersPrivate: Boolean = false,
 )
 
 /** Two locations that might be the same place. [reasons]: nearby, same_name, similar_name. */
@@ -83,6 +85,7 @@ class AdminRepository(private val api: FieldArcheryApi, private val accounts: Ac
                 rounds = l.getInt("rounds"),
                 isPrivate = l.optBoolean("isPrivate"),
                 hidden = l.optBoolean("hidden"),
+                othersPrivate = l.optBoolean("othersPrivate"),
             )
         }
     }

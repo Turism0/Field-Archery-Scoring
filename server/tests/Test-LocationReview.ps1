@@ -109,14 +109,19 @@ try {
     $r = Call POST '/api/locations/resolve' @{ ids = @($aHome) } -Token $admin
     Expect "Admins see 'Private location' too" (@($r.Body.locations)[0].name -eq 'Private location') "($(@($r.Body.locations)[0].name))"
     $r = Call GET '/api/locations/map' -Token $admin
-    Expect "it isn't on an Admin's map" (@($r.Body.locations | Where-Object locationId -eq $aHome).Count -eq 0)
+    $onMap = @($r.Body.locations | Where-Object locationId -eq $aHome)[0]
     $r = Call GET "/api/locations/$aHome/page" -Token $admin
-    Expect "an Admin can't open its page" ($r.Status -eq 404) "($($r.Status))"
+    $page = $r
     $r = Call GET '/api/admin/locations' -Token $admin
     $row = @($r.Body.locations | Where-Object locationId -eq $aHome)[0]
     if ($isOwner) {
-        Expect 'the Owner sees it exists in the admin list, name and position hidden' ($row -and $row.hidden -and $row.name -eq 'Private location' -and $null -eq $row.latitude) "($($row.name) $($row.latitude))"
+        # 3.2.31 (Pete): the Owner sees everyone's private locations (marked othersPrivate), view-only.
+        Expect "it's on the Owner's map, marked othersPrivate" ($onMap -and $onMap.othersPrivate -eq $true -and $onMap.name -eq "zz_test Home $tag") "($($onMap | ConvertTo-Json -Compress))"
+        Expect 'the Owner can open its page, view-only' ($page.Status -eq 200 -and $page.Body.location.othersPrivate -eq $true -and -not $page.Body.location.canDelete -and -not $page.Body.location.canMove -and -not $page.Body.location.canChangePrivacy) "($($page.Status) $($page.Body.location | ConvertTo-Json -Compress))"
+        Expect 'the Owner sees it in the admin list with its name and position' ($row -and -not $row.hidden -and $row.othersPrivate -and $row.name -eq "zz_test Home $tag" -and $null -ne $row.latitude) "($($row | ConvertTo-Json -Compress))"
     } else {
+        Expect "it isn't on an Admin's map" ($null -eq $onMap)
+        Expect "an Admin can't open its page" ($page.Status -eq 404) "($($page.Status))"
         Expect "an Admin doesn't see it in the admin list" ($null -eq $row)
     }
     $r = Call PUT "/api/admin/locations/$aHome" @{ name = "zz_test Renamed $tag" } -Token $admin

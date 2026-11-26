@@ -176,8 +176,8 @@ fun LocationPageScreen(
                                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                             Text("Private", style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                if (data.location.isPrivate) "Only you see it. Turn off to share it: it goes on the map and other archers can be matched to it."
-                                                else "You named this location, so you can make it private: only you see it, e.g. your garden.",
+                                                if (data.location.isPrivate) "Other archers can't see it. Turn off to share it: it goes on the map and other archers can be matched to it."
+                                                else "You named this location, so you can make it private: other archers won't see it, e.g. your garden.",
                                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Switch(checked = data.location.isPrivate, onCheckedChange = { vm.togglePrivate(it) }, enabled = !privacyBusy)
@@ -188,7 +188,7 @@ fun LocationPageScreen(
                             item(key = "private") {
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     PrivateBadge()
-                                    Text("Only you can see this location.", style = MaterialTheme.typography.bodySmall,
+                                    Text(if (data.location.othersPrivate) "Someone else's private location: other archers can't see it." else "Other archers can't see this location.", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }

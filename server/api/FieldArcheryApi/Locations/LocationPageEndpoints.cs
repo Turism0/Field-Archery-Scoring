@@ -10,6 +10,7 @@ namespace FieldArcheryApi.Locations;
 /// Shoot location map and location page (API 1.7.03). All calls need "Authorization: Bearer &lt;token&gt;".
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
 ///                                    public live locations, plus your own private ones (not name-only ones, API 3.0);
+///                                    3.2.31: the Owner also gets everyone's private ones, marked othersPrivate: true;
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
 ///   (2.0.05: friends and bowStyles get average36 / average40 = average per animal × 36 / 40;
 ///    rounds get animalCount, predatorPrey, fans.)
@@ -20,12 +21,12 @@ namespace FieldArcheryApi.Locations;
 ///   (API 3.0: location.latitude / longitude null for a name-only location; location.canPlace: you can put it on the map.)
 ///   (API 3.2.12: location.canChangePrivacy: you named it, so you can make it private or public with
 ///    PUT /api/locations/{id}/private; location.otherArchers / otherRounds: other archers' rounds here.)
-/// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it and
-/// Admins, and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
+/// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it (3.2.31: and the
+/// Owner), and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
 /// </summary>
 public static class LocationPageEndpoints
 {
-    private sealed record MapRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, int MyRounds, int Rounds);
+    private sealed record MapRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude, bool IsPrivate, int MyRounds, int Rounds, bool OthersPrivate);
 
     private sealed record Loc(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate, Guid? CreatedById);
 
@@ -65,19 +66,23 @@ public static class LocationPageEndpoints
                 WHERE LocationId IS NOT NULL AND Status = 'COMPLETED' AND IsDeleted = 0)
             SELECT l.LocationId, l.Name, l.Latitude, l.Longitude, l.IsPrivate,
                    (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId AND d.ArcherId = @me) AS MyRounds,
-                   (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId) AS Rounds
+                   (SELECT COUNT(*) FROM done d WHERE d.LocationId = l.LocationId) AS Rounds,
+                   CAST(CASE WHEN l.IsPrivate = 1 AND (l.CreatedById IS NULL OR l.CreatedById <> @me) THEN 1 ELSE 0 END AS bit) AS OthersPrivate
             FROM dbo.ShootLocation l
             WHERE l.MergedIntoId IS NULL
               AND l.Latitude IS NOT NULL   -- name-only locations (3.0) aren't on the map
-              AND (l.IsPrivate = 0 OR l.CreatedById = @me)
+              AND (l.IsPrivate = 0 OR l.CreatedById = @me OR @isOwner = 1)   -- 3.2.31: the Owner sees every private one
             ORDER BY l.Name;
-            """, new { me = user.ArcherId(), isAdmin = user.IsAdmin() }, cancellationToken: ct));
+            """, new { me = user.ArcherId(), isOwner = user.IsOwner() }, cancellationToken: ct));
         return Results.Ok(new
         {
             locations = rows.Select(r => new
             {
                 r.LocationId, r.Name, latitude = (double)r.Latitude, longitude = (double)r.Longitude,
                 r.IsPrivate, r.MyRounds, r.Rounds,
+                // 3.2.31 (Pete): someone else's private location (only ever sent to the Owner): shown on the map in its own
+                // colour, never used for matching rounds or kept in the apps' copy of locations.
+                r.OthersPrivate,
             }),
         });
     }
@@ -93,7 +98,8 @@ public static class LocationPageEndpoints
             "SELECT LocationId, Name, Latitude, Longitude, IsPrivate, CreatedById FROM dbo.ShootLocation WHERE LocationId = @id;",
             new { id = current.LocationId }, cancellationToken: ct));
         var mine = loc.CreatedById == me;
-        if (loc.IsPrivate && !mine) return NotFound();
+        // 3.2.31: the Owner can open anyone's private location (to look after location data); nobody else can.
+        if (loc.IsPrivate && !mine && !user.IsOwner()) return NotFound();
 
         var myRounds = await conn.QueryAsync<RoundRow>(new CommandDefinition($"""
             SELECT r.RoundId, r.ArcherId, CAST(r.ShootDate AS datetime2(3)) AS ShootDate, r.TargetCount, r.ArcherClass, r.AgeGroup,
@@ -217,11 +223,13 @@ public static class LocationPageEndpoints
                 // API 3.0: a name-only location can be put on the map by its creator or an Admin.
                 canPlace = loc.Latitude is null && (mine || user.IsAdmin()),
                 // API 3.2.14: Admins and the Owner can move a location that's on the map.
-                canMove = loc.Latitude is not null && user.IsAdmin(),
+                canMove = loc.Latitude is not null && user.IsAdmin() && (!loc.IsPrivate || mine),
                 canChangePrivacy = mine,
                 // API 3.2.16: the archer who named it, or the Owner, can delete it; roundsHere (everyone's, not deleted)
                 // is for the warning.
-                canDelete = mine || user.IsOwner(),
+                // 3.2.31: someone else's private location is view-only for the Owner on its page.
+                canDelete = mine || (user.IsOwner() && !loc.IsPrivate),
+                othersPrivate = loc.IsPrivate && !mine,
                 roundsHere,
                 otherArchers,
                 otherRounds,

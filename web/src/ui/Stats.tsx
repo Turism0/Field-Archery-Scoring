@@ -89,14 +89,16 @@ function FilterBar({ rounds, filter, onChange, kit }: { rounds: Round[]; filter:
 }
 
 function Bests({ rounds, all }: { rounds: Round[]; all: Round[] }) {
-  const list = bests(rounds)
+  // 3.2.31 (Pete): only the best 40- and 36-target totals (40 first), besides the best average.
+  const list = bests(rounds).filter(b => b.targetCount === 40 || b.targetCount === 36).sort((a, b) => b.targetCount - a.targetCount)
   const avgs = bestAverages(rounds)
   const groups = new Map<string, typeof list>()
+  for (const a of avgs) groups.set(`${a.type}|${a.bowStyle}`, [])
   for (const b of list) { const k = `${b.type}|${b.bowStyle}`; groups.set(k, [...(groups.get(k) ?? []), b]) }
   return <>
     {/* The handicap always uses your last 20 rounds, whatever the filters. */}
     <HandicapSummary rounds={all} />
-    <div class="sub">Best totals for each round type, bow style and number of targets in these dates, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
+    <div class="sub">Best average, and best 40- and 36-target totals, for each round type and bow style in these dates, from fully scored rounds. Best average counts rounds of {MIN_TARGETS_FOR_BEST_AVERAGE}+ targets.</div>
     {!groups.size && <p>No fully scored rounds match these filters.</p>}
     <div class="grid2">{[...groups.entries()].map(([k, l]) => {
       const [type, bow] = k.split('|') as [RoundType, string]
