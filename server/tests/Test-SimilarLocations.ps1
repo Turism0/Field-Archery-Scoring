@@ -8,7 +8,8 @@
     Naming a new location with checkSimilar: true is answered 409 similar_exists when a location you can use (public, or
     your own private) has the same name (anywhere), a similar name within 500 m (or either has no pin; 3.2.28), or is
     within 300 m. Without checkSimilar (older apps, or "it's a new
-    place"), it's made as before. 3.2.32: an archer's private location can be merged into a similar public one. Two throwaway accounts (zz_test_…) and test locations out in the North Sea, named
+    place"), it's made as before. 3.2.32: an archer's private location can be merged into a similar public one. 3.2.33: they're told about it
+    (/api/me similarLocations, page similarPublic) and can say it's a different place (not-same). Two throwaway accounts (zz_test_…) and test locations out in the North Sea, named
     "zzsim …" (not zz_test: that holds the word "test", which a real "Test Ground" counts as similar to).
     Every line should start with OK. Tidy up afterwards with server/sql/900_delete_test_accounts.sql.
 #>
@@ -96,6 +97,30 @@ Expect 'your own private location is' ($r.Status -eq 409 -and (Ids $r) -contains
 $r = Call POST '/api/locations' @{ name = "zzsim $(Word) Range"; latitude = $lat; longitude = $lon; checkSimilar = $true }
 Expect 'needs a sign-in' ($r.Status -eq 401) "($($r.Status))"
 
+# 3.2.33 (Pete): the archer is told when a similar public location exists for their private one, and can say it's a
+# different place.
+$r = Call GET '/api/me' -Token $Archer1.Token
+Expect '/api/me counts your private location with a similar public one (similarLocations)' ($r.Body.similarLocations -eq 1) "(got $($r.Body.similarLocations))"
+$r = Call GET '/api/me' -Token $Archer2.Token
+Expect '...and 0 for an archer with no private locations' ($r.Body.similarLocations -eq 0) "(got $($r.Body.similarLocations))"
+$r = Call GET "/api/locations/$garden/page" -Token $Archer1.Token
+Expect "the private location's page suggests the public Garden (similarPublic)" ($r.Status -eq 200 -and (@($r.Body.location.similarPublic | ForEach-Object { $_.locationId }) -contains $publicGarden)) "($($r.Status) $($r.Body.location | ConvertTo-Json -Compress -Depth 5))"
+$r = Call POST "/api/locations/$garden/not-same" @{ publicIds = @($publicGarden) } -Token $Archer2.Token
+Expect "someone else can't answer for your private location" ($r.Status -eq 404) "($($r.Status))"
+$r = Call POST "/api/locations/$garden/not-same" @{ publicIds = @() } -Token $Archer1.Token
+Expect 'not-same with no ids is refused' ($r.Status -eq 400) "($($r.Status))"
+$r = Call POST "/api/locations/$garden/not-same" @{ publicIds = @($publicGarden) } -Token $Archer1.Token
+Expect "you can say it's a different place" ($r.Status -eq 204) "($($r.Status) $($r.Body.message))"
+$r = Call GET '/api/me' -Token $Archer1.Token
+Expect '...then it no longer counts' ($r.Body.similarLocations -eq 0) "(got $($r.Body.similarLocations))"
+$r = Call GET "/api/locations/$garden/page" -Token $Archer1.Token
+Expect "...or shows on the page" (-not @($r.Body.location.similarPublic).Count) "($($r.Body.location | ConvertTo-Json -Compress -Depth 5))"
+$r = Call GET "/api/locations/$garden/merge-targets" -Token $Archer1.Token
+Expect '...but you can still merge into it' (@($r.Body.locations | ForEach-Object { $_.locationId }) -contains $publicGarden) "($($r.Body | ConvertTo-Json -Compress -Depth 5))"
+$r = Call POST '/api/locations' @{ name = "zzsim $secret Garden Club"; latitude = $lat - 0.2; longitude = $lon + 0.0002 } -Token $Archer2.Token
+$r = Call GET '/api/me' -Token $Archer1.Token
+Expect 'a new similar public location is counted again' ($r.Body.similarLocations -eq 1) "(got $($r.Body.similarLocations))"
+
 # 3.2.32 (Pete): the archer who named a private location can merge it into a similar public one.
 $r = Call GET "/api/locations/$garden/merge-targets" -Token $Archer2.Token
 Expect "someone else can't list merge targets for your private location" ($r.Status -eq 404) "($($r.Status))"
@@ -112,6 +137,8 @@ $r = Call POST '/api/locations/resolve' @{ ids = @($garden) } -Token $Archer1.To
 Expect 'the old id now leads to the public location' (@($r.Body.locations)[0].locationId -eq $publicGarden) "($($r.Body | ConvertTo-Json -Compress -Depth 5))"
 $r = Call GET "/api/locations/$garden/merge-targets" -Token $Archer1.Token
 Expect "once merged it can't be merged again" ($r.Status -eq 404) "($($r.Status))"
+$r = Call GET '/api/me' -Token $Archer1.Token
+Expect "once merged it's not counted (3.2.33)" ($r.Body.similarLocations -eq 0) "(got $($r.Body.similarLocations))"
 
 Write-Host ''
 if ($script:problems -eq 0) { Write-Host 'All similar location tests passed.' -ForegroundColor Green }

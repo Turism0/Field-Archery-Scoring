@@ -134,6 +134,7 @@ class AccountRepository(
             val me = api.me(result.token)
             store.setRole(AccountRole.fromCode(me.optString("role")))
             store.setDuplicateLocations(me.optInt("duplicateLocations"))
+            store.setSimilarLocations(me.optInt("similarLocations"))   // 3.2.33
         }
         onSignedIn()
     }

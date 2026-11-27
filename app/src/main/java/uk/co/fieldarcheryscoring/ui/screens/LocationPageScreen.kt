@@ -205,6 +205,17 @@ fun LocationPageScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
+                        // 3.2.33 (Pete): a similar public location exists for your private one: merge, or say it's different.
+                        if (data.location.similarPublic.isNotEmpty()) {
+                            item(key = "similar") {
+                                SimilarPublicCard(
+                                    data.location.similarPublic,
+                                    busy = privacyBusy,
+                                    onMerge = { m -> vm.pickMerge(m) },
+                                    onNotSame = vm::notSame,
+                                )
+                            }
+                        }
                         if (data.location.canChangePrivacy) {
                             // 3.2.12: you named it, so you can make it private or public.
                             item(key = "privacy") {
@@ -489,3 +500,42 @@ private fun RowScope.Cell(text: String, weight: Float = 1f, header: Boolean = fa
 }
 
 private fun typeName(type: String): String = RoundType.entries.firstOrNull { it.name == type }?.displayName ?: type
+
+/**
+ * 3.2.33 (Pete): on your private location's page when a public location looks like the same place: merge into it (the
+ * same confirm as "Merge into a public location"), or say it's a different place so it isn't suggested again.
+ */
+@Composable
+private fun SimilarPublicCard(
+    matches: List<uk.co.fieldarcheryscoring.domain.PlaceMatch>,
+    busy: Boolean,
+    onMerge: (uk.co.fieldarcheryscoring.domain.PlaceMatch) -> Unit,
+    onNotSame: () -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if (matches.size == 1) "There's a similar public location" else "There are similar public locations",
+                style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            Text(
+                "If your private location is really " + (if (matches.size == 1) "it" else "one of them") +
+                    ", merge it in: your rounds here move there. If not, say it's a different place and it won't be suggested again.",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            matches.forEach { m ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(m.name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                        Text(uk.co.fieldarcheryscoring.domain.LocationMatch.why(m), style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer)
+                    }
+                    TextButton(onClick = { onMerge(m) }, enabled = !busy) { Text("Merge") }
+                }
+            }
+            TextButton(onClick = onNotSame, enabled = !busy, modifier = Modifier.align(Alignment.End)) {
+                Text(if (matches.size == 1) "It's a different place" else "They're different places")
+            }
+        }
+    }
+}

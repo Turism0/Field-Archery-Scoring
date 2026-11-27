@@ -11,6 +11,7 @@ namespace FieldArcheryApi.Locations;
 ///   GET /api/locations/map         → { locations: [{ locationId, name, latitude, longitude, isPrivate, myRounds, rounds }] }
 ///                                    public live locations, plus your own private ones (not name-only ones, API 3.0);
 ///                                    3.2.31: the Owner also gets everyone's private ones, marked othersPrivate: true;
+///                                    3.2.33: checkSimilar: true on your private ones with a similar public one to look at;
 ///                                    myRounds = your finished rounds there, rounds = everyone's (public only)
 ///   (2.0.05: friends and bowStyles get average36 / average40 = average per animal × 36 / 40;
 ///    rounds get animalCount, predatorPrey, fans.)
@@ -21,6 +22,8 @@ namespace FieldArcheryApi.Locations;
 ///   (API 3.0: location.latitude / longitude null for a name-only location; location.canPlace: you can put it on the map.)
 ///   (API 3.2.12: location.canChangePrivacy: you named it, so you can make it private or public with
 ///    PUT /api/locations/{id}/private; location.otherArchers / otherRounds: other archers' rounds here.)
+///   (API 3.2.33: location.similarPublic: [{ locationId, name, isPrivate, distanceMetres, reasons }] – on your own private
+///    location, similar public ones you haven't said are a different place: the app suggests merging.)
 /// Only finished, not-deleted rounds count. A private location's page is only for the archer who named it (3.2.31: and the
 /// Owner), and has no friends or all-archer sections. Friends' rounds open with GET /api/friends/{id}/rounds/{roundId}.
 /// </summary>
@@ -74,6 +77,7 @@ public static class LocationPageEndpoints
               AND (l.IsPrivate = 0 OR l.CreatedById = @me OR @isOwner = 1)   -- 3.2.31: the Owner sees every private one
             ORDER BY l.Name;
             """, new { me = user.ArcherId(), isOwner = user.IsOwner() }, cancellationToken: ct));
+        var check = await LocationEndpoints.SimilarPublicIdsAsync(conn, user.ArcherId(), ct);   // 3.2.33
         return Results.Ok(new
         {
             locations = rows.Select(r => new
@@ -83,6 +87,8 @@ public static class LocationPageEndpoints
                 // 3.2.31 (Pete): someone else's private location (only ever sent to the Owner): shown on the map in its own
                 // colour, never used for matching rounds or kept in the apps' copy of locations.
                 r.OthersPrivate,
+                // 3.2.33 (Pete): your private location has a similar public one you haven't answered.
+                checkSimilar = check.Contains(r.LocationId),
             }),
         });
     }
@@ -215,6 +221,11 @@ public static class LocationPageEndpoints
             ? await LocationEndpoints.OthersHereAsync(conn, loc.LocationId, me, null, ct)
             : (0, 0);
 
+        // 3.2.33 (Pete): similar public locations to suggest merging into (less ones the archer said are a different place).
+        var similarPublic = mine && loc.IsPrivate
+            ? await LocationEndpoints.SuggestedMergesAsync(conn, loc.LocationId, me, ct)
+            : new List<LocationEndpoints.SimilarMatch>();
+
         return Results.Ok(new
         {
             location = new
@@ -227,6 +238,7 @@ public static class LocationPageEndpoints
                 canChangePrivacy = mine,
                 // 3.2.32: you named this private location, so you can merge it into a similar public one.
                 canMergeIntoPublic = mine && loc.IsPrivate,
+                similarPublic,
                 // API 3.2.16: the archer who named it, or the Owner, can delete it; roundsHere (everyone's, not deleted)
                 // is for the warning.
                 // 3.2.31: someone else's private location is view-only for the Owner on its page.

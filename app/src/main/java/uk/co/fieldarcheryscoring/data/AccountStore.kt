@@ -60,6 +60,15 @@ class AccountStore(context: Context) {
 
     fun setFriendRequests(count: Int) { _friendRequests.value = count }
 
+    private val _similarLocations = MutableStateFlow(0)
+    /**
+     * 3.2.33 (Pete): your private locations with a similar public one you haven't merged into or said is a different
+     * place (badge on the Locations tile). Not stored.
+     */
+    val similarLocations: StateFlow<Int> = _similarLocations.asStateFlow()
+
+    fun setSimilarLocations(count: Int) { _similarLocations.value = count }
+
     /**
      * Friends' usernames and ids from the last time the list was fetched, so friends can be added to a group round
      * with no signal. Usernames only (the server's own data), cleared on sign-out.
@@ -116,6 +125,7 @@ class AccountStore(context: Context) {
         _duplicateLocations.value = 0
         _roundOffers.value = 0
         _friendRequests.value = 0
+        _similarLocations.value = 0
         ended?.let { onCleared?.invoke(it) }
     }
 

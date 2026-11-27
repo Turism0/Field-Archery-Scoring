@@ -20,6 +20,7 @@ export function Dashboard() {
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
   const requests = useData(() => getKv<number>('friendRequestCount')) ?? 0   // 3.2.27
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
+  const similar = useData(() => getKv<number>('similarLocationCount')) ?? 0   // 3.2.33
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
   const [editing, setEditing] = useState<HomeLayout | null>(null)
   const layout = normalised(stored)
@@ -70,13 +71,15 @@ export function Dashboard() {
           </Card>
         </div>
 
-        {(offers > 0 && account) || (requests > 0 && account) || (duplicates > 0 && admin) || (account && noLocation.length > 0) || going.length > 0 ? <div class="grid2">
+        {(offers > 0 && account) || (requests > 0 && account) || (duplicates > 0 && admin) || (similar > 0 && account) || (account && noLocation.length > 0) || going.length > 0 ? <div class="grid2">
           {offers > 0 && account && <button class="tile hi" onClick={() => go('/friends')}><span class="dot">☺</span>
             <span class="grow"><b>{offers} round{offers === 1 ? '' : 's'} scored for you</b><span class="sub">Accept or decline them in Friends</span></span></button>}
           {requests > 0 && account && <button class="tile hi" onClick={() => go('/friends')}><span class="dot">☺</span>
             <span class="grow"><b>{requests} friend request{requests === 1 ? '' : 's'} waiting</b><span class="sub">Accept or decline them in Friends</span></span></button>}
           {duplicates > 0 && admin && <button class="tile warn" onClick={() => go('/admin/duplicates')}><span class="dot">⚠</span>
             <span class="grow"><b>{duplicates} possible duplicate location{duplicates === 1 ? '' : 's'}</b><span class="sub">Merge or mark as different places</span></span></button>}
+          {similar > 0 && account && <button class="tile warn" onClick={() => go('/map')}><span class="dot">📍</span>
+            <span class="grow"><b>{similar} private location{similar === 1 ? '' : 's'} with a similar public one</b><span class="sub">Merge it in, or say it's a different place</span></span></button>}
           {account && noLocation.length > 0 && <button class="tile" onClick={() => go(`/card/${noLocation[0].id}`)}><span class="dot">📍</span>
             <span class="grow"><b>{noLocation.length} round{noLocation.length === 1 ? '' : 's'} without a shoot location</b>
               <span class="sub">Latest: {ukDate(noLocation[0].shootDate)} · {targetsLine(noLocation[0])}. Open it and tap the location line.</span></span></button>}

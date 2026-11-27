@@ -105,6 +105,7 @@ fun HomeScreen(
     val duplicates by vm.duplicateLocations.collectAsStateWithLifecycle()
     val roundOffers by vm.roundOffers.collectAsStateWithLifecycle()
     val friendRequests by vm.friendRequests.collectAsStateWithLifecycle()
+    val similarLocations by vm.similarLocations.collectAsStateWithLifecycle()
     val online by vm.online.collectAsStateWithLifecycle()
     val server by vm.server.collectAsStateWithLifecycle()
     val updateRequired by vm.updateRequired.collectAsStateWithLifecycle()
@@ -241,8 +242,14 @@ fun HomeScreen(
                             HomeTileId.LOCATIONS -> HomeTile(
                                 icon = Icons.Filled.LocationOn,
                                 title = "Shoot locations",
-                                subtitle = if (signedIn) "Map of locations, your scorecards and stats at each" else "Sign in to see the map of shoot locations",
+                                subtitle = when {
+                                    !signedIn -> "Sign in to see the map of shoot locations"
+                                    // 3.2.33 (Pete): a private location of yours has a similar public one.
+                                    similarLocations > 0 -> "${plural(similarLocations, "private location")} with a similar public one to check"
+                                    else -> "Map of locations, your scorecards and stats at each"
+                                },
                                 onClick = onMap,
+                                badge = if (signedIn) similarLocations else 0,
                             )
                             HomeTileId.ADMIN -> HomeTile(
                                 icon = Icons.Filled.Settings,

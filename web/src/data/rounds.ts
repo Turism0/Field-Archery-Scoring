@@ -162,6 +162,7 @@ async function doSync(): Promise<SyncReport> {
     await setKv('duplicateLocations', me.duplicateLocations ?? 0)
     if (me.roundOffers != null) await setKv('offerCount', me.roundOffers)
     if (me.friendRequests != null) await setKv('friendRequestCount', me.friendRequests)   // 3.2.27: Friends badge
+    if (me.similarLocations != null) await setKv('similarLocationCount', me.similarLocations)   // 3.2.33: Locations badge
     // Shoot locations before uploading, so finished rounds go up with theirs.
     try { await createPending(); await lookUpPending(); await refreshNames() } catch (e) { if (e instanceof ApiError && (e.isNetwork || e.status === 401)) throw e }
     // 3.2.25: this device's copy of the locations, for no signal (best effort).

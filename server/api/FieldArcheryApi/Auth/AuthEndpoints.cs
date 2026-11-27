@@ -20,7 +20,7 @@ namespace FieldArcheryApi.Auth;
 ///                            count towards the same lock-out as wrong passwords.
 ///   POST /api/auth/recovery-code  (Bearer token) { password }    → { recoveryCode }: a new one (the old one stops working)
 ///   POST /api/auth/logout    (Bearer token)                      → 204, revokes this phone's token
-///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role, duplicateLocations, roundOffers, friendRequests (3.2.27) }
+///   GET  /api/me             (Bearer token)                      → { archerId, username, createdUtc, role, duplicateLocations, roundOffers, friendRequests (3.2.27), similarLocations (3.2.33) }
 /// Errors are JSON: { error: "code", message: "text for the user" }.
 /// </summary>
 public static partial class AuthEndpoints
@@ -274,7 +274,9 @@ public static partial class AuthEndpoints
         var roundOffers = await FieldArcheryApi.Offers.OfferEndpoints.CountForAsync(conn, me.ArcherId, ct);
         // 3.2.27: friend requests waiting for an answer (also on the Friends tile badge).
         var friendRequests = await FieldArcheryApi.Friends.FriendEndpoints.IncomingCountAsync(conn, me.ArcherId, ct);
-        return Results.Ok(new { me.ArcherId, me.Username, me.CreatedUtc, me.Role, me.HasRecoveryCode, duplicateLocations, roundOffers, friendRequests });
+        // 3.2.33: your private locations with a similar public one you haven't answered (badge on the Locations tile).
+        var similarLocations = (await FieldArcheryApi.Locations.LocationEndpoints.SimilarPublicIdsAsync(conn, me.ArcherId, ct)).Count;
+        return Results.Ok(new { me.ArcherId, me.Username, me.CreatedUtc, me.Role, me.HasRecoveryCode, duplicateLocations, roundOffers, friendRequests, similarLocations });
     }
 
     private static IResult? UsernameProblem(string username) =>

@@ -120,6 +120,8 @@ export interface MapLocation {
   id: string; name: string; latitude: number | null; longitude: number | null; isPrivate: boolean; myRounds: number; rounds: number
   /** 3.2.31 (Pete): someone else's private location (only ever sent to the Owner): on the map in its own colour, never offered or cached. */
   othersPrivate?: boolean
+  /** 3.2.33 (Pete): your private location has a similar public one you haven't merged into or said is a different place. */
+  checkSimilar?: boolean
 }
 /** A location on the map (it has a pin). */
 export type PinnedLocation = MapLocation & { latitude: number; longitude: number }
@@ -282,7 +284,22 @@ export async function mergeTargets(id: string): Promise<PlaceMatch[]> {
 export async function mergeInto(id: string, intoId: string): Promise<string> {
   const j = await authed(t => request('POST', `/api/locations/${id}/merge-into`, { intoId }, t))
   try { await refreshNames() } catch { /* the next sync does it */ }
+  await refreshSimilarCount()
   return j.name ?? ''
+}
+
+/** 3.2.33 (Pete): you say these public locations aren't the same place as your private one, so they stop being suggested. */
+export async function notSame(id: string, publicIds: string[]) {
+  await authed(t => request('POST', `/api/locations/${id}/not-same`, { publicIds }, t))
+  await refreshSimilarCount()
+}
+
+/** 3.2.33: the Locations badge straight away (every sync refreshes it too). */
+async function refreshSimilarCount() {
+  try {
+    const me = await authed(t => request('GET', '/api/me', undefined, t))
+    if (me.similarLocations != null) await setKv('similarLocationCount', me.similarLocations)
+  } catch { /* the next sync does it */ }
 }
 
 export async function deleteLocation(id: string) {
@@ -297,7 +314,7 @@ export async function nameAt(roundId: string, name: string, lat: number, lon: nu
 // ---- map and location pages (straight from the server) ----
 
 const toMap = (l: any): MapLocation => ({ id: l.locationId, name: l.name, latitude: l.latitude ?? null, longitude: l.longitude ?? null,
-  isPrivate: !!l.isPrivate, myRounds: l.myRounds ?? 0, rounds: l.rounds ?? 0, othersPrivate: !!l.othersPrivate })
+  isPrivate: !!l.isPrivate, myRounds: l.myRounds ?? 0, rounds: l.rounds ?? 0, othersPrivate: !!l.othersPrivate, checkSimilar: !!l.checkSimilar })
 
 /** The locations on the map (with a pin). */
 export async function mapLocations(): Promise<PinnedLocation[]> {
@@ -334,7 +351,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canDelete: boolean; roundsHere: number; canChangePrivacy: boolean; canMergeIntoPublic: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canDelete: boolean; roundsHere: number; canChangePrivacy: boolean; canMergeIntoPublic: boolean; similarPublic: PlaceMatch[]; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -351,6 +368,7 @@ export async function locationPage(id: string): Promise<LocationPage> {
   return {
     location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canMove: !!j.location.canMove, canDelete: !!j.location.canDelete, roundsHere: j.location.roundsHere ?? 0, canChangePrivacy: !!j.location.canChangePrivacy,
       canMergeIntoPublic: !!j.location.canMergeIntoPublic,
+      similarPublic: (j.location.similarPublic ?? []).map(matchFrom),
       otherArchers: j.location.otherArchers ?? 0, otherRounds: j.location.otherRounds ?? 0 },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({

@@ -250,6 +250,8 @@ class HomeViewModel(
     val roundOffers: StateFlow<Int> = accountStore.roundOffers
     /** Friend requests waiting for an answer (3.2.27: also on the Friends tile badge). */
     val friendRequests: StateFlow<Int> = accountStore.friendRequests
+    /** 3.2.33: private locations with a similar public one to look at (badge on the Locations tile). */
+    val similarLocations: StateFlow<Int> = accountStore.similarLocations
 
     init {
         // Guests' scores in group rounds are only kept for 30 days.
@@ -929,6 +931,28 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 cancelMerge()
+                _message.value = e.friendlyMessage()
+            } finally {
+                _privacyBusy.value = false
+            }
+        }
+    }
+
+    /**
+     * 3.2.33 (Pete): "It's a different place" on the banner: the similar public locations shown stop being suggested
+     * (on every phone and the web) – a new similar one would still be.
+     */
+    fun notSame() {
+        val shown = (_page.value as? Load.Ready)?.value?.location?.similarPublic.orEmpty()
+        if (shown.isEmpty()) return
+        viewModelScope.launch {
+            _privacyBusy.value = true
+            try {
+                repo.notSame(locationId, shown.map { it.id })
+                _message.value = if (shown.size == 1) "OK, ${shown[0].name} won't be suggested again." else "OK, they won't be suggested again."
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _message.value = e.friendlyMessage()
             } finally {
                 _privacyBusy.value = false

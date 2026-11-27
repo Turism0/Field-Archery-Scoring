@@ -102,6 +102,7 @@ public static class AccountDeletion
             UPDATE dbo.Round SET LocationId = NULL WHERE LocationId IN (SELECT LocationId FROM @loc);
             UPDATE dbo.ScoreGroup SET LocationId = NULL WHERE LocationId IN (SELECT LocationId FROM @loc);
             DELETE dbo.LocationPairApproval WHERE LocationLowId IN (SELECT LocationId FROM @loc) OR LocationHighId IN (SELECT LocationId FROM @loc);
+            DELETE dbo.LocationNotSame WHERE LocationId IN (SELECT LocationId FROM @loc);   -- 3.2.33
             UPDATE dbo.ShootLocation SET MergedIntoId = NULL WHERE MergedIntoId IN (SELECT LocationId FROM @loc);
             DELETE dbo.ShootLocation WHERE LocationId IN (SELECT LocationId FROM @loc);
             UPDATE dbo.ShootLocation SET CreatedById = NULL WHERE CreatedById = @id;

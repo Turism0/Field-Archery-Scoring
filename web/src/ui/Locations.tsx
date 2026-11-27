@@ -264,6 +264,14 @@ export function LocationMap({ pick, place, move = false }: { pick?: string; plac
         {place && <div class="banner">Tap the map where {placing1?.name ?? 'the shoot'} {move ? 'really ' : ''}is.</div>}
         {pick && <div class="banner">Tap a pin, then "Use this location". Or tap the map where the shoot is to name a new location.</div>}
         {placing && <div class="banner row between" style="flex-direction:row">Tap the map where the new location is.<button onClick={() => setPlacing(false)}>Cancel</button></div>}
+        {/* 3.2.33 (Pete): your private locations with a similar public one (the Locations badge). */}
+        {!pick && !place && !placing && (() => {
+          const toCheck = [...list, ...(named ?? [])].filter(l => l.checkSimilar)
+          return toCheck.length > 0 && <div class="banner col" style="align-items:stretch">
+            <span>{toCheck.length === 1 ? 'Your private location has a similar public one:' : `${toCheck.length} of your private locations have a similar public one:`}</span>
+            {toCheck.map(l => <button class="row between plain" onClick={() => go(`/location/${l.id}`)}><b>{l.name}</b><span class="sub">Check ›</span></button>)}
+          </div>
+        })()}
         <Loading load={data} retry={retry}>{() => <>
           <div style="position:relative"><div ref={box} class="map" />
             {haveMe && <button class="tonal" style="position:absolute;right:10px;top:10px;z-index:500" onClick={() => meRef.current?.go()}>◎ Me</button>}</div>
@@ -422,8 +430,25 @@ function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: stri
     if (warning) setAsk(warning)
     else change(v)
   }
+  // 3.2.33 (Pete): a similar public location exists: merge into it, or say it's a different place.
+  const notSame = async () => {
+    setBusy(true)
+    try {
+      await loc.notSame(id, l.similarPublic.map(m => m.id))
+      toast(l.similarPublic.length === 1 ? `OK, ${l.similarPublic[0].name} won't be suggested again.` : "OK, they won't be suggested again.")
+      onChanged()
+    } catch (e) { toast(errorText(e)) } finally { setBusy(false) }
+  }
   return (
     <div class="card low">
+      {l.similarPublic.length > 0 && <div class="banner col" style="align-items:stretch">
+        <b>{l.similarPublic.length === 1 ? "There's a similar public location" : 'There are similar public locations'}</b>
+        <div class="sub">If your private location is really {l.similarPublic.length === 1 ? 'it' : 'one of them'}, merge it in: your rounds here move there. If not, say it's a different place and it won't be suggested again.</div>
+        {l.similarPublic.map(m => <div class="row between" style="flex-wrap:nowrap">
+          <span><b>{m.name}</b><div class="sub">{whyMatch(m)}</div></span>
+          <button class="tonal" disabled={busy} onClick={() => setInto(m)}>Merge</button></div>)}
+        <button style="align-self:flex-end" disabled={busy} onClick={notSame}>{l.similarPublic.length === 1 ? "It's a different place" : "They're different places"}</button>
+      </div>}
       <label class="row" style="flex-wrap:nowrap;align-items:flex-start">
         <span class="grow"><b>🔒 Private</b><div class="sub">{l.isPrivate
           ? 'Other archers can\'t see it. Turn off to share it: it goes on the map and other archers can be matched to it.'

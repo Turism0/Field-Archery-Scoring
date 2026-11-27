@@ -62,6 +62,7 @@ class RoundSyncer(
             accounts.setDuplicateLocations(me.optInt("duplicateLocations"))
             accounts.setRoundOffers(me.optInt("roundOffers"))
             accounts.setFriendRequests(me.optInt("friendRequests"))   // 3.2.27
+            accounts.setSimilarLocations(me.optInt("similarLocations"))   // 3.2.33
             // Shoot locations before uploading, so finished rounds go up with theirs.
             try {
                 locations.createPending()   // 3.2.25: locations named with no signal

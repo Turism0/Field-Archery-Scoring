@@ -4,6 +4,14 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.33
+
+- **3.2.33 (app, web app and API; SQL 020, schema 16): you're told when a public location looks like your private one (Pete).**
+  - If someone makes a public location that's the same or similar to one of your private ones (the same name anywhere, a similar name within 500 m or with no pin, or anything within 300 m), the **Shoot locations** tile on Home gets a red number (like the Friends tile) and says "1 private location with a similar public one to check". The map shows a note at the top with a **Check** button (a list if there's more than one); the web app's dashboard has a tile for it.
+  - Your private location's page shows **There's a similar public location**, with **Merge** (the 3.2.32 merge, straight to the confirm) or **It's a different place**. A different place is remembered on the server (every phone and the web) and stops it being suggested; a new similar public location is still suggested. **Merge into a public location** still offers it.
+  - API: `/api/me` `similarLocations`; the map and name-only lists mark them `checkSimilar`; the page has `location.similarPublic`; `POST /api/locations/{id}/not-same { publicIds }` (only the archer who named it). SQL `020_location_not_same.sql` (table LocationNotSame; schema 16) must be run before the API is published.
+  - Test-SimilarLocations: the count, the page suggestion, not-same (someone else can't; then it's not counted or shown but can still be merged), a new similar public location counted again, and nothing counted once merged.
+
 ## Version 3.2.32
 
 - **3.2.32 (app, web app and API; no SQL): merge your private location into a similar public one (Pete).**

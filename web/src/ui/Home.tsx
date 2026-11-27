@@ -32,6 +32,7 @@ export function Home() {
   const offers = useData(() => getKv<number>('offerCount')) ?? 0
   const requests = useData(() => getKv<number>('friendRequestCount')) ?? 0   // 3.2.27
   const duplicates = useData(() => getKv<number>('duplicateLocations')) ?? 0
+  const similar = useData(() => getKv<number>('similarLocationCount')) ?? 0   // 3.2.33
   const stored = useData(() => getKv<HomeLayout>('homeLayout'))
   const [online, server] = useOnline()
   const [syncing, setSyncing] = useState(false)
@@ -65,7 +66,10 @@ export function Home() {
           : requests > 0 && offers > 0 ? `${plural(requests, 'friend request')} and ${plural(offers, 'round')} scored for you waiting`
           : requests > 0 ? `${plural(requests, 'friend request')} waiting`
           : offers > 0 ? `${offers} round${offers === 1 ? '' : 's'} scored for you to accept` : "Friends' scorecards and stats, requests"} onClick={() => go('/friends')} />
-      case 'LOCATIONS': return <Tile icon="📍" title="Shoot locations" sub={signedIn ? 'Map of locations, your scorecards and stats at each' : 'Sign in to see the map of shoot locations'} onClick={() => go('/map')} />
+      case 'LOCATIONS': return <Tile icon="📍" title="Shoot locations" badge={signedIn ? similar : 0}
+        sub={!signedIn ? 'Sign in to see the map of shoot locations'
+          : similar > 0 ? `${plural(similar, 'private location')} with a similar public one to check`
+          : 'Map of locations, your scorecards and stats at each'} onClick={() => go('/map')} />
       case 'ADMIN': return <Tile icon="⚙" title="Admin" badge={duplicates}
         sub={duplicates > 0 ? `${duplicates} possible duplicate location${duplicates === 1 ? '' : 's'} to check` : account?.role === 'OWNER' ? 'Accounts, admins and shoot locations' : 'Accounts and shoot locations'} onClick={() => go('/admin')} />
     }

@@ -121,6 +121,8 @@ fun LocationMapScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val named by vm.named.collectAsStateWithLifecycle()
     var showNamed by remember { mutableStateOf(false) }
+    /** 3.2.33: the list of your private locations with a similar public one, when there's more than one. */
+    var showCheck by remember { mutableStateOf(false) }
     var newAt by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     /** "New location" tapped: the next tap on the map is where it goes. */
     var placing by remember { mutableStateOf(false) }
@@ -205,6 +207,43 @@ fun LocationMapScreen(
                             total = l.value.count { !it.othersPrivate },
                             othersPrivate = if (pickMode) 0 else l.value.count { it.othersPrivate },
                         )
+                        // 3.2.33 (Pete): your private locations that have a similar public one (the Locations tile badge).
+                        val toCheck = (l.value + named).filter { it.checkSimilar }.distinctBy { it.id }
+                        if (toCheck.isNotEmpty() && !pickMode && !placing && placeId == null) {
+                            Surface(
+                                Modifier.align(Alignment.TopCenter).padding(12.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                shadowElevation = 2.dp,
+                            ) {
+                                Row(Modifier.padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        if (toCheck.size == 1) "Your private location ${toCheck[0].name} has a similar public one."
+                                        else "${toCheck.size} of your private locations have a similar public one.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    TextButton(onClick = { if (toCheck.size == 1) onOpenLocation(toCheck[0]) else showCheck = true }) { Text("Check") }
+                                }
+                            }
+                        }
+                        if (showCheck) {
+                            ModalBottomSheet(onDismissRequest = { showCheck = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+                                Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Similar public locations", style = MaterialTheme.typography.headlineSmall)
+                                    Text("These private locations of yours have a public location that looks like the same place. Open one to merge it, or say it's a different place.",
+                                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    toCheck.forEach { loc ->
+                                        ListItem(
+                                            headlineContent = { Text(loc.name) },
+                                            modifier = Modifier.clickable { showCheck = false; onOpenLocation(loc) },
+                                        )
+                                        HorizontalDivider()
+                                    }
+                                }
+                            }
+                        }
                         if (placing) {
                             Surface(
                                 Modifier.align(Alignment.TopCenter).padding(12.dp),

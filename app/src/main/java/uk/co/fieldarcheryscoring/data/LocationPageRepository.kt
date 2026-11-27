@@ -35,6 +35,12 @@ data class MapLocation(
     val canChangePrivacy: Boolean = false,
     /** On a location page (3.2.32): your private location, so you can merge it into a similar public one. */
     val canMergeIntoPublic: Boolean = false,
+    /**
+     * 3.2.33 (Pete): your private location has a similar public one you haven't merged into or said is a different place
+     * (map and name-only list); on its page, [similarPublic] are those public locations.
+     */
+    val checkSimilar: Boolean = false,
+    val similarPublic: List<uk.co.fieldarcheryscoring.domain.PlaceMatch> = emptyList(),
     /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
     val otherArchers: Int = 0,
     val otherRounds: Int = 0,
@@ -187,7 +193,20 @@ class LocationPageRepository(
     suspend fun mergeInto(locationId: String, intoId: String): String {
         val name = call { token -> api.mergeLocationInto(token, locationId, intoId).optString("name") }
         changed()
+        refreshSimilarCount()
         return name
+    }
+
+    /** 3.2.33 (Pete): you say [publicIds] aren't the same place as your private location, so they stop being suggested. */
+    suspend fun notSame(locationId: String, publicIds: List<String>) {
+        call { token -> api.locationNotSame(token, locationId, publicIds) }
+        changed()
+        refreshSimilarCount()
+    }
+
+    /** 3.2.33: the Locations tile badge, straight away (it's refreshed on every sync too). */
+    private suspend fun refreshSimilarCount() {
+        runCatching { call { token -> api.me(token) } }.getOrNull()?.let { accounts.setSimilarLocations(it.optInt("similarLocations")) }
     }
 
     /** Deletes a location (3.2.16): the archer who named it, or the Owner. Rounds there (anyone's) lose it. */
@@ -215,6 +234,7 @@ class LocationPageRepository(
                 canChangePrivacy = location.optBoolean("canChangePrivacy"),
                 othersPrivate = location.optBoolean("othersPrivate"),   // 3.2.31: the Owner looking
                 canMergeIntoPublic = location.optBoolean("canMergeIntoPublic"),
+                similarPublic = location.optJSONArray("similarPublic")?.objects().orEmpty().map { PendingPlaceJson.matchFrom(it) },
                 otherArchers = location.optInt("otherArchers"),
                 otherRounds = location.optInt("otherRounds"),
             ),
@@ -278,6 +298,7 @@ private fun JSONObject.toMapLocation() = MapLocation(
     myRounds = optInt("myRounds"),
     rounds = optInt("rounds"),
     othersPrivate = optBoolean("othersPrivate"),
+    checkSimilar = optBoolean("checkSimilar"),   // 3.2.33
 )
 
 private fun JSONObject.toRoundSummary(): FriendRoundSummary {

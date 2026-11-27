@@ -21,6 +21,9 @@ BEGIN
     IF OBJECT_ID(N'dbo.LocationPairApproval') IS NOT NULL
         DELETE dbo.LocationPairApproval
         WHERE LocationLowId IN (SELECT LocationId FROM @loc) OR LocationHighId IN (SELECT LocationId FROM @loc);
+    IF OBJECT_ID(N'dbo.LocationNotSame') IS NOT NULL
+        DELETE dbo.LocationNotSame
+        WHERE LocationId IN (SELECT LocationId FROM @loc) OR PublicLocationId IN (SELECT LocationId FROM @loc);
     UPDATE dbo.ShootLocation SET MergedIntoId = NULL WHERE MergedIntoId IN (SELECT LocationId FROM @loc);
     DELETE dbo.ShootLocation WHERE LocationId IN (SELECT LocationId FROM @loc);
     PRINT CONCAT(@@ROWCOUNT, ' test location(s) deleted.');

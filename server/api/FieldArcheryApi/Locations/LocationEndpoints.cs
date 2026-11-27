@@ -18,7 +18,7 @@ namespace FieldArcheryApi.Locations;
 ///                                distanceMetres, reasons: [same_name|similar_name|nearby] }] } when a location you can use has the
 ///                                same or a similar name or is within 300 m; send again without it to make the new one anyway)
 ///                                (API 3.0: { name, noPin: true, isPrivate? } makes a name-only location: no map pin)
-///   GET  /api/locations/named    (API 3.0) → { locations: [{ locationId, name, isPrivate, myRounds, rounds }] } name-only locations
+///   GET  /api/locations/named    (API 3.0) → { locations: [{ locationId, name, isPrivate, myRounds, rounds, checkSimilar (3.2.33) }] } name-only locations
 ///                                you can see (public, and your own private ones), by name: for choosing one for a round
 ///   PUT  /api/locations/{id}/position { latitude, longitude } (API 3.0) → { locationId, name, latitude, longitude }: puts a
 ///                                name-only location on the map; its creator or an Admin; 409 already_placed if it has a pin
@@ -47,6 +47,9 @@ namespace FieldArcheryApi.Locations;
 ///            500 m or with no pin, or within 300 m: the new-location suggestion rules). Only for the archer who named it.
 ///   (3.2.32) POST /api/locations/{id}/merge-into { intoId } → { locationId, name, roundsMoved }: merges your private location
 ///            into one of those public ones (its rounds move there). 404 not yours / not private; 409 not_similar.
+///   (3.2.33) POST /api/locations/{id}/not-same { publicIds: [...] } → 204: you say those public locations aren't the same
+///            place as your private location {id}, so its page and the Locations tile badge stop suggesting them. 404 not
+///            yours / not private. /api/me similarLocations = your private locations with a similar public one not answered.
 /// </summary>
 public static class LocationEndpoints
 {
@@ -67,6 +70,7 @@ public static class LocationEndpoints
     public sealed record PrivacyRequest(bool? IsPrivate, bool? Confirm = null);
     public sealed record ApproveRequest(Guid? AId, Guid? BId);
     public sealed record MergeRequest(Guid? IntoId);
+    public sealed record NotSameRequest(IReadOnlyList<Guid>? PublicIds);
 
     private sealed record LocationRow(Guid LocationId, string Name, decimal Latitude, decimal Longitude);
     private sealed record AdminRow(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude,
@@ -98,6 +102,7 @@ public static class LocationEndpoints
         locations.MapDelete("/{locationId:guid}", Delete);
         locations.MapGet("/{locationId:guid}/merge-targets", MergeTargets);   // 3.2.32
         locations.MapPost("/{locationId:guid}/merge-into", MergeInto);       // 3.2.32
+        locations.MapPost("/{locationId:guid}/not-same", NotSame);           // 3.2.33
 
         var admin = app.MapGroup("/api/admin/locations").RequireAuthorization();
         admin.MapGet("/", AdminList);
@@ -233,7 +238,11 @@ public static class LocationEndpoints
               AND (l.IsPrivate = 0 OR l.CreatedById = @me)
             ORDER BY l.Name;
             """, new { me = user.ArcherId() }, cancellationToken: ct));
-        return Results.Ok(new { locations = rows });
+        var check = await SimilarPublicIdsAsync(conn, user.ArcherId(), ct);   // 3.2.33
+        return Results.Ok(new
+        {
+            locations = rows.Select(r => new { r.LocationId, r.Name, r.IsPrivate, r.MyRounds, r.Rounds, checkSimilar = check.Contains(r.LocationId) }),
+        });
     }
 
     /// <summary>
@@ -449,6 +458,8 @@ public static class LocationEndpoints
             UPDATE dbo.RoundOffer SET LocationId = NULL, UpdatedUtc = SYSUTCDATETIME() WHERE LocationId IN (SELECT LocationId FROM @gone);
             DELETE dbo.LocationPairApproval
             WHERE LocationLowId IN (SELECT LocationId FROM @gone) OR LocationHighId IN (SELECT LocationId FROM @gone);
+            DELETE dbo.LocationNotSame
+            WHERE LocationId IN (SELECT LocationId FROM @gone) OR PublicLocationId IN (SELECT LocationId FROM @gone);
             UPDATE dbo.ShootLocation SET MergedIntoId = NULL WHERE LocationId IN (SELECT LocationId FROM @gone);
 
             UPDATE dbo.Round
@@ -529,6 +540,8 @@ public static class LocationEndpoints
             UPDATE dbo.ShootLocation SET MergedIntoId = @intoId WHERE MergedIntoId = @locationId;
             UPDATE dbo.ShootLocation SET MergedIntoId = @intoId, MergedUtc = SYSUTCDATETIME(), MergedById = @by
             WHERE LocationId = @locationId;
+            -- 3.2.33: "not the same place" answers for a private location merged away aren't needed any more.
+            DELETE dbo.LocationNotSame WHERE LocationId = @locationId;
             """, new { locationId, intoId, by }, tx, cancellationToken: ct));
         var name = await conn.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT Name FROM dbo.ShootLocation WHERE LocationId = @intoId;", new { intoId }, tx, cancellationToken: ct));
@@ -546,8 +559,7 @@ public static class LocationEndpoints
 
     /// <summary>3.2.32 (Pete): public locations similar to your private one (the new-location suggestion rules).</summary>
     private static async Task<List<SimilarMatch>> TargetsAsync(SqlConnection conn, Guid locationId, OwnPrivate own, Guid me, CancellationToken ct) =>
-        (await SimilarAsync(conn, own.Name, (double?)own.Latitude, (double?)own.Longitude, me, ct))
-            .Where(m => !m.isPrivate && m.locationId != locationId).ToList();
+        PublicMatches(locationId, own.Name, own.Latitude, own.Longitude, await UsableRowsAsync(conn, me, ct));
 
     private static async Task<IResult> MergeTargets(Guid locationId, ClaimsPrincipal user, Db db, CancellationToken ct)
     {
@@ -583,6 +595,29 @@ public static class LocationEndpoints
         var (moved, name) = await MoveAsync(conn, tx, locationId, intoId, me, ct);
         await tx.CommitAsync(ct);
         return Results.Ok(new { locationId = intoId, name, roundsMoved = moved });
+    }
+
+    /// <summary>
+    /// 3.2.33 (Pete): the archer says the public locations they were shown (publicIds) aren't the same place as their
+    /// private one, so they stop being suggested (on every phone and the web). Ids that aren't merge targets are ignored.
+    /// </summary>
+    private static async Task<IResult> NotSame(Guid locationId, NotSameRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        if (req.PublicIds is not { Count: > 0 } ids) return Error(400, "missing_ids", "Say which locations aren't the same place.");
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        if (await OwnPrivateAsync(conn, locationId, me, null, ct) is not { } own)
+            return Error(404, "no_such_location", "That isn't one of your private locations.");
+        var targets = AllPublicMatches(locationId, own.Name, own.Latitude, own.Longitude, await UsableRowsAsync(conn, me, ct))
+            .Select(m => m.locationId).ToHashSet();
+        foreach (var publicId in ids.Distinct().Where(targets.Contains))
+        {
+            await conn.ExecuteAsync(new CommandDefinition("""
+                IF NOT EXISTS (SELECT 1 FROM dbo.LocationNotSame WHERE LocationId = @locationId AND PublicLocationId = @publicId)
+                    INSERT dbo.LocationNotSame (LocationId, PublicLocationId) VALUES (@locationId, @publicId);
+                """, new { locationId, publicId }, cancellationToken: ct));
+        }
+        return Results.NoContent();
     }
 
     /// <summary>
@@ -654,21 +689,26 @@ public static class LocationEndpoints
 
     public sealed record SimilarMatch(Guid locationId, string name, bool isPrivate, int? distanceMetres, IReadOnlyList<string> reasons);
 
-    private sealed record SimilarRow(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate);
+    private sealed record SimilarRow(Guid LocationId, string Name, decimal? Latitude, decimal? Longitude, bool IsPrivate, Guid? CreatedById);
 
     /// <summary>
     /// 3.2.25: live locations you can use (public, and your own private ones) that might be the one being named: the same
     /// or a similar name (the Admin duplicate rules), or within [SimilarMetres] of its pin. Best matches first, at most 5.
     /// </summary>
-    public static async Task<List<SimilarMatch>> SimilarAsync(SqlConnection conn, string name, double? lat, double? lon, Guid me, CancellationToken ct)
-    {
-        var rows = await conn.QueryAsync<SimilarRow>(new CommandDefinition("""
-            SELECT LocationId, Name, Latitude, Longitude, IsPrivate
+    public static async Task<List<SimilarMatch>> SimilarAsync(SqlConnection conn, string name, double? lat, double? lon, Guid me, CancellationToken ct) =>
+        Best(Matches(name, lat, lon, await UsableRowsAsync(conn, me, ct)));
+
+    /// <summary>Live locations you can use: public ones, and your own private ones.</summary>
+    private static async Task<List<SimilarRow>> UsableRowsAsync(SqlConnection conn, Guid me, CancellationToken ct) =>
+        (await conn.QueryAsync<SimilarRow>(new CommandDefinition("""
+            SELECT LocationId, Name, Latitude, Longitude, IsPrivate, CreatedById
             FROM dbo.ShootLocation
             WHERE MergedIntoId IS NULL AND (IsPrivate = 0 OR CreatedById = @me);
-            """, new { me }, cancellationToken: ct));
+            """, new { me }, cancellationToken: ct))).ToList();
+
+    private static IEnumerable<SimilarMatch> Matches(string name, double? lat, double? lon, IEnumerable<SimilarRow> rows)
+    {
         var key = DuplicateFinder.Key(name);
-        var found = new List<SimilarMatch>();
         foreach (var r in rows)
         {
             int? metres = lat is { } la && lon is { } lo && r.Latitude is { } rLat && r.Longitude is { } rLon
@@ -678,9 +718,54 @@ public static class LocationEndpoints
             if (k == key) reasons.Add("same_name");
             else if (CloseName(k, key) && (metres is null || metres <= SimilarNameMetres)) reasons.Add("similar_name");
             if (metres <= SimilarMetres) reasons.Add("nearby");
-            if (reasons.Count > 0) found.Add(new SimilarMatch(r.LocationId, r.Name, r.IsPrivate, metres, reasons));
+            if (reasons.Count > 0) yield return new SimilarMatch(r.LocationId, r.Name, r.IsPrivate, metres, reasons);
         }
-        return found.OrderByDescending(m => m.reasons.Count).ThenBy(m => m.distanceMetres ?? int.MaxValue).ThenBy(m => m.name).Take(5).ToList();
+    }
+
+    private static List<SimilarMatch> Best(IEnumerable<SimilarMatch> found) =>
+        found.OrderByDescending(m => m.reasons.Count).ThenBy(m => m.distanceMetres ?? int.MaxValue).ThenBy(m => m.name).Take(5).ToList();
+
+    /// <summary>3.2.32: public locations similar to a private one (its own name and pin), best first, at most 5.</summary>
+    private static List<SimilarMatch> PublicMatches(Guid locationId, string name, decimal? lat, decimal? lon, IEnumerable<SimilarRow> rows) =>
+        Best(AllPublicMatches(locationId, name, lat, lon, rows));
+
+    private static IEnumerable<SimilarMatch> AllPublicMatches(Guid locationId, string name, decimal? lat, decimal? lon, IEnumerable<SimilarRow> rows) =>
+        Matches(name, (double?)lat, (double?)lon, rows.Where(r => !r.IsPrivate && r.LocationId != locationId));
+
+    /// <summary>3.2.33: the public locations an archer said aren't the same place as their private one.</summary>
+    private static async Task<HashSet<(Guid, Guid)>> NotSameAsync(SqlConnection conn, Guid me, CancellationToken ct) =>
+        (await conn.QueryAsync<(Guid, Guid)>(new CommandDefinition("""
+            SELECT d.LocationId, d.PublicLocationId FROM dbo.LocationNotSame d
+            JOIN dbo.ShootLocation l ON l.LocationId = d.LocationId
+            WHERE l.CreatedById = @me AND l.IsPrivate = 1 AND l.MergedIntoId IS NULL;
+            """, new { me }, cancellationToken: ct))).ToHashSet();
+
+    /// <summary>
+    /// 3.2.33 (Pete): similar public locations to tell the archer about on their private location's page – the merge
+    /// targets, less the ones they've said are a different place.
+    /// </summary>
+    public static async Task<List<SimilarMatch>> SuggestedMergesAsync(SqlConnection conn, Guid locationId, Guid me, CancellationToken ct)
+    {
+        if (await OwnPrivateAsync(conn, locationId, me, null, ct) is not { } own) return new List<SimilarMatch>();
+        var notSame = await NotSameAsync(conn, me, ct);
+        return Best(AllPublicMatches(locationId, own.Name, own.Latitude, own.Longitude, await UsableRowsAsync(conn, me, ct))
+            .Where(m => !notSame.Contains((locationId, m.locationId))));
+    }
+
+    /// <summary>
+    /// 3.2.33 (Pete): your private locations that have a similar public location you haven't merged into or said is a
+    /// different place. Their count is /api/me similarLocations (the red number on the Locations tile); the map and the
+    /// name-only list mark them checkSimilar.
+    /// </summary>
+    public static async Task<HashSet<Guid>> SimilarPublicIdsAsync(SqlConnection conn, Guid me, CancellationToken ct)
+    {
+        var rows = await UsableRowsAsync(conn, me, ct);
+        var mine = rows.Where(r => r.IsPrivate && r.CreatedById == me).ToList();
+        if (mine.Count == 0) return new HashSet<Guid>();
+        var notSame = await NotSameAsync(conn, me, ct);
+        return mine.Where(p => AllPublicMatches(p.LocationId, p.Name, p.Latitude, p.Longitude, rows)
+                .Any(m => !notSame.Contains((p.LocationId, m.locationId))))
+            .Select(p => p.LocationId).ToHashSet();
     }
 
     /// <summary>
