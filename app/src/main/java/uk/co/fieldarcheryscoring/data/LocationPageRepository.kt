@@ -33,6 +33,8 @@ data class MapLocation(
     val roundsHere: Int = 0,
     /** On a location page (3.2.12): you named it, so you can make it private or public. */
     val canChangePrivacy: Boolean = false,
+    /** On a location page (3.2.32): your private location, so you can merge it into a similar public one. */
+    val canMergeIntoPublic: Boolean = false,
     /** On a location page (3.2.12, yours and public): other archers' rounds here, for the warning before making it private. */
     val otherArchers: Int = 0,
     val otherRounds: Int = 0,
@@ -176,6 +178,18 @@ class LocationPageRepository(
         changed()
     }
 
+    /** 3.2.32 (Pete): public locations similar to your private one, to merge it into. */
+    suspend fun mergeTargets(locationId: String): List<uk.co.fieldarcheryscoring.domain.PlaceMatch> = call { token ->
+        api.locationMergeTargets(token, locationId).getJSONArray("locations").objects().map { PendingPlaceJson.matchFrom(it) }
+    }
+
+    /** 3.2.32: merges your private location into [intoId]; its rounds move there. Returns the kept location's name. */
+    suspend fun mergeInto(locationId: String, intoId: String): String {
+        val name = call { token -> api.mergeLocationInto(token, locationId, intoId).optString("name") }
+        changed()
+        return name
+    }
+
     /** Deletes a location (3.2.16): the archer who named it, or the Owner. Rounds there (anyone's) lose it. */
     suspend fun delete(locationId: String) {
         call { token -> api.deleteLocation(token, locationId) }
@@ -200,6 +214,7 @@ class LocationPageRepository(
                 roundsHere = location.optInt("roundsHere"),
                 canChangePrivacy = location.optBoolean("canChangePrivacy"),
                 othersPrivate = location.optBoolean("othersPrivate"),   // 3.2.31: the Owner looking
+                canMergeIntoPublic = location.optBoolean("canMergeIntoPublic"),
                 otherArchers = location.optInt("otherArchers"),
                 otherRounds = location.optInt("otherRounds"),
             ),

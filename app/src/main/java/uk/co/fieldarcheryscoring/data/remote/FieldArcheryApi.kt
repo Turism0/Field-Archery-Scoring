@@ -226,6 +226,14 @@ class FieldArcheryApi(
     suspend fun setLocationPrivate(token: String, locationId: String, isPrivate: Boolean, confirm: Boolean): JSONObject =
         request("PUT", "/api/locations/$locationId/private", JSONObject().put("isPrivate", isPrivate).put("confirm", confirm), token)
 
+    /** 3.2.32: { locations: [ { locationId, name, isPrivate, distanceMetres, reasons } ] }: public ones your private one could merge into. */
+    suspend fun locationMergeTargets(token: String, locationId: String): JSONObject =
+        request("GET", "/api/locations/$locationId/merge-targets", body = null, token = token)
+
+    /** 3.2.32: merges your private location into a similar public one: { locationId, name, roundsMoved }; 409 not_similar. */
+    suspend fun mergeLocationInto(token: String, locationId: String, intoId: String): JSONObject =
+        request("POST", "/api/locations/$locationId/merge-into", JSONObject().put("intoId", intoId), token)
+
     /** 3.2.16: deletes a location (the archer who named it, or the Owner). Rounds there lose it. */
     suspend fun deleteLocation(token: String, locationId: String): JSONObject =
         request("DELETE", "/api/locations/$locationId", body = null, token = token)

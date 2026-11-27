@@ -42,6 +42,11 @@ namespace FieldArcheryApi.Locations;
 ///                                                    (API 3.0: distanceMetres null when either has no pin; then names only)
 ///   POST /api/admin/locations/duplicates/approve { aId, bId } → 204: different places, stop flagging them
 ///   POST /api/admin/locations/{id}/merge { intoId } → { locationId, name, roundsMoved }: the duplicate's rounds move to intoId
+///   (3.2.32) GET  /api/locations/{id}/merge-targets → { locations: [{ locationId, name, isPrivate, distanceMetres, reasons }] }:
+///            public locations your private location {id} could be merged into (the same name, a similar name within
+///            500 m or with no pin, or within 300 m: the new-location suggestion rules). Only for the archer who named it.
+///   (3.2.32) POST /api/locations/{id}/merge-into { intoId } → { locationId, name, roundsMoved }: merges your private location
+///            into one of those public ones (its rounds move there). 404 not yours / not private; 409 not_similar.
 /// </summary>
 public static class LocationEndpoints
 {
@@ -91,6 +96,8 @@ public static class LocationEndpoints
         locations.MapPut("/{locationId:guid}/position", Place);
         locations.MapPut("/{locationId:guid}/private", SetPrivate);
         locations.MapDelete("/{locationId:guid}", Delete);
+        locations.MapGet("/{locationId:guid}/merge-targets", MergeTargets);   // 3.2.32
+        locations.MapPost("/{locationId:guid}/merge-into", MergeInto);       // 3.2.32
 
         var admin = app.MapGroup("/api/admin/locations").RequireAuthorization();
         admin.MapGet("/", AdminList);
@@ -505,6 +512,15 @@ public static class LocationEndpoints
             return Error(404, "no_such_location", "Both locations must exist and not already be merged.");
         }
 
+        var (moved, name) = await MoveAsync(conn, tx, locationId, intoId, user.ArcherId(), ct);
+        await tx.CommitAsync(ct);
+        return Results.Ok(new { locationId = intoId, name, roundsMoved = moved });
+    }
+
+    /// <summary>The merge itself: rounds move, the duplicate (and anything merged into it) points at the one kept.</summary>
+    private static async Task<(int Moved, string Name)> MoveAsync(
+        SqlConnection conn, System.Data.Common.DbTransaction tx, Guid locationId, Guid intoId, Guid by, CancellationToken ct)
+    {
         var moved = await conn.ExecuteAsync(new CommandDefinition(
             "UPDATE dbo.Round SET LocationId = @intoId WHERE LocationId = @locationId;",
             new { locationId, intoId }, tx, cancellationToken: ct));
@@ -513,9 +529,58 @@ public static class LocationEndpoints
             UPDATE dbo.ShootLocation SET MergedIntoId = @intoId WHERE MergedIntoId = @locationId;
             UPDATE dbo.ShootLocation SET MergedIntoId = @intoId, MergedUtc = SYSUTCDATETIME(), MergedById = @by
             WHERE LocationId = @locationId;
-            """, new { locationId, intoId, by = user.ArcherId() }, tx, cancellationToken: ct));
+            """, new { locationId, intoId, by }, tx, cancellationToken: ct));
         var name = await conn.ExecuteScalarAsync<string>(new CommandDefinition(
             "SELECT Name FROM dbo.ShootLocation WHERE LocationId = @intoId;", new { intoId }, tx, cancellationToken: ct));
+        return (moved, name ?? "");
+    }
+
+    private sealed record OwnPrivate(string Name, decimal? Latitude, decimal? Longitude);
+
+    /// <summary>3.2.32: your own private location (live), or null.</summary>
+    private static Task<OwnPrivate?> OwnPrivateAsync(SqlConnection conn, Guid locationId, Guid me, System.Data.Common.DbTransaction? tx, CancellationToken ct) =>
+        conn.QuerySingleOrDefaultAsync<OwnPrivate>(new CommandDefinition("""
+            SELECT Name, Latitude, Longitude FROM dbo.ShootLocation
+            WHERE LocationId = @locationId AND MergedIntoId IS NULL AND IsPrivate = 1 AND CreatedById = @me;
+            """, new { locationId, me }, tx, cancellationToken: ct));
+
+    /// <summary>3.2.32 (Pete): public locations similar to your private one (the new-location suggestion rules).</summary>
+    private static async Task<List<SimilarMatch>> TargetsAsync(SqlConnection conn, Guid locationId, OwnPrivate own, Guid me, CancellationToken ct) =>
+        (await SimilarAsync(conn, own.Name, (double?)own.Latitude, (double?)own.Longitude, me, ct))
+            .Where(m => !m.isPrivate && m.locationId != locationId).ToList();
+
+    private static async Task<IResult> MergeTargets(Guid locationId, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        if (await OwnPrivateAsync(conn, locationId, me, null, ct) is not { } own)
+            return Error(404, "no_such_location", "That isn't one of your private locations.");
+        return Results.Ok(new { locations = await TargetsAsync(conn, locationId, own, me, ct) });
+    }
+
+    /// <summary>3.2.32 (Pete): the archer who named a private location merges it into a similar public one.</summary>
+    private static async Task<IResult> MergeInto(Guid locationId, MergeRequest req, ClaimsPrincipal user, Db db, CancellationToken ct)
+    {
+        if (req.IntoId is not { } intoId) return Error(400, "missing_into", "Choose the location to merge into.");
+        var me = user.ArcherId();
+        await using var conn = await db.OpenAsync(ct);
+        if (await OwnPrivateAsync(conn, locationId, me, null, ct) is not { } own)
+            return Error(404, "no_such_location", "That isn't one of your private locations.");
+        if (!(await TargetsAsync(conn, locationId, own, me, ct)).Any(m => m.locationId == intoId))
+            return Error(409, "not_similar", "You can only merge it into a public location with the same or a similar name, or nearby.");
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        // Still yours and private, and the other still public, now that they're locked.
+        var still = await conn.ExecuteScalarAsync<int>(new CommandDefinition("""
+            SELECT COUNT(*) FROM dbo.ShootLocation WITH (UPDLOCK, HOLDLOCK)
+            WHERE MergedIntoId IS NULL AND ((LocationId = @locationId AND IsPrivate = 1 AND CreatedById = @me)
+                                            OR (LocationId = @intoId AND IsPrivate = 0));
+            """, new { locationId, intoId, me }, tx, cancellationToken: ct));
+        if (still != 2)
+        {
+            await tx.RollbackAsync(ct);
+            return Error(404, "no_such_location", "Both locations must exist and not already be merged.");
+        }
+        var (moved, name) = await MoveAsync(conn, tx, locationId, intoId, me, ct);
         await tx.CommitAsync(ct);
         return Results.Ok(new { locationId = intoId, name, roundsMoved = moved });
     }

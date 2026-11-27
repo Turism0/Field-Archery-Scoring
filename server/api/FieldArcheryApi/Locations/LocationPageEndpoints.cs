@@ -225,6 +225,8 @@ public static class LocationPageEndpoints
                 // API 3.2.14: Admins and the Owner can move a location that's on the map.
                 canMove = loc.Latitude is not null && user.IsAdmin() && (!loc.IsPrivate || mine),
                 canChangePrivacy = mine,
+                // 3.2.32: you named this private location, so you can merge it into a similar public one.
+                canMergeIntoPublic = mine && loc.IsPrivate,
                 // API 3.2.16: the archer who named it, or the Owner, can delete it; roundsHere (everyone's, not deleted)
                 // is for the warning.
                 // 3.2.31: someone else's private location is view-only for the Owner on its page.

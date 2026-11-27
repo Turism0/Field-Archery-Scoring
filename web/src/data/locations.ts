@@ -273,6 +273,18 @@ export async function setPrivate(id: string, isPrivate: boolean, confirm = false
 }
 
 /** Deletes a location (3.2.16): the archer who named it, or the Owner. Rounds there lose it (anyone's). */
+/** 3.2.32 (Pete): public locations similar to your private one, to merge it into. */
+export async function mergeTargets(id: string): Promise<PlaceMatch[]> {
+  return ((await authed(t => request('GET', `/api/locations/${id}/merge-targets`, undefined, t))).locations ?? []).map(matchFrom)
+}
+
+/** 3.2.32: merges your private location into a similar public one (its rounds move there); this device's rounds follow. */
+export async function mergeInto(id: string, intoId: string): Promise<string> {
+  const j = await authed(t => request('POST', `/api/locations/${id}/merge-into`, { intoId }, t))
+  try { await refreshNames() } catch { /* the next sync does it */ }
+  return j.name ?? ''
+}
+
 export async function deleteLocation(id: string) {
   await authed(t => request('DELETE', `/api/locations/${id}`, undefined, t))
 }
@@ -322,7 +334,7 @@ export interface BowStyleStats {
   averagePerAnimal: number | null; average36: number | null; average40: number | null
   archerClass: ArcherClass | null; ageGroup: AgeGroup | null
 }
-export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canDelete: boolean; roundsHere: number; canChangePrivacy: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
+export interface LocationPage { location: MapLocation & { canPlace: boolean; canMove: boolean; canDelete: boolean; roundsHere: number; canChangePrivacy: boolean; canMergeIntoPublic: boolean; otherArchers: number; otherRounds: number }; myRounds: RoundSummary[]; friends: LocationFriend[]; bowStyles: BowStyleStats[]; bowClasses: BowStyleStats[] }
 
 const summary = (r: any): RoundSummary => ({
   roundId: r.roundId, shootDate: String(r.shootDate).slice(0, 10), targetCount: r.targetCount, classLine: classLineOf(r),
@@ -338,6 +350,7 @@ export async function locationPage(id: string): Promise<LocationPage> {
   const j = await authed(t => request('GET', `/api/locations/${id}/page`, undefined, t))
   return {
     location: { ...toMap(j.location), canPlace: !!j.location.canPlace, canMove: !!j.location.canMove, canDelete: !!j.location.canDelete, roundsHere: j.location.roundsHere ?? 0, canChangePrivacy: !!j.location.canChangePrivacy,
+      canMergeIntoPublic: !!j.location.canMergeIntoPublic,
       otherArchers: j.location.otherArchers ?? 0, otherRounds: j.location.otherRounds ?? 0 },
     myRounds: (j.myRounds ?? []).map(summary),
     friends: (j.friends ?? []).map((f: any) => ({

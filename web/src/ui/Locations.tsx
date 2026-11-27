@@ -400,6 +400,23 @@ function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: stri
       else toast(errorText(e))
     } finally { setBusy(false) }
   }
+  // 3.2.32 (Pete): merging your private location into a similar public one.
+  const [targets, setTargets] = useState<PlaceMatch[] | null>(null)
+  const [into, setInto] = useState<PlaceMatch | null>(null)
+  const startMerge = async () => {
+    setBusy(true)
+    try { setTargets(await loc.mergeTargets(id)) } catch (e) { toast(errorText(e)) } finally { setBusy(false) }
+  }
+  const merge = async () => {
+    if (!into) return
+    setBusy(true)
+    try {
+      const name = await loc.mergeInto(id, into.id)
+      toast(`Merged into ${name || into.name}. Your rounds there moved with it.`)
+      setInto(null); setTargets(null)
+      onChanged()   // the page now shows the public location (a merged id leads there)
+    } catch (e) { setInto(null); setTargets(null); toast(errorText(e)) } finally { setBusy(false) }
+  }
   const toggle = (v: boolean) => {
     const warning = v ? makePrivateWarning(l.name, l.otherArchers, l.otherRounds) : null
     if (warning) setAsk(warning)
@@ -414,6 +431,20 @@ function PrivacyCard({ page, id, onChanged }: { page: loc.LocationPage; id: stri
         <input type="checkbox" style="width:auto;margin-top:4px" checked={l.isPrivate} disabled={busy}
           onChange={e => { const v = (e.target as HTMLInputElement).checked; (e.target as HTMLInputElement).checked = l.isPrivate; toggle(v) }} />
       </label>
+      {l.canMergeIntoPublic && <button class="outlined" style="align-self:flex-start" disabled={busy} onClick={startMerge}>Merge into a public location</button>}
+      <Dialog open={!!targets && !into} title="Merge into a public location" onClose={() => setTargets(null)}
+        actions={<button onClick={() => setTargets(null)}>Cancel</button>}>
+        {!targets?.length ? <p>There's no public location with the same or a similar name, or nearby, to merge it into.</p> : <>
+          <p>Public locations like this one. Pick the one it really is:</p>
+          {targets.map(m => <button class="row between plain" onClick={() => setInto(m)}>
+            <span><b>{m.name}</b><div class="sub">{whyMatch(m)}</div></span></button>)}
+        </>}
+      </Dialog>
+      <Dialog open={!!into} title={`Merge into ${into?.name ?? ''}?`} onClose={() => setInto(null)}
+        actions={<><button disabled={busy} onClick={() => setInto(null)}>Cancel</button>
+          <button class="tonal" disabled={busy} onClick={merge}>Merge</button></>}>
+        <p>Your private location goes, and your rounds there move to {into?.name} (a public location, on the map). It can't be undone.</p>
+      </Dialog>
       <Dialog open={!!ask} title="Make it private?" onClose={() => setAsk(null)}
         actions={<><button disabled={busy} onClick={() => setAsk(null)}>Cancel</button>
           <button class="danger" disabled={busy} onClick={() => change(true, true)}>Make private</button></>}>

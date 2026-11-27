@@ -4,6 +4,13 @@ Android app for scoring field archery rounds (Big Game and Woodsman). Works full
 
 **Stack:** Kotlin, Jetpack Compose (Material 3), Room (SQLite), Navigation Compose, WorkManager, osmdroid (OpenStreetMap). minSdk 26, targetSdk 36, compileSdk 36. AGP 9.5.2 (built-in Kotlin 2.4), Gradle 9.6, KSP 2.3, Room 2.8.
 
+## Version 3.2.32
+
+- **3.2.32 (app, web app and API; no SQL): merge your private location into a similar public one (Pete).**
+  - On the page of a private location you named, **Merge into a public location** lists public locations like it (the new-location suggestion rules: the same name anywhere, a similar name within 500 m or with no pin, or anything within 300 m). Pick one and confirm: your private location goes and your rounds there move to the public one; the page then shows the public location, and rounds on the phone pick it up on the next sync (straight away in the web app).
+  - API: `GET /api/locations/{id}/merge-targets`, `POST /api/locations/{id}/merge-into { intoId }` (only the archer who named it, only into one of those targets: 409 `not_similar` otherwise); the page has `location.canMergeIntoPublic`. Admin merges share the same merge code.
+  - Test-SimilarLocations: merge targets and merge-into (someone else can't; a public location that isn't similar is refused; the old id leads to the public one).
+
 ## Version 3.2.31
 
 - **3.2.31 (app, web app and API; no SQL): the Owner can see private shoot locations; Bests shows 40 and 36 only (Pete).**

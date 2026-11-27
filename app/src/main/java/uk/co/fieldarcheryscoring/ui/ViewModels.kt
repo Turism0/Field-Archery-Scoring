@@ -890,6 +890,52 @@ class LocationPageViewModel(private val repo: LocationPageRepository, saved: Sav
 
     fun cancelPrivate() { _askPrivate.value = null }
 
+    // ---- Merge into a public location (3.2.32, Pete): your private location, into a similar public one ----
+
+    /** The public locations offered (null: not choosing). */
+    private val _mergeTargets = MutableStateFlow<List<uk.co.fieldarcheryscoring.domain.PlaceMatch>?>(null)
+    val mergeTargets: StateFlow<List<uk.co.fieldarcheryscoring.domain.PlaceMatch>?> = _mergeTargets.asStateFlow()
+    /** The one picked, waiting for "Merge" to be confirmed. */
+    private val _mergeInto = MutableStateFlow<uk.co.fieldarcheryscoring.domain.PlaceMatch?>(null)
+    val mergeInto: StateFlow<uk.co.fieldarcheryscoring.domain.PlaceMatch?> = _mergeInto.asStateFlow()
+
+    fun startMerge() {
+        viewModelScope.launch {
+            _privacyBusy.value = true
+            try {
+                _mergeTargets.value = repo.mergeTargets(locationId)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _message.value = e.friendlyMessage()
+            } finally {
+                _privacyBusy.value = false
+            }
+        }
+    }
+
+    fun pickMerge(m: uk.co.fieldarcheryscoring.domain.PlaceMatch) { _mergeInto.value = m }
+    fun cancelMerge() { _mergeTargets.value = null; _mergeInto.value = null }
+
+    /** Merges it; the page then shows the public location (the server sends the kept one for a merged id). */
+    fun merge() {
+        val into = _mergeInto.value ?: return
+        viewModelScope.launch {
+            _privacyBusy.value = true
+            try {
+                val name = repo.mergeInto(locationId, into.id)
+                cancelMerge()
+                _message.value = "Merged into ${name.ifBlank { into.name }}. Your rounds there moved with it."
+                load()
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                cancelMerge()
+                _message.value = e.friendlyMessage()
+            } finally {
+                _privacyBusy.value = false
+            }
+        }
+    }
+
     // ---- Delete (3.2.16): the archer who named it, or the Owner ----
 
     private val _askDelete = MutableStateFlow<String?>(null)

@@ -90,6 +90,8 @@ fun LocationPageScreen(
     val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val askPrivate by vm.askPrivate.collectAsStateWithLifecycle()
     val askDelete by vm.askDelete.collectAsStateWithLifecycle()
+    val mergeTargets by vm.mergeTargets.collectAsStateWithLifecycle()
+    val mergeInto by vm.mergeInto.collectAsStateWithLifecycle()
     val privacyBusy by vm.privacyBusy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -107,6 +109,42 @@ fun LocationPageScreen(
                 }
             },
             dismissButton = { TextButton(onClick = { vm.cancelDelete() }, enabled = !privacyBusy) { Text("Cancel") } },
+        )
+    }
+
+    // 3.2.32 (Pete): merging your private location into a similar public one.
+    mergeInto?.let { m ->
+        AlertDialog(
+            onDismissRequest = { if (!privacyBusy) vm.cancelMerge() },
+            title = { Text("Merge into ${m.name}?") },
+            text = {
+                Text("Your private location goes, and your rounds there move to ${m.name} (a public location, on the map). " +
+                    "It can't be undone.")
+            },
+            confirmButton = { TextButton(onClick = { vm.merge() }, enabled = !privacyBusy) { Text("Merge") } },
+            dismissButton = { TextButton(onClick = { vm.cancelMerge() }, enabled = !privacyBusy) { Text("Cancel") } },
+        )
+    } ?: mergeTargets?.let { list ->
+        AlertDialog(
+            onDismissRequest = { vm.cancelMerge() },
+            title = { Text("Merge into a public location") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (list.isEmpty()) {
+                        Text("There's no public location with the same or a similar name, or nearby, to merge it into.")
+                    } else {
+                        Text("Public locations like this one. Pick the one it really is:", style = MaterialTheme.typography.bodyMedium)
+                        list.forEach { m ->
+                            Column(Modifier.fillMaxWidth().clickable { vm.pickMerge(m) }.padding(vertical = 6.dp)) {
+                                Text(m.name, style = MaterialTheme.typography.titleSmall)
+                                Text(uk.co.fieldarcheryscoring.domain.LocationMatch.why(m), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.cancelMerge() }) { Text("Cancel") } },
         )
     }
 
@@ -181,6 +219,13 @@ fun LocationPageScreen(
                                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Switch(checked = data.location.isPrivate, onCheckedChange = { vm.togglePrivate(it) }, enabled = !privacyBusy)
+                                    }
+                                    // 3.2.32 (Pete): a private location that's really a public one: merge it in.
+                                    if (data.location.canMergeIntoPublic) {
+                                        TextButton(onClick = { vm.startMerge() }, enabled = !privacyBusy,
+                                            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)) {
+                                            Text("Merge into a public location")
+                                        }
                                     }
                                 }
                             }
